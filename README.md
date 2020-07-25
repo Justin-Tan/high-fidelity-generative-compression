@@ -1,2 +1,2 @@
 # high-fidelity-generative-compression
-Pytorch implementation of High-Fidelity Generative Image Compression
+Generative Image Compression, the remix.

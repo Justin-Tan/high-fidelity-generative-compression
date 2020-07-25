@@ -3,6 +3,23 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Custom
+*.log
+*.h5
+*.hdf
+*.pt
+*.pth
+*.npy
+**/*.h5
+**/*.hdf
+**/*.pt
+**/*.pth
+**/*.npy
+graphs/
+results/
+experiments/
+imgs/*.pdf
+
 # C extensions
 *.so
 
