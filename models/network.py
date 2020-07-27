@@ -7,6 +7,35 @@ import functools
 # Custom
 from utils import normalization
 
+class ResidualBlock(nn.Module):
+    def __init__(self, in_channels, kernel_size=3, stride=1, 
+                 norm_layer=None, activation='relu'):
+
+        self.activation = getattr(F, activation)
+        self.norm_layer = norm_layer
+        if norm_layer is None:
+            self.norm_layer = nn.InstanceNorm2d(in_channels, affine=True,
+                                                track_running_stats=True)
+
+        pad_size = int((kernel_size-1)/2)
+        self.pad = nn.ReflectionPad2d(pad_size)
+        self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size, stride=stride)
+        self.conv2 = nn.Conv2d(in_channels, in_channels, kernel_size, stride=stride)
+
+    def forward(x):
+
+        identity_map = x
+        res = self.pad(x)
+        res = self.conv1(res)
+        res = self.activation(self.norm_layer(res))
+
+        res = self.pad(res)
+        res = self.conv2(res)
+        res = self.norm_layer(res)
+
+        return torch.add(res, identity_map)
+
+
 class Encoder(nn.Module):
     def __init__(self, image_dims, batch_size, activation='relu', C=16,
                  channel_norm=True):
@@ -53,63 +82,176 @@ class Encoder(nn.Module):
         H1, H2, H3, H4, H5 = heights
         W1, W2, W3, W4, W5 = widths 
 
-        # (262,262) -> (256,256), with implicit padding
-        self.conv1 = nn.Conv2d(im_channels, filters[0], kernel_size=(7,7), stride=1)
-        self.norm1 = interlayer_norm((batch_size, filters[0], H1, W1), **norm_kwargs)
+        # (256,256) -> (256,256), with implicit padding
+        self.conv_block1 = nn.Sequential(
+            self.pre_pad,
+            nn.Conv2d(im_channels, filters[0], kernel_size=(7,7), stride=1),
+            interlayer_norm((batch_size, filters[0], H1, W1), **norm_kwargs),
+            self.activation,
+        )
 
         # (256,256) -> (128,128)
-        self.conv2 = nn.Conv2d(filters[0], filters[1], kernel_dim, **cnn_kwargs)
-        self.norm2 = interlayer_norm((batch_size, filters[1], H2, W2), **norm_kwargs)
+        self.conv_block2 = nn.Sequential(
+            self.asymmetric_pad,
+            nn.Conv2d(filters[0], filters[1], kernel_dim, **cnn_kwargs),
+            interlayer_norm((batch_size, filters[1], H2, W2), **norm_kwargs),
+            self.activation,
+        )
 
         # (128,128) -> (64,64)
-        self.conv3 = nn.Conv2d(filters[1], filters[2], kernel_dim, **cnn_kwargs)
-        self.norm3 = interlayer_norm((batch_size, filters[2], H3, W3), **norm_kwargs)
+        self.conv_block3 = nn.Sequential(
+            self.asymmetric_pad,
+            nn.Conv2d(filters[1], filters[2], kernel_dim, **cnn_kwargs),
+            interlayer_norm((batch_size, filters[2], H3, W3), **norm_kwargs),
+            self.activation,
+        )
 
         # (64,64) -> (32,32)
-        self.conv4 = nn.Conv2d(filters[2], filters[3], kernel_dim, **cnn_kwargs)
-        self.norm4 = interlayer_norm((batch_size, filters[3], H4, W4), **norm_kwargs)
+        self.conv_block4 = nn.Sequential(
+            self.asymmetric_pad,
+            nn.Conv2d(filters[2], filters[3], kernel_dim, **cnn_kwargs),
+            interlayer_norm((batch_size, filters[3], H4, W4), **norm_kwargs),
+            self.activation,
+        )
 
         # (32,32) -> (16,16)
-        self.conv5 = nn.Conv2d(filters[3], filters[4], kernel_dim, **cnn_kwargs)
-        self.norm5 = interlayer_norm((batch_size, filters[4], H5, W5), **norm_kwargs)
+        self.conv_block5 = nn.Sequential(
+            self.asymmetric_pad,
+            nn.Conv2d(filters[3], filters[4], kernel_dim, **cnn_kwargs),
+            interlayer_norm((batch_size, filters[4], H5, W5), **norm_kwargs),
+            self.activation,
+        )
         
         # Project channels onto space w/ dimension C
         # Feature maps have dimension C x W/16 x H/16
         # (16,16) -> (16,16)
-        self.conv_out = nn.Conv2d(filters[4], C, kernel_dim, stride=1, **cnn_kwargs)
+        self.conv_block_out = nn.Sequential(
+            self.post_pad,
+            nn.Conv2d(filters[4], C, kernel_dim, stride=1, **cnn_kwargs),
+        )
         
                 
     def forward(self, x):
         
         batch_size = x.size(0)
 
-        x = self.pre_pad(x)
-        x = self.activation(self.conv1(x))
-        x = self.norm1(x)
-
-        x = self.asymmetric_pad(x)
-        x = self.activation(self.conv2(x))
-        x = self.norm2(x)
-
-        x = self.asymmetric_pad(x)
-        x = self.activation(self.conv3(x))
-        x = self.norm3(x)
-
-        x = self.asymmetric_pad(x)
-        x = self.activation(self.conv4(x))
-        x = self.norm4(x)
-
-        x = self.asymmetric_pad(x)
-        x = self.activation(self.conv5(x))
-        x = self.norm5(x)
-        
-        x = self.post_pad(x)
-        out = self.conv_out(x)
-        
-        # Reshape for quantization
-        out = out.view((batch_size, -1))
-        
+        x = self.conv_block1(x)
+        x = self.conv_block2(x)
+        x = self.conv_block3(x)
+        x = self.conv_block4(x)
+        x = self.conv_block5(x)
+        out = self.conv_block_out(x)
+                
         return out
+
+
+class Generator(nn.Module):
+    def __init__(self, input_dims, batch_size, activation='relu', C=16,
+                 n_residual_blocks=8, channel_norm=True):
+
+        """ 
+        Generator with convolutional architecture proposed in [1].
+        Upscales quantized encoder output into feature map of size C x W x H.
+        Expects input size (C,16,16)
+        ========
+        Arguments:
+        input_dims: Dimensions of quantized representation, (C,H,W)
+        batch_size: Number of instances per minibatch
+        C:          Encoder bottleneck depth, controls bits-per-pixel
+                    C = {2,4,8,16}
+
+        [1] Mentzer et. al., "High-Fidelity Generative Image Compression", 
+            arXiv:2006.09965 (2020).
+        """
+        
+        super(Generator, self).__init__()
+        
+        kernel_dim = 3
+        filters = (960, 480, 240, 120, 60)
+        self.n_residual_blocks = n_residual_blocks
+        assert input_dims == (C, 16, 16), 'Inconsistent input dims to generator'
+
+        # Layer / normalization options
+        cnn_kwargs = dict(stride=2, padding=1, output_padding=1)
+        norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=False)
+        self.activation = getattr(F, activation)  # (leaky_relu, relu, elu)
+        
+        if channel_norm is True:
+            interlayer_norm = normalization.ChannelNorm2D_wrap
+        else:
+            interlayer_norm = normalization.InstanceNorm2D_wrap
+
+        self.pre_pad = nn.ReflectionPad2d(1)
+        self.asymmetric_pad = nn.ReflectionPad2d((0,1,1,0))  # Slower than tensorflow?
+        self.post_pad = nn.ReflectionPad2d(3)
+
+        H0, W0 = input_dims[1:]
+        heights = (2**i for i in range(5,9))
+        widths = heights
+        H1, H2, H3, H4 = heights
+        W1, W2, W3, W4 = widths 
+
+        # (16,16) -> (16,16), with implicit padding
+        self.conv_block_init = nn.Sequential(
+            interlayer_norm((batch_size, C, H0, W0), **norm_kwargs),
+            self.pre_pad,
+            nn.Conv2d(C, filters[0], kernel_size=(3,3), stride=1),
+            interlayer_norm((batch_size, filters[0], H0, W0), **norm_kwargs),
+        )
+
+        for m in range(n_residual_blocks):
+            resblock_m = ResidualBlock(in_channels=filters[0], 
+                norm_layer=interlayer_norm, activation=activation)
+            self.add_module('resblock_{}'.format(str(m)), resblock_m)
+        
+        # TODO Transposed conv. alternative: https://distill.pub/2016/deconv-checkerboard/
+        # (16,16) -> (32,32)
+        self.upconv_block1 = nn.Sequential(
+            nn.ConvTranspose2d(filters[0], filters[1], kernel_dim, **cnn_kwargs),
+            interlayer_norm((batch_size, filters[1], H1, W1), **norm_kwargs),
+            self.activation,
+        )
+
+        self.upconv_block2 = nn.Sequential(
+            nn.ConvTranspose2d(filters[1], filters[2], kernel_dim, **cnn_kwargs),
+            interlayer_norm((batch_size, filters[2], H2, W2), **norm_kwargs),
+            self.activation,
+        )
+
+        self.upconv_block3 = nn.Sequential(
+            nn.ConvTranspose2d(filters[2], filters[3], kernel_dim, **cnn_kwargs),
+            interlayer_norm((batch_size, filters[3], H3, W3), **norm_kwargs),
+            self.activation,
+        )
+
+        self.upconv_block4 = nn.Sequential(
+            nn.ConvTranspose2d(filters[3], filters[4], kernel_dim, **cnn_kwargs),
+            interlayer_norm((batch_size, filters[4], H4, W4), **norm_kwargs),
+            self.activation,
+        )
+
+        self.conv_block_out = nn.Sequential(
+            self.post_pad,
+            nn.Conv2d(im_channels, filters[0], kernel_size=(7,7), stride=1),
+        )
+
+
+    def forward(x):
+        
+        x = self.conv_block_init(x)
+
+        for m in range(self.n_residual_blocks):
+            resblock_m = getattr(self, 'resblock_{}'.format(str(m)))
+            x = resblock_m(x)
+
+        x = self.upconv_block1(x)
+        x = self.upconv_block2(x)
+        x = self.upconv_block3(x)
+        x = self.upconv_block4(x)
+        out = self.conv_block_out(x)
+
+        return torch.tanh(out)
+
 
 class Discriminator(nn.Module):
     def __init__(self, image_dims, context_dims, C, spectral_norm=True):
