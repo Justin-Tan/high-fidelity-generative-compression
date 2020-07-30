@@ -26,7 +26,6 @@ class args(object):
     weight_decay = 1e-6
 
 class directories(object):
-    checkpoints = 'checkpoints'
-    results = 'results'
+    experiments = 'experiments'
 
 args.name = 'hific_exp'
