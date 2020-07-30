@@ -11,6 +11,8 @@ class ResidualBlock(nn.Module):
     def __init__(self, in_channels, kernel_size=3, stride=1, 
                  norm_layer=None, activation='relu'):
 
+        super(ResidualBlock, self).__init__()
+
         self.activation = getattr(F, activation)
         self.norm_layer = norm_layer
         if norm_layer is None:
@@ -22,7 +24,7 @@ class ResidualBlock(nn.Module):
         self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size, stride=stride)
         self.conv2 = nn.Conv2d(in_channels, in_channels, kernel_size, stride=stride)
 
-    def forward(x):
+    def forward(self, x):
 
         identity_map = x
         res = self.pad(x)
@@ -56,28 +58,29 @@ class Encoder(nn.Module):
         
         super(Encoder, self).__init__()
         
-        im_channels = self.image_dims[0]
         kernel_dim = 3
         filters = (60, 120, 240, 480, 960)
 
         # Images downscaled to 500 x 1000 + randomly cropped to 256 x 256
+        im_channels = image_dims[0]
         assert image_dims == (im_channels, 256, 256), 'Crop image to 256 x 256!'
 
         # Layer / normalization options
         cnn_kwargs = dict(stride=2, padding=0, padding_mode='reflect')
-        norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=False)
-        self.activation = getattr(F, activation)  # (leaky_relu, relu, elu)
+        norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=True)
+        activation_d = dict(relu='ReLU', elu='ELU', leaky_relu='LeakyReLU')
+        self.activation = getattr(nn, activation_d[activation])  # (leaky_relu, relu, elu)
         
         if channel_norm is True:
-            interlayer_norm = normalization.ChannelNorm2D_wrap
+            self.interlayer_norm = normalization.ChannelNorm2D_wrap
         else:
-            interlayer_norm = normalization.InstanceNorm2D_wrap
+            self.interlayer_norm = normalization.InstanceNorm2D_wrap
 
         self.pre_pad = nn.ReflectionPad2d(3)
         self.asymmetric_pad = nn.ReflectionPad2d((0,1,1,0))  # Slower than tensorflow?
         self.post_pad = nn.ReflectionPad2d(1)
 
-        heights = (2**i for i in range(4,9))[::-1]
+        heights = [2**i for i in range(4,9)][::-1]
         widths = heights
         H1, H2, H3, H4, H5 = heights
         W1, W2, W3, W4, W5 = widths 
@@ -86,40 +89,40 @@ class Encoder(nn.Module):
         self.conv_block1 = nn.Sequential(
             self.pre_pad,
             nn.Conv2d(im_channels, filters[0], kernel_size=(7,7), stride=1),
-            interlayer_norm((batch_size, filters[0], H1, W1), **norm_kwargs),
-            self.activation,
+            self.interlayer_norm((batch_size, filters[0], H1, W1), **norm_kwargs),
+            self.activation(),
         )
 
         # (256,256) -> (128,128)
         self.conv_block2 = nn.Sequential(
             self.asymmetric_pad,
             nn.Conv2d(filters[0], filters[1], kernel_dim, **cnn_kwargs),
-            interlayer_norm((batch_size, filters[1], H2, W2), **norm_kwargs),
-            self.activation,
+            self.interlayer_norm((batch_size, filters[1], H2, W2), **norm_kwargs),
+            self.activation(),
         )
 
         # (128,128) -> (64,64)
         self.conv_block3 = nn.Sequential(
             self.asymmetric_pad,
             nn.Conv2d(filters[1], filters[2], kernel_dim, **cnn_kwargs),
-            interlayer_norm((batch_size, filters[2], H3, W3), **norm_kwargs),
-            self.activation,
+            self.interlayer_norm((batch_size, filters[2], H3, W3), **norm_kwargs),
+            self.activation(),
         )
 
         # (64,64) -> (32,32)
         self.conv_block4 = nn.Sequential(
             self.asymmetric_pad,
             nn.Conv2d(filters[2], filters[3], kernel_dim, **cnn_kwargs),
-            interlayer_norm((batch_size, filters[3], H4, W4), **norm_kwargs),
-            self.activation,
+            self.interlayer_norm((batch_size, filters[3], H4, W4), **norm_kwargs),
+            self.activation(),
         )
 
         # (32,32) -> (16,16)
         self.conv_block5 = nn.Sequential(
             self.asymmetric_pad,
             nn.Conv2d(filters[3], filters[4], kernel_dim, **cnn_kwargs),
-            interlayer_norm((batch_size, filters[4], H5, W5), **norm_kwargs),
-            self.activation,
+            self.interlayer_norm((batch_size, filters[4], H5, W5), **norm_kwargs),
+            self.activation(),
         )
         
         # Project channels onto space w/ dimension C
@@ -127,14 +130,12 @@ class Encoder(nn.Module):
         # (16,16) -> (16,16)
         self.conv_block_out = nn.Sequential(
             self.post_pad,
-            nn.Conv2d(filters[4], C, kernel_dim, stride=1, **cnn_kwargs),
+            nn.Conv2d(filters[4], C, kernel_dim, stride=1),
         )
         
                 
     def forward(self, x):
         
-        batch_size = x.size(0)
-
         x = self.conv_block1(x)
         x = self.conv_block2(x)
         x = self.conv_block3(x)
@@ -146,7 +147,7 @@ class Encoder(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, input_dims, batch_size, activation='relu', C=16,
+    def __init__(self, input_dims, batch_size, C=16, activation='relu',
                  n_residual_blocks=8, channel_norm=True):
 
         """ 
@@ -173,70 +174,71 @@ class Generator(nn.Module):
 
         # Layer / normalization options
         cnn_kwargs = dict(stride=2, padding=1, output_padding=1)
-        norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=False)
-        self.activation = getattr(F, activation)  # (leaky_relu, relu, elu)
+        norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=True)
+        activation_d = dict(relu='ReLU', elu='ELU', leaky_relu='LeakyReLU')
+        self.activation = getattr(nn, activation_d[activation])  # (leaky_relu, relu, elu)
         
         if channel_norm is True:
-            interlayer_norm = normalization.ChannelNorm2D_wrap
+            self.interlayer_norm = normalization.ChannelNorm2D_wrap
         else:
-            interlayer_norm = normalization.InstanceNorm2D_wrap
+            self.interlayer_norm = normalization.InstanceNorm2D_wrap
 
         self.pre_pad = nn.ReflectionPad2d(1)
         self.asymmetric_pad = nn.ReflectionPad2d((0,1,1,0))  # Slower than tensorflow?
         self.post_pad = nn.ReflectionPad2d(3)
 
         H0, W0 = input_dims[1:]
-        heights = (2**i for i in range(5,9))
+        heights = [2**i for i in range(5,9)]
         widths = heights
         H1, H2, H3, H4 = heights
         W1, W2, W3, W4 = widths 
 
         # (16,16) -> (16,16), with implicit padding
         self.conv_block_init = nn.Sequential(
-            interlayer_norm((batch_size, C, H0, W0), **norm_kwargs),
+            self.interlayer_norm((batch_size, C, H0, W0), **norm_kwargs),
             self.pre_pad,
             nn.Conv2d(C, filters[0], kernel_size=(3,3), stride=1),
-            interlayer_norm((batch_size, filters[0], H0, W0), **norm_kwargs),
+            self.interlayer_norm((batch_size, filters[0], H0, W0), **norm_kwargs),
         )
 
         for m in range(n_residual_blocks):
             resblock_m = ResidualBlock(in_channels=filters[0], 
-                norm_layer=interlayer_norm, activation=activation)
+                norm_layer=self.interlayer_norm, activation=activation)
             self.add_module('resblock_{}'.format(str(m)), resblock_m)
         
         # TODO Transposed conv. alternative: https://distill.pub/2016/deconv-checkerboard/
         # (16,16) -> (32,32)
         self.upconv_block1 = nn.Sequential(
             nn.ConvTranspose2d(filters[0], filters[1], kernel_dim, **cnn_kwargs),
-            interlayer_norm((batch_size, filters[1], H1, W1), **norm_kwargs),
-            self.activation,
+            self.interlayer_norm((batch_size, filters[1], H1, W1), **norm_kwargs),
+            self.activation(),
         )
 
         self.upconv_block2 = nn.Sequential(
             nn.ConvTranspose2d(filters[1], filters[2], kernel_dim, **cnn_kwargs),
-            interlayer_norm((batch_size, filters[2], H2, W2), **norm_kwargs),
-            self.activation,
+            self.interlayer_norm((batch_size, filters[2], H2, W2), **norm_kwargs),
+            self.activation(),
         )
 
         self.upconv_block3 = nn.Sequential(
             nn.ConvTranspose2d(filters[2], filters[3], kernel_dim, **cnn_kwargs),
-            interlayer_norm((batch_size, filters[3], H3, W3), **norm_kwargs),
-            self.activation,
+            self.interlayer_norm((batch_size, filters[3], H3, W3), **norm_kwargs),
+            self.activation(),
         )
 
         self.upconv_block4 = nn.Sequential(
             nn.ConvTranspose2d(filters[3], filters[4], kernel_dim, **cnn_kwargs),
-            interlayer_norm((batch_size, filters[4], H4, W4), **norm_kwargs),
-            self.activation,
+            self.interlayer_norm((batch_size, filters[4], H4, W4), **norm_kwargs),
+            self.activation(),
         )
 
         self.conv_block_out = nn.Sequential(
             self.post_pad,
-            nn.Conv2d(im_channels, filters[0], kernel_size=(7,7), stride=1),
+            nn.Conv2d(filters[-1], 3, kernel_size=(7,7), stride=1),
         )
 
 
-    def forward(x):
+    def forward(self, x):
         
         x = self.conv_block_init(x)
 
