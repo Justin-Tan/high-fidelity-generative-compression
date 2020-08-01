@@ -18,8 +18,7 @@ cd high-fidelity-generative-compression
 
 python3 train.py -h
 ```
-It should be noted that the "size" of the compressed image is this memory required to store the quantized image and does not account for the storage of the model required to decode the compressed form.
-
+It should be noted that the "size" of the compressed image is this memory required to store the quantized representation of the image and does not account for the storage of the model required to decode the compressed form.
 
 ## Contributing
 All content in this repository is licensed under the Apache-2.0 license.

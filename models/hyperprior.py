@@ -8,36 +8,24 @@ import functools
 from models import network
 from utils import math, distributions, initialization, helpers
 
-class VAE(nn.Module):
+class Hyperprior(nn.Module):
     
-    def __init__(self, input_dim, hidden_dim, latent_dim=8):
+    def __init__(self, bottleneck_capacity=220):
         """
-        Lightweight VAE implementation for density estimation
-        TODO image data
+        Hyperprior. Introduces probabilistic model over latents.
+        The hyperprior over the standard latents is modelled as
+        a non-parametric, fully factorized density.
         """
-        super(VAE, self).__init__()
+        super(Hyperprior, self).__init__()
         
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim = np.prod(self.input_dim)
-        self.latent_dim = latent_dim
-        self.latent_spec = {'continuous': self.latent_dim}
+        self.bottleneck_capacity =bottleneck_capacity
 
-        self.prior = distributions.Normal()
-        self.z_dist = distributions.Normal()
-        self.x_dist = distributions.Normal()  # distributions.Bernoulli()
+        encoder = network.HyperpriorEncoder
+        decoder = network.HyperpriorDecoder
 
-        encoder = network.ToyEncoder
-        decoder = network.ToyDecoder
-
-        self.encoder = encoder(input_dim=self.input_dim, latent_spec=self.latent_spec, hidden_dim=self.hidden_dim)
-        self.decoder = decoder(input_dim=self.input_dim, latent_dim=self.latent_dim, hidden_dim=self.hidden_dim,
-            output_dim=self.output_dim)
+        self.encoder = encoder(C=bottleneck_capacity)
+        self.decoder = decoder(C=bottleneck_capacity)
         self.reset_parameters()
-
-        print('Using prior:', self.prior)
-        print('Using likelihood p(x|z):', self.x_dist)
-        print('Using approximate posterior p(z|x): Diagonal-covariance Gaussian')
             
     def reset_parameters(self):
         self.apply(initialization.weights_init)
@@ -81,3 +69,19 @@ class VAE(nn.Module):
         x_stats = self.decoder(latent_sample)
         
         return x_stats, latent_sample, latent_stats
+
+
+class UnivariateDensity(nn.Module):
+    """
+    Probability model for hyper-latents
+    """
+
+    def __init__(self, init_scale=10, filters=(3, 3, 3), **kwargs):
+        """
+        init_scale: Scaling factor determining the initial width of the
+                    probability densities.
+        filters:    Number of filters at each layer
+                    of the density model.
+        """
+        super(UnivariateDensity, self).__init__()
+        

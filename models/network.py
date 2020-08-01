@@ -47,7 +47,7 @@ class ResidualBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, image_dims, batch_size, activation='relu', C=16,
+    def __init__(self, image_dims, batch_size, activation='relu', C=220,
                  channel_norm=True):
 
         """ 
@@ -167,7 +167,7 @@ class Generator(nn.Module):
         input_dims: Dimensions of quantized representation, (C,H,W)
         batch_size: Number of instances per minibatch
         C:          Encoder bottleneck depth, controls bits-per-pixel
-                    C = {2,4,8,16}
+                    C = 220 used in [1].
 
         [1] Mentzer et. al., "High-Fidelity Generative Image Compression", 
             arXiv:2006.09965 (2020).
@@ -214,7 +214,6 @@ class Generator(nn.Module):
                 channel_norm=channel_norm, activation=activation)
             self.add_module('resblock_{}'.format(str(m)), resblock_m)
         
-        # TODO Transposed conv. alternative: https://distill.pub/2016/deconv-checkerboard/
         # (16,16) -> (32,32)
         self.upconv_block1 = nn.Sequential(
             nn.ConvTranspose2d(filters[0], filters[1], kernel_dim, **cnn_kwargs),
@@ -248,12 +247,16 @@ class Generator(nn.Module):
 
     def forward(self, x):
         
-        x = self.conv_block_init(x)
+        head = self.conv_block_init(x)
 
         for m in range(self.n_residual_blocks):
             resblock_m = getattr(self, 'resblock_{}'.format(str(m)))
-            x = resblock_m(x)
-
+            if m == 0:
+                x = resblock_m(head)
+            else:
+                x = resblock_m(x)
+        
+        x = x + head
         x = self.upconv_block1(x)
         x = self.upconv_block2(x)
         x = self.upconv_block3(x)
@@ -266,7 +269,7 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, image_dims, context_dims, C, spectral_norm=True):
         """ 
-        Convolutional patchGAN discriminator proposed in [1].
+        Convolutional patchGAN discriminator used in [1].
         Accepts as input generator output G(z) or x ~ p*(x) where
         p*(x) is the true data distribution.
         Contextual information provided is encoder output y = E(x)
@@ -275,7 +278,7 @@ class Discriminator(nn.Module):
         image_dims:     Dimensions of input image, (C_in,H,W)
         context_dims:   Dimensions of contextual information, (C_in', H', W')
         C:              Bottleneck depth, controls bits-per-pixel
-                        C = {2,4,8,16}, C = C_in' if encoder output used
+                        C = 220 used in [1], C = C_in' if encoder output used
                         as context.
 
         [1] Mentzer et. al., "High-Fidelity Generative Image Compression", 
@@ -320,9 +323,10 @@ class Discriminator(nn.Module):
         # (32,32) -> (16,16)
         self.conv4 = norm(nn.Conv2d(filters[2], filters[3], kernel_dim, **cnn_kwargs))
 
-        self.conv_out = nn.Conv2d(filters[3], 1, 1, stride=1)
+        self.conv_out = nn.Conv2d(filters[3], 1, kernel_size=1, stride=1)
 
     def forward(self, x, y):
+        batch_size = x.size()[0]
 
         # Concatenate upscaled encoder output y as contextual information
         y = self.activation(self.context_conv(y))
@@ -335,13 +339,66 @@ class Discriminator(nn.Module):
         x = self.activation(self.conv4(x))
         
         out = torch.sigmoid(self.conv_out(x))
+        out = out.view(-1,1)
         
         return out
         
 """
-TEMPLATES
-=====================
-Encoders / Decoders
-=====================
+=============
+Hyperprior
+=============
 """
 
+class HyperpriorEncoder(nn.Module):
+    """
+    Hyperprior encoder, or 'analysis model' as proposed in [1]. 
+
+    [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
+        arXiv:1802.01436 (2018).
+    """
+    def __init__(self, C=220, activation='relu', mode='large'):
+        super(HyperpriorEncoder, self).__init__()
+
+        N = 192 if mode == 'large' else 128  # 320
+        cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, padding_mode='reflect')
+        self.activation = getattr(F, activation)
+
+        self.conv1 = nn.Conv2d(C, N, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(N, N, **cnn_kwargs)
+        self.conv3 = nn.Conv2d(N, N, **cnn_kwargs)
+
+    def forward(self, x):
+        
+        # x = torch.abs(x)
+        x = self.activation(self.conv1(x))
+        x = self.activation(self.conv2(x))
+        x = self.conv3(x)
+
+        return x
+
+
+class HyperpriorDecoder(nn.Module):
+    """
+    Hyperprior decoder, or 'synthesis model' as proposed in [1]. 
+
+    [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
+        arXiv:1802.01436 (2018).
+    """
+    def __init__(self, C=220, activation='relu', mode='large'):
+        super(HyperpriorDecoder, self).__init__()
+
+        M,N = 320,192 if mode == 'large' else (192,128)  # 320
+        cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, output_padding=1)
+        self.activation = getattr(F, activation)
+
+        self.conv1 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
+        self.conv2 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
+        self.conv3 = nn.ConvTranspose2d(N, C, kernel_size=3, stride=1, padding=1)
+
+    def forward(self, x):
+        
+        x = self.activation(self.conv1(x))
+        x = self.activation(self.conv2(x))
+        x = self.conv3(x)
+
+        return x
