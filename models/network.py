@@ -349,9 +349,9 @@ Hyperprior
 =============
 """
 
-class HyperpriorEncoder(nn.Module):
+class HyperpriorAnalysis(nn.Module):
     """
-    Hyperprior encoder, or 'analysis model' as proposed in [1]. 
+    Hyperprior 'analysis model' as proposed in [1]. 
 
     [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
         arXiv:1802.01436 (2018).
@@ -377,9 +377,10 @@ class HyperpriorEncoder(nn.Module):
         return x
 
 
-class HyperpriorDecoder(nn.Module):
+class HyperpriorSynthesis(nn.Module):
     """
-    Hyperprior decoder, or 'synthesis model' as proposed in [1]. 
+    Hyperprior 'synthesis model' as proposed in [1]. Outputs 
+    distribution parameters of input latents.
 
     [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
         arXiv:1802.01436 (2018).
