@@ -56,9 +56,9 @@ class Encoder(nn.Module):
         ========
         Arguments:
         image_dims:  Dimensions of input image, (C_in,H,W)
-        batch_size: Number of instances per minibatch
-        C:          Bottleneck depth, controls bits-per-pixel
-                    C = {2,4,8,16}
+        batch_size:  Number of instances per minibatch
+        C:           Bottleneck depth, controls bits-per-pixel
+                     C = {2,4,8,16}
 
         [1] Mentzer et. al., "High-Fidelity Generative Image Compression", 
             arXiv:2006.09965 (2020).
@@ -356,10 +356,9 @@ class HyperpriorAnalysis(nn.Module):
     [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
         arXiv:1802.01436 (2018).
     """
-    def __init__(self, C=220, activation='relu', mode='large'):
-        super(HyperpriorEncoder, self).__init__()
+    def __init__(self, C=220, N=320, activation='relu'):
+        super(HyperpriorAnalysis, self).__init__()
 
-        N = 192 if mode == 'large' else 128  # 320
         cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, padding_mode='reflect')
         self.activation = getattr(F, activation)
 
@@ -385,21 +384,27 @@ class HyperpriorSynthesis(nn.Module):
     [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
         arXiv:1802.01436 (2018).
     """
-    def __init__(self, C=220, activation='relu', mode='large'):
-        super(HyperpriorDecoder, self).__init__()
+    def __init__(self, C=220, N=320, activation='relu', final_activation=None):
+        super(HyperpriorSynthesis, self).__init__()
 
-        M,N = 320,192 if mode == 'large' else (192,128)  # 320
         cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, output_padding=1)
         self.activation = getattr(F, activation)
+        self.final_activation = final_activation
 
         self.conv1 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
         self.conv2 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
         self.conv3 = nn.ConvTranspose2d(N, C, kernel_size=3, stride=1, padding=1)
+
+        if self.final_activation is not None:
+            self.final_activation = getattr(F, final_activation)
 
     def forward(self, x):
         
         x = self.activation(self.conv1(x))
         x = self.activation(self.conv2(x))
         x = self.conv3(x)
+
+        if self.final_activation is not None:
+            x = self.final_activation(x)
 
         return x

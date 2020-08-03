@@ -14,7 +14,7 @@ from scipy.stats import entropy
 from collections import OrderedDict
 from sklearn.metrics import mutual_info_score
 
-from models import network, vae, flows
+from models import network
 from utils import distributions
 
 META_FILENAME = "specs.json"
@@ -53,41 +53,6 @@ class Swish(nn.Module):
 
     def forward(self, x):
         return x * torch.sigmoid(self.beta * x)
-
-def setup_signature(args):
-
-    time_signature = '{:%Y_%m_%d_%H:%M}'.format(datetime.datetime.now()).replace(':', '_')
-    if args.name is not None:
-        args.name = '{}_{}_{}_{}'.format(args.name, args.dataset, args.loss_type, time_signature)
-    else:
-        args.name = '{}_{}_{}'.format(args.dataset, args.loss_type, time_signature)
-
-    if args.flow != 'no_flow':
-        args.name = '{}_{}'.format(args.name, args.flow)
-
-    if args.loss_type == 'beta_VAE':
-        args.name = '{}_beta{}'.format(args.name, args.beta)
-    elif args.loss_type == 'annealed_VAE':
-        args.name = '{}_gamma{}'.format(args.name, args.gamma)
-    elif args.loss_type == 'factor_VAE':
-        args.name = '{}_gamma_fvae{}'.format(args.name, args.gamma_fvae)
-    elif 'TCVAE' in args.loss_type:
-        args.name = '{}_betatcvae{}'.format(args.name, args.beta_btcvae)
-
-    if args.supervision is True:
-        args.name = '{}_lambda{}'.format(args.name, args.supervision_lagrange_m)
-        args.name = '{}_sidx{}'.format(args.name, ''.join(str(e) for e in args.sensitive_latent_idx))
-
-    args.snapshot = os.path.join(args.save, args.name)
-    args.checkpoints_save = os.path.join(args.snapshot, 'checkpoints')
-    args.figures_save = os.path.join(args.snapshot, 'figures')
-    args.storage_save = os.path.join(args.snapshot, 'storage')
-    makedirs(args.snapshot)
-    makedirs(args.checkpoints_save)
-    makedirs(args.figures_save)
-    makedirs(args.storage_save)
-
-    return args
 
 def setup_generic_signature(args, special_info):
 
@@ -271,32 +236,6 @@ def logger_setup(logpath, filepath, package_files=[]):
 
     return logger
 
-
-def logger_setup_alpha(logpath, filepath, package_files=[], displaying=True, saving=True, debug=False):
-    logger = logging.getLogger()
-    if debug:
-        level = logging.DEBUG
-    else:
-        level = logging.INFO
-    logger.setLevel(level)
-    if saving:
-        info_file_handler = logging.FileHandler(logpath, mode="a")
-        info_file_handler.setLevel(level)
-        logger.addHandler(info_file_handler)
-    if displaying:
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(level)
-        logger.addHandler(console_handler)
-    logger.info(filepath)
-    # with open(filepath, "r") as f:
-    #     logger.info(f.read())
-
-    for f in package_files:
-        logger.info(f)
-        with open(f, "r") as package_f:
-            logger.info(package_f.read())
-
-    return logger
 
 def log(storage, epoch, counter, mean_epoch_loss, total_loss, best_loss, start_time, epoch_start_time, 
         batch_size, header='[TRAIN]', log_interval=100, logger=None):
@@ -507,81 +446,3 @@ def summary(model, input_size, batch_size=-1, device="cuda"):
     print("Params size (MB): %0.2f" % total_params_size)
     print("Estimated Total Size (MB): %0.2f" % total_size)
     print("----------------------------------------------------------------")
-
-def jsd_metric(df, selection_fraction=0.005, nbins=32, dE_min=-0.25, dE_max=0.1, mbc_min=5.2425, mbc_max=5.29, variable='B_Mbc'):
-    """
-    Attempt to quantify sculpting.
-    Evaluates mass decorrelation on some blackbox learner by evaluating a discrete
-    approximation of the Jensen-Shannon divergence between the distributions of interest
-    (here a mass-related quantity) passing and failing some learner threshold. If the 
-    learned representation used for classification is noninformative of the variable of
-    interest this should be low.
-    """
-
-    def _one_hot_encoding(x, nbins):
-        x_one_hot = np.zeros((x.shape[0], nbins))
-        x_one_hot[np.arange(x.shape[0]), x] = 1
-        # x_one_hot[np.arange(x.shape[0]), np.max(x, nbins-1)] = 1
-        x_one_hot_sum = np.sum(x_one_hot, axis=0)/x_one_hot.shape[0]
-
-        return x_one_hot_sum
-
-    try:
-        df_bkg = df[df.label<0.5]
-    except AttributeError:
-        df_bkg = df[df.y_true<0.5]
-
-    #try:
-    #    df_bkg = df_bkg[df_bkg.B_deltaE > -0.25].query('B_deltaE < 0.1')
-    #except AttributeError:
-    #    df_bkg = df_bkg[df_bkg._B_deltaE > -0.25].query('_B_deltaE < 0.1')
-
-    select_bkg = df_bkg.nlargest(int(df_bkg.shape[0]*selection_fraction), columns='y_prob')
-    print('Surviving events', select_bkg.shape)
-    min_threshold = select_bkg.y_prob.min()
-    print(min_threshold)
-
-    df_pass = df_bkg[df_bkg.y_prob > min_threshold]
-    df_fail = df_bkg[df_bkg.y_prob < min_threshold]
-    print('Passing events', df_pass.shape)
-
-    try:
-        df_bkg_pass = df_pass[df_pass.label < 0.5]
-        df_bkg_fail = df_fail[df_fail.label < 0.5]
-    except AttributeError:
-        df_bkg_pass = df_pass[df_pass.y_true < 0.5]
-        df_bkg_fail = df_fail[df_fail.y_true < 0.5]
-    print('Passing bkg events', df_bkg_pass.shape)
-
-    # N_bkg_pass = int(df_bkg_pass._weight_.sum())
-    # N_bkg_fail = int(df_bkg_fail._weight_.sum())
-    # print('N_bkg_pass / N_bkg_fail: {}'.format(N_bkg_pass/N_bkg_fail))
-
-    # Discretization
-    if variable == 'B_Mbc':
-        try:
-            bkg_pass_discrete = np.digitize(df_bkg_pass.B_Mbc, bins=np.linspace(mbc_min,mbc_max,nbins), right=False)-1
-            bkg_fail_discrete = np.digitize(df_bkg_fail.B_Mbc, bins=np.linspace(mbc_min,mbc_max,nbins), right=False)-1
-        except AttributeError:
-            bkg_pass_discrete = np.digitize(df_bkg_pass._B_Mbc, bins=np.linspace(mbc_min,mbc_max,nbins), right=False)-1
-            bkg_fail_discrete = np.digitize(df_bkg_fail._B_Mbc, bins=np.linspace(mbc_min,mbc_max,nbins), right=False)-1
-    elif variable =='dE':
-        try:
-            bkg_pass_discrete = np.digitize(df_bkg_pass.B_deltaE, bins=np.linspace(dE_min,dE_max,nbins), right=False)-1
-            bkg_fail_discrete = np.digitize(df_bkg_fail.B_deltaE, bins=np.linspace(dE_min,dE_max,nbins), right=False)-1
-        except AttributeError:
-            bkg_pass_discrete = np.digitize(df_bkg_pass._B_deltaE, bins=np.linspace(dE_min,dE_max,nbins), right=False)-1
-            bkg_fail_discrete = np.digitize(df_bkg_fail._B_deltaE, bins=np.linspace(dE_min,dE_max,nbins), right=False)-1
-
-    bkg_pass_sum = _one_hot_encoding(bkg_pass_discrete, nbins)
-    bkg_fail_sum = _one_hot_encoding(bkg_fail_discrete, nbins)
-
-    M = 0.5*bkg_pass_sum + 0.5*bkg_fail_sum
-
-    kld_pass = entropy(bkg_pass_sum, M)
-    kld_fail = entropy(bkg_fail_sum, M)
-
-    jsd_discrete = 0.5*kld_pass + 0.5*kld_fail
-
-    return jsd_discrete
-
