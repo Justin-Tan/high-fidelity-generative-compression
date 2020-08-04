@@ -78,7 +78,8 @@ class Encoder(nn.Module):
         norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=True)
         activation_d = dict(relu='ReLU', elu='ELU', leaky_relu='LeakyReLU')
         self.activation = getattr(nn, activation_d[activation])  # (leaky_relu, relu, elu)
-        
+        self.n_downsampling_layers = 4
+
         if channel_norm is True:
             self.interlayer_norm = normalization.ChannelNorm2D_wrap
         else:
@@ -185,6 +186,7 @@ class Generator(nn.Module):
         norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=True)
         activation_d = dict(relu='ReLU', elu='ELU', leaky_relu='LeakyReLU')
         self.activation = getattr(nn, activation_d[activation])  # (leaky_relu, relu, elu)
+        self.n_upsampling_layers = 4
         
         if channel_norm is True:
             self.interlayer_norm = normalization.ChannelNorm2D_wrap

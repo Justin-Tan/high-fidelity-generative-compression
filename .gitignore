@@ -19,6 +19,8 @@ graphs/
 results/
 experiments/
 imgs/*.pdf
+data/*.jpg
+hific_dev/
 
 # C extensions
 *.so
