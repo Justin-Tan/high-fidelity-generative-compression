@@ -58,7 +58,9 @@ def linear_init(layer, activation="relu"):
 
 def weights_init(module):
     if isinstance(module, torch.nn.modules.conv._ConvNd):
-        # TO-DO: check literature
+        # TODO: check literature
         linear_init(module)
     elif isinstance(module, nn.Linear):
         linear_init(module)
+
+
