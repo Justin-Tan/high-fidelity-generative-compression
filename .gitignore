@@ -144,3 +144,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Misc
+
+bin
+*.un~
