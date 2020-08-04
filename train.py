@@ -17,9 +17,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # Custom modules
-from default_config import directories
-from models import losses, network, flows, iw_vae
-from utils import helpers, initialization, datasets, evaluate, math, distributions, vis
+from hific.default_config import directories
+from hific.models import losses, network, flows, iw_vae
+from hific.utils import helpers, initialization, datasets, evaluate, math, distributions, vis
 
 # go fast boi!!
 # Optimizes cuda kernels NO dynamic input sizes or u will have a BAD time

@@ -14,8 +14,8 @@ from scipy.stats import entropy
 from collections import OrderedDict
 from sklearn.metrics import mutual_info_score
 
-from models import network
-from utils import distributions
+from hific.models import network
+from hific.utils import distributions
 
 META_FILENAME = "specs.json"
 

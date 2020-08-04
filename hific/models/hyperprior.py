@@ -6,8 +6,8 @@ import functools
 from collections import namedtuple
 
 # Custom
-from models import network
-from utils import math, distributions, initialization, helpers
+from hific.models import network
+from hific.utils import math, distributions, initialization, helpers
 
 MIN_SCALE = 0.11
 MIN_LIKELIHOOD = 1e-9

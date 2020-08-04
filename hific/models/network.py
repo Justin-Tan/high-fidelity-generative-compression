@@ -5,7 +5,7 @@ import numpy as np
 import functools
 
 # Custom
-from utils import normalization
+from hific.utils import normalization
 
 class ResidualBlock(nn.Module):
     def __init__(self, input_dims, kernel_size=3, stride=1, 
