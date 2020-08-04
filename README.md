@@ -28,6 +28,7 @@ All content in this repository is licensed under the Apache-2.0 license.
 
 ## Acknowledgements
 * The code under `perceptual_similarity/` implementing the perceptual distortion loss is borrowed from the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
+* Kookaburra image (`data/kookaburra.jpg`) by [u/Crispy_Chooken](https://old.reddit.com/r/australia/comments/i3ffpk/best_photo_of_a_kookaburra_ive_taken_yet/).
 
 ## Citation
 This is not the official implementation. Please cite the [original paper](https://arxiv.org/abs/2006.09965) if you use their work.

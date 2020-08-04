@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 
 """
-Default arguments. Entries can be manually overriden by command line arguments in `train.py`.
+Default arguments from [1]. Entries can be manually overriden via
+command line arguments in `train.py`.
+
 [1]: arXiv 2006.09965
 """
 
 class args(object):
+    name = 'hific_exp'
     silent = True
     n_epochs = 42  # Paper says 2M training steps
     batch_size = 2048
@@ -28,4 +31,12 @@ class args(object):
 class directories(object):
     experiments = 'experiments'
 
-args.name = 'hific_exp'
+class model_type(object):
+    COMPRESSION = 'compression'
+    COMPRESSION_GAN = 'compression_gan'
+    
+
+class model_mode(object):
+    TRAINING = 'training'
+    VALIDATION = 'validation'
+    COMPRESSION = 'compression'

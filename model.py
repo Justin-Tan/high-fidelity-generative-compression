@@ -3,53 +3,37 @@ Stitches submodels together.
 """
 import numpy as np
 
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 # Custom modules
-from models import network
-from utils import helpers, initialization, datasets, math, distributions
+from hific.models import network, hyperprior
+from hific.utils import helpers, initialization, datasets, math, distributions
 
-# go fast boi!!
-# Optimizes cuda kernels NO dynamic input sizes or u will have a BAD time
-torch.backends.cudnn.benchmark = True
+from default_config import model_mode, model_type
 
-def create_model(args):
-    if args.flow == 'no_flow':
-        if args.vae_model == 'vae':
-            model = iw_vae.VAE(input_dim=args.input_dim,
-                               hidden_dim=args.vae_hidden_dim,
-                               latent_dim=args.latent_dim)
-        elif args.vae_model == 'iwae':
-            if args.use_studentT is True:
-                iwae = iw_vae.IWAE_st
-            else:
-                iwae = iw_vae.IWAE
-            model = iwae(input_dim=args.input_dim,
-                                hidden_dim=args.vae_hidden_dim,
-                                latent_dim=args.latent_dim,
-                                num_i_samples=args.num_i_samples)
-        elif args.vae_model == 'sumo':
-            model = iw_vae.SUMO(input_dim=args.input_dim,
-                                hidden_dim=args.vae_hidden_dim,
-                                latent_dim=args.latent_dim,
-                                min_terms=args.min_RR_terms)
-    else:
-        if args.flow == 'real_nvp':
-            subflow = distributions.InvertibleAffineFlow
-        elif args.flow == 'maf':
-            subflow = distributions.MAF
-        
-        model = flows.DiscreteFlowModel(input_dim=args.input_dim,
-                                        hidden_dim=args.discrete_flow_hidden_dim,
-                                        n_flows=args.flow_steps,
-                                        base_dist=distributions.StudentT(args.dof),#Normal(),
-                                        flow=subflow,
-                                        context_dim=args.context_dim)
-    
+Nodes = namedtuple(
+    "Nodes",                    # Expected ranges for RGB:
+    ["input_image",             # [0, 255]
+     "input_image_scaled",      # [0, 1]
+     "reconstruction",          # [0, 255]
+     "reconstruction_scaled",   # [0, 1]
+     "latent_quantized"])       # Latent post-quantization.
+
+class hific_model(nn.Module):
+    """
+    Builds hific model from submodels.
+    """
+    def __init__(self, args, mode=)
+
+def create_model(args, mode=model_mode.TRAINING, model_type=model_type.COMPRESSION):
+
+    self.args = args
+    self.mode = mode
+
     return model
 
 
