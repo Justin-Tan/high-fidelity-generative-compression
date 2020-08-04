@@ -1,0 +1,9 @@
+future==0.18.2
+-e git+https://github.com/Justin-Tan/high-fidelity-generative-compression.git@master#egg=hific
+joblib==0.16.0
+numpy==1.19.1
+scikit-learn==0.23.2
+scipy==1.5.2
+sklearn==0.0
+threadpoolctl==2.1.0
+torch==1.6.0
