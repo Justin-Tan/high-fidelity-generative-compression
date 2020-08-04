@@ -13,6 +13,7 @@ MIN_SCALE = 0.11
 MIN_LIKELIHOOD = 1e-9
 MAX_LIKELIHOOD = 1e3
 SMALL_HYPERLATENT_FILTERS = 192
+LARGE_HYPERLATENT_FILTERS = 320
 
 HyperInfo = namedtuple(
     "HyperInfo",
@@ -215,7 +216,7 @@ class HyperpriorDensity(nn.Module):
 
 class Hyperprior(CodingModel):
     
-    def __init__(self, bottleneck_capacity=220, hyperlatent_filters=320, mode='large'):
+    def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, mode='large'):
         """
         Introduces probabilistic model over latents of 
         latents.
