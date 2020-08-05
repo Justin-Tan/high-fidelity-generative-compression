@@ -1,5 +1,3 @@
-""" Authors: @YannDubs 2019
-"""
 import torch
 import numpy as np
 

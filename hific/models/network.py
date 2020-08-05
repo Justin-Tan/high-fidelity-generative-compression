@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import functools
 
 # Custom
 from hific.utils import normalization
@@ -71,7 +70,7 @@ class Encoder(nn.Module):
 
         # Images downscaled to 500 x 1000 + randomly cropped to 256 x 256
         im_channels = image_dims[0]
-        assert image_dims == (im_channels, 256, 256), 'Crop image to 256 x 256!'
+        # assert image_dims == (im_channels, 256, 256), 'Crop image to 256 x 256!'
 
         # Layer / normalization options
         cnn_kwargs = dict(stride=2, padding=0, padding_mode='reflect')
@@ -179,7 +178,6 @@ class Generator(nn.Module):
         kernel_dim = 3
         filters = (960, 480, 240, 120, 60)
         self.n_residual_blocks = n_residual_blocks
-        assert input_dims == (C, 16, 16), 'Inconsistent input dims to generator'
 
         # Layer / normalization options
         cnn_kwargs = dict(stride=2, padding=1, output_padding=1)
@@ -300,7 +298,7 @@ class Discriminator(nn.Module):
         self.context_upsample = nn.Upsample(scale_factor=16, mode='nearest')
 
         # Images downscaled to 500 x 1000 + randomly cropped to 256 x 256
-        assert image_dims == (im_channels, 256, 256), 'Crop image to 256 x 256!'
+        # assert image_dims == (im_channels, 256, 256), 'Crop image to 256 x 256!'
 
         # Layer / normalization options
         # TODO: calculate padding properly
@@ -328,6 +326,10 @@ class Discriminator(nn.Module):
         self.conv_out = nn.Conv2d(filters[3], 1, kernel_size=1, stride=1)
 
     def forward(self, x, y):
+        """
+        x: Concatenated real/gen images
+        y: Quantized latents
+        """
         batch_size = x.size()[0]
 
         # Concatenate upscaled encoder output y as contextual information
@@ -340,10 +342,10 @@ class Discriminator(nn.Module):
         x = self.activation(self.conv3(x))
         x = self.activation(self.conv4(x))
         
-        out = torch.sigmoid(self.conv_out(x))
-        out = out.view(-1,1)
+        out_logits = self.conv_out(x).view(-1,1)
+        out = torch.sigmoid(out_logits)
         
-        return out
+        return out, out_logits
         
 """
 =============
@@ -410,3 +412,25 @@ class HyperpriorSynthesis(nn.Module):
             x = self.final_activation(x)
 
         return x
+
+
+if __name__ == '__main__':
+
+    B = 5
+    C = 7
+    x = torch.randn((B,3,256,256))
+    x_dims = tuple(x.size())
+    print('Input dims', x_dims)
+
+    E = Encoder(image_dims=x_dims[1:], batch_size=B, C=C)
+    y = E(x)
+    y_dims = tuple(y.size())
+    print('Encoder output', y_dims)
+
+    G = Generator(input_dims=y_dims[1:], batch_size=B, C=C)
+    g = G(y)
+    print('Generator output', g.size())
+
+    D = Discriminator(image_dims=x_dims[1:], context_dims=tuple(g.size())[1:], C=C)
+    d = D(x,y)
+    print('Discriminator output', d.size())

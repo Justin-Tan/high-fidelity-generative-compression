@@ -13,8 +13,8 @@ class model_types(object):
 
 class model_modes(object):
     TRAINING = 'training'
-    VALIDATION = 'validation'
-    COMPRESSION = 'compression'
+    VALIDATION = 'validation'  # Monitoring
+    EVALUATION = 'evaluation'
 
 class args(object):
     """
@@ -32,10 +32,10 @@ class args(object):
 
     # Architecture params - Table 3a) of [1]
     latent_channels = 220
-    lambda_B = 2**(-4)
-    k_M = 0.075 * 2**(-5)
-    k_P = 1.
-    beta = 0.15
+    lambda_B = 2**(-4)          # Loose rate
+    k_M = 0.075 * 2**(-5)       # Distortion
+    k_P = 1.                    # Perceptual loss
+    beta = 0.15                 # Generator loss
     use_channel_norm = True
 
     # Shapes
@@ -55,6 +55,7 @@ class args(object):
     target_rate = 0.14
     perceptual_weight = 1.
     lambda_A_R = dict(0.14=2**1, 0.30=2**0, 0.45==2**(-1))
+    lambda_A = lambda_A_R[target_rate]
 
     # Constrain rate:
     # Loss = C * (1/lambda * R + CD * D) + CP * P
@@ -62,7 +63,7 @@ class args(object):
     # lambda_b otherwise.
     C = 0.1 * 2. ** -5  # R-D joint coefficient
     CD = 0.75  # distortion
-    CP = None
+    CP = None  # Generator loss
 
     lambda_A = 0.1 * 2. ** -6
     lambda_B = 0.1 * 2. ** 1
@@ -81,8 +82,9 @@ class hific_args(args):
     loss terms.
     """
     model_type = model_types.COMPRESSION_GAN
+    gan_loss = 'non_saturating'  # ('non_saturating', 'least_squares')
     discriminator_steps = 1
-    CP=0.1 * 1.5 ** 1,  # Sweep over 0.1 * 1.5 ** x
+    CP=0.15  # Sweep over 0.1 * 1.5 ** x
 
 class directories(object):
     experiments = 'experiments'

@@ -1,6 +1,3 @@
-""" Author: @YannDubs 2019 """
-# 240673801902
-
 import torch
 from torch import nn
 

@@ -1,8 +1,13 @@
 # high-fidelity-generative-compression
 Generative Image Compression, the remix. Pytorch implementation of the paper ["High-Fidelity Generative Image Compression" by Mentzer et. al.](https://hific.github.io/)
 
-# TODO
+## Lowdown
+The lowdown
+
+## TODO
 * Check input images format, [0,255], [0,1] or [-1,1]. LPIPS assumes [-1,1].
+* Check if using [-1,1] for images works better.
+* Check generator final activation - or just clip to [0,1].
 
 ## Note
 The generator is trained to achieve realistic and not exact reconstruction. Therefore, in theory **images which are compressed and decoded may be arbitrarily different from the input**. This precludes usage for sensitive applications. An important caveat from the authors is reproduced here: 
@@ -10,7 +15,7 @@ The generator is trained to achieve realistic and not exact reconstruction. Ther
 > "_Therefore, we emphasize that our method is not suitable for sensitive image contents, such as, e.g., storing medical images, or important documents._" 
 
 ## Usage
-* Install PyTorch and dependencies from [https://pytorch.org/](https://pytorch.org/). Then install other requirements.
+* Install Pytorch and dependencies from [https://pytorch.org/](https://pytorch.org/). Then install other requirements.
 ```
 pip install -r requirements.txt
 ```
@@ -23,12 +28,18 @@ python3 train.py -h
 ```
 It should be noted that the "size" of the compressed image is this memory required to store the bitstring corresponding to the image and does not account for the storage of the model required to decode the compressed format.
 
-## Contributing
-All content in this repository is licensed under the Apache-2.0 license.
+## Contributing / Todo
+All content in this repository is licensed under the Apache-2.0 license. Functionality for range encoding/decoding is in-progress. Feel free to submit any corrections or suggestions as issues.
 
 ## Acknowledgements
-* The code under `perceptual_similarity/` implementing the perceptual distortion loss is borrowed from the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
+* The code under `hific/perceptual_similarity/` implementing the perceptual distortion loss is modified from the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
 * Kookaburra image (`data/kookaburra.jpg`) by [u/Crispy_Chooken](https://old.reddit.com/r/australia/comments/i3ffpk/best_photo_of_a_kookaburra_ive_taken_yet/).
+
+## References
+The following additional papers were useful to understand implementation details.
+* Johannes Ballé, David Minnen, Saurabh Singh, Sung Jin Hwang, Nick Johnston. Variational image compression with a scale hyperprior. [arXiv:1802.01436 (2018)](https://arxiv.org/abs/1802.01436).
+* David Minnen, Johannes Ballé, George Toderici. Joint Autoregressive and Hierarchical Priors for Learned Image Compression. [arXiv 1809.02736 (2018)](https://arxiv.org/abs/1809.02736).
+* Johannes Ballé, Valero Laparra, Eero P. Simoncelli. End-to-end optimization of nonlinear transform codes for perceptual quality. [arXiv 1607.05006 (2016)](https://arxiv.org/abs/1607.05006)
 
 ## Citation
 This is not the official implementation. Please cite the [original paper](https://arxiv.org/abs/2006.09965) if you use their work.

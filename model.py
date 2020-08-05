@@ -12,18 +12,19 @@ import torch.nn.functional as F
 # Custom modules
 import hific.perceptual_similarity as ps
 from hific.models import network, hyperprior
-from hific.utils import helpers, initialization, datasets, math, distributions
+from hific.utils import helpers, datasets, math, losses
 
 from default_config import model_modes, model_types, args, directories
 
-Nodes = namedtuple(
-    "Nodes",                    # Expected ranges for RGB:
-    ["input_image",             # [0, 255]
-     "input_image_scaled",      # [0, 1]
-     "reconstruction",          # [0, 255]
-     "reconstruction_scaled",   # [0, 1]
-     "latent_quantized"])       # Latent post-quantization.
+Intermediates = namedtuple("Intermediates",
+    ["input_image",             # [0, 1] (after scaling from [0, 255])
+     "reconstruction",          # [0, 1]
+     "latent_quantized",        # Latents post-quantization.
+     "n_bpp",                   # Differential entropy estimate.
+     "q_bpp"])                  # Shannon entropy estimate.
 
+Disc_out= namedtuple("disc_out",
+    ["D_real", "D_gen", "D_real_logits", "D_gen_logits"])
 
 class HificModel(nn.Module):
 
@@ -33,21 +34,14 @@ class HificModel(nn.Module):
         """
         Builds hific model from submodels.
         """
-
         self.args = args
         self.mode = mode
         self.model_type = model_type
         self.logger = logger
+        self.step_counter = 0
 
         if not isinstance(self.model_type, model_types):
             raise ValueError("Invalid model_type: [{}]".format(self.model_type))
-
-        if self.model_type == model_types.COMPRESSION_GAN:
-            assert self.args.discriminator_steps > 0, 'Must specify nonzero training steps for D!'
-            self.discriminator_steps = self.args.discriminator_steps
-            self.logger.info('Generative mode enabled.')
-        else:
-            self.discriminator_steps = 0
 
         self.image_dims = self.args.image_dims  # Assign from dataloader
         self.batch_size = self.args.batch_size
@@ -59,25 +53,147 @@ class HificModel(nn.Module):
 
         self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.args.latent_channels)
 
-        self.Discriminator = network.Discriminator(image_dims=self.image_dims,
-            context_dims=self.args.latent_dims, C=self.args.latent_channels)
+        # Use discriminator if GAN mode enabled and in training/validation
+        self.use_discriminator = (
+            self.model_type = model_types.COMPRESSION_GAN
+            and (self.mode != model_modes.EVALUATION)
+        )
+
+        if self.use_discriminator is True:
+            assert self.args.discriminator_steps > 0, 'Must specify nonzero training steps for D!'
+            self.discriminator_steps = self.args.discriminator_steps
+            self.logger.info('GAN mode enabled. Training discriminator for {} steps.'.format(
+                self.discriminator_steps))
+            self.Discriminator = network.Discriminator(image_dims=self.image_dims,
+                context_dims=self.args.latent_dims, C=self.args.latent_channels)
+        else:
+            self.discriminator_steps = 0
+            self.Discriminator = None
+
         
+        self.squared_difference = torch.nn.MSELoss(reduction='None')
         # Expects [-1,1] images or [0,1] with normalize=True flag
         self.perceptual_loss = ps.PerceptualLoss(model='net_lin', net='alex', use_gpu=True)
+        
 
     def compression_forward(self, x):
-        """x: Input image, range [0, 255]."""
+        """
+        Forward pass through encoder, hyperprior, and decoder.
+
+        Inputs
+        x:  Input image. Format (N,C,H,W), range [0, 255].
+            torch.Tensor
+        
+        Outputs
+        intermediates: NamedTuple of intermediate values
+        """
+        image_dims = tuple(torch.size(x)[1:])  # (C,H,W)
 
         if self.mode = model_modes.VALIDATION and (self.training is False):
-            image_dims = tuple(torch.size(x)[1:])
             n_downsamples = self.Encoder.n_downsampling_layers
-            x = _pad(x, image_dims, n_downsamples)
+            factor = 2 ** n_downsamples
+            logger.info('Padding to {}'.format(factor))
+            x = helpers.pad_factor(x, image_dims, factor)
 
-        x = x.float() / 255.
+        # Scale range to [0,1]
+        x = torch.div(x, 255.)
+
+        # Encoder forward pass
+        y = self.Encoder(x)
+        hyperinfo = self.Hyperprior(y)
+
+        latents_quantized = hyperinfo.decoded
+        total_nbpp = hyperinfo.total_nbpp
+        total_qbpp = hyperinfo.total_qbpp
+
+        reconstruction = self.Generator(y)
+        # Undo padding
+        reconstruction = reconstruction[:, :, :image_dims[1], :image_dims[2]]
+        
+        intermediates = Intermediates(x, reconstruction, latents_quantized, 
+            total_nbpp, total_qbpp)
+
+        return intermediates
+
+    def distortion_loss(self, x_gen, x_real):
+        # loss in [0,255] space but normalized by 255 to not be too big
+        mse = self.squared_difference(x_gen, x_real) # / 255.
+        return torch.mean(mse)
 
     def perceptual_loss(self, x_gen, x_real):
-        """Assumes inputs are in [0, 1]."""
+        """ Assumes inputs are in [0, 1]. """
         return torch.mean(self.perceptual_loss(x_gen, x_real, normalize=True))
+
+    def discriminator_forward(self, intermediates, generator_train):
+        """ Train on gen/real batches simultaneously. """
+        x_gen = intermediates.reconstruction
+        x_real = intermediates.input_image
+
+        # Alternate between training discriminator and compression models
+        if generator_train is False:
+            x_gen = x_gen.detach()
+
+        D_in = torch.cat([x_real, x_gen], dim=0)
+
+        latents = intermediates.latents_quantized.detach()
+        # latents = torch.cat([latents, latents], dim=0)
+        latents = torch.repeat_interleave(latents, 2, dim=0)
+
+        D_out, D_out_logits = self.Discriminator(D_in, latents)
+
+        D_real, D_gen = torch.split(D_out, 2, dim=0)
+        D_real_logits, D_gen_logits = torch.split(D_out_logits, 2, dim=0)
+
+        # Tensorboard
+        # real_response, gen_response = D_real.mean(), D_fake.mean()
+
+        return Disc_out(D_real, D_gen, D_real_logits, D_gen_logits)
+
+
+    def compression_loss(self, intermediates):
+        
+        x_real = intermediates.input_image
+        x_gen = intermediates.reconstruction
+
+        weighted_distortion = self.args.k_M * self.distortion_loss(x_gen, x_real)
+        weighted_perceptual = self.args.k_P * self.perceptual_loss(x_gen, x_real)
+
+        weighted_rate = losses.weighted_rate_loss(self.args, total_nbpp=intermediates.n_bpp,
+            total_qbpp=intermediates.q_bpp, step_counter=self.step_counter)
+
+        weighted_R_D_loss = weighted_rate + weighted_distortion
+        weighted_compression_loss = weighted_R_D_loss + weighted_perceptual
+
+        if self.use_discriminator is True:
+            disc_out = self.discriminator_forward(intermediates, generator_train=True)
+            G_loss = losses.gan_loss(disc_out, mode='generator_loss')
+            weighted_G_loss = self.args.beta * G_loss
+            weighted_compression_loss += weighted_G_loss
+
+        return weighted_compression_loss
+
+
+    def discriminator_loss(self, intermediates):
+
+        disc_out = self.discriminator_forward(intermediates, generator_train=False)
+        D_loss = losses.gan_loss(disc_out, mode='discriminator_loss')
+        return D_loss
+
+    def forward(self, x):
+
+        self.step_counter += 1
+        intermediates = self.compression_forward(x)
+
+        if self.mode == model_modes.EVALUATION:
+            reconstruction = torch.mul(intermediates.reconstruction, 255.)
+            reconstruction = torch.clamp(reconstruction, min=0., max=255.)
+            return reconstruction, intermediates.total_qbpp
+
+        compression_model_loss = self.compression_loss(intermediates)
+
+        if self.use_discriminator:
+            discriminator_model_loss = self.discriminator_loss(intermediates)
+        
 
 if __name__ == '__main__':
 
@@ -92,7 +208,7 @@ if __name__ == '__main__':
     for n, p in model.named_parameters():
         logger.info(n)
 
-    x = torch.randn([10, 2, 256, 256])
+    x = torch.randn([10, 3, 256, 256])
     out = model(x)
     print('Out shape', out.size())
 

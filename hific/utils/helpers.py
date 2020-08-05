@@ -1,8 +1,6 @@
-""" Authors: @YannDubs 2019
-             @sksq96   2019 """
-
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.autograd import Variable
 
 import numpy as np
@@ -45,6 +43,13 @@ def quick_restore_model(model, filename):
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
+def pad_factor(input_image, spatial_dims, factor):
+    """Pad `input_image` (N,C,H,W) such that H and W are divisible by `factor`."""
+    H, W = spatial_dims[0], spatial_dims[1]
+    pad_H = (factor - (H % factor)) % factor
+    pad_W = (factor - (W % factor)) % factor
+    return F.pad(input_image, pad=(0, pad_H, 0, pad_W), mode='reflection')
+
 class Swish(nn.Module):
 
     def __init__(self):
@@ -53,6 +58,17 @@ class Swish(nn.Module):
 
     def forward(self, x):
         return x * torch.sigmoid(self.beta * x)
+
+def get_scheduled_params(param, param_schedule, step_counter):
+    # e.g. schedule = dict(vals=[1., 0.1], steps=[N])
+    # reduces param value by a factor of 0.1 after N steps
+    vals, steps = param_schedule['vals'], param_schedule['steps']
+    assert(len(vals) == len(steps)+1), 'Mispecified schedule! - {}'.format(param_schedule)
+    steps.extend([int(step_counter)])
+    idx = np.where(step_counter < np.array(s['steps']))[0][0]
+    param *= vals[idx]
+
+    return param
 
 def setup_generic_signature(args, special_info):
 
