@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from hific.utils.helpers import get_scheduled_params0
+from hific.utils.helpers import get_scheduled_params
 
 def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter):
     """
@@ -49,7 +49,7 @@ def gan_loss(disc_out, mode='generator_loss', gan_type='non_saturating'):
 
     if gan_type == 'non_saturating':
         loss_fn = _non_saturating_loss
-    elif: gan_type == 'least_squares'
+    elif gan_type == 'least_squares':
         loss_fn = _least_squares_loss
     else:
         raise ValueError('Invalid GAN loss')

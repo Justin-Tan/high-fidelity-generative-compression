@@ -2,6 +2,7 @@
 Stitches submodels together.
 """
 import numpy as np
+import time, os
 
 from collections import defaultdict, namedtuple
 
@@ -14,7 +15,7 @@ import hific.perceptual_similarity as ps
 from hific.models import network, hyperprior
 from hific.utils import helpers, datasets, math, losses
 
-from default_config import model_modes, model_types, args, directories
+from default_config import ModelModes, ModelTypes, args, directories
 
 Intermediates = namedtuple("Intermediates",
     ["input_image",             # [0, 1] (after scaling from [0, 255])
@@ -28,20 +29,22 @@ Disc_out= namedtuple("disc_out",
 
 class HificModel(nn.Module):
 
-    def __init__(self, args, logger, mode=model_modes.TRAINING, model_type=model_types.COMPRESSION):
+    def __init__(self, args, logger, model_mode=ModelModes.TRAINING, model_type=ModelTypes.COMPRESSION):
         super(HificModel, self).__init__()
 
         """
         Builds hific model from submodels.
         """
         self.args = args
-        self.mode = mode
+        self.model_mode = model_mode
         self.model_type = model_type
         self.logger = logger
         self.step_counter = 0
 
-        if not isinstance(self.model_type, model_types):
+        if not hasattr(ModelTypes, self.model_type.upper()):
             raise ValueError("Invalid model_type: [{}]".format(self.model_type))
+        if not hasattr(ModelModes, self.model_mode.upper()):
+            raise ValueError("Invalid model_mode: [{}]".format(self.model_mode))
 
         self.image_dims = self.args.image_dims  # Assign from dataloader
         self.batch_size = self.args.batch_size
@@ -55,8 +58,8 @@ class HificModel(nn.Module):
 
         # Use discriminator if GAN mode enabled and in training/validation
         self.use_discriminator = (
-            self.model_type = model_types.COMPRESSION_GAN
-            and (self.mode != model_modes.EVALUATION)
+            self.model_type == ModelTypes.COMPRESSION_GAN
+            and (self.model_mode != ModelModes.EVALUATION)
         )
 
         if self.use_discriminator is True:
@@ -89,7 +92,7 @@ class HificModel(nn.Module):
         """
         image_dims = tuple(torch.size(x)[1:])  # (C,H,W)
 
-        if self.mode = model_modes.VALIDATION and (self.training is False):
+        if self.model_mode == ModelModes.VALIDATION and (self.training is False):
             n_downsamples = self.Encoder.n_downsampling_layers
             factor = 2 ** n_downsamples
             logger.info('Padding to {}'.format(factor))
@@ -114,15 +117,6 @@ class HificModel(nn.Module):
             total_nbpp, total_qbpp)
 
         return intermediates
-
-    def distortion_loss(self, x_gen, x_real):
-        # loss in [0,255] space but normalized by 255 to not be too big
-        mse = self.squared_difference(x_gen, x_real) # / 255.
-        return torch.mean(mse)
-
-    def perceptual_loss(self, x_gen, x_real):
-        """ Assumes inputs are in [0, 1]. """
-        return torch.mean(self.perceptual_loss(x_gen, x_real, normalize=True))
 
     def discriminator_forward(self, intermediates, generator_train):
         """ Train on gen/real batches simultaneously. """
@@ -149,6 +143,14 @@ class HificModel(nn.Module):
 
         return Disc_out(D_real, D_gen, D_real_logits, D_gen_logits)
 
+    def distortion_loss(self, x_gen, x_real):
+        # loss in [0,255] space but normalized by 255 to not be too big
+        mse = self.squared_difference(x_gen, x_real) # / 255.
+        return torch.mean(mse)
+
+    def perceptual_loss(self, x_gen, x_real):
+        """ Assumes inputs are in [0, 1]. """
+        return torch.mean(self.perceptual_loss(x_gen, x_real, normalize=True))
 
     def compression_loss(self, intermediates):
         
@@ -157,16 +159,22 @@ class HificModel(nn.Module):
 
         weighted_distortion = self.args.k_M * self.distortion_loss(x_gen, x_real)
         weighted_perceptual = self.args.k_P * self.perceptual_loss(x_gen, x_real)
+        print('Distortion loss size', weighted_distortion.size())
+        print('Perceptual loss size', weighted_perceptual.size())
 
         weighted_rate = losses.weighted_rate_loss(self.args, total_nbpp=intermediates.n_bpp,
             total_qbpp=intermediates.q_bpp, step_counter=self.step_counter)
 
+        print('Weighted rate loss size', weighted_rate.size())
         weighted_R_D_loss = weighted_rate + weighted_distortion
         weighted_compression_loss = weighted_R_D_loss + weighted_perceptual
+
+        print('Weighted R-D loss size', weighted_R_D_loss.size())
 
         if self.use_discriminator is True:
             disc_out = self.discriminator_forward(intermediates, generator_train=True)
             G_loss = losses.gan_loss(disc_out, mode='generator_loss')
+            print('G loss size', G_loss.size())
             weighted_G_loss = self.args.beta * G_loss
             weighted_compression_loss += weighted_G_loss
 
@@ -177,6 +185,7 @@ class HificModel(nn.Module):
 
         disc_out = self.discriminator_forward(intermediates, generator_train=False)
         D_loss = losses.gan_loss(disc_out, mode='discriminator_loss')
+
         return D_loss
 
     def forward(self, x):
@@ -184,21 +193,23 @@ class HificModel(nn.Module):
         self.step_counter += 1
         intermediates = self.compression_forward(x)
 
-        if self.mode == model_modes.EVALUATION:
+        if self.model_mode == ModelModes.EVALUATION:
             reconstruction = torch.mul(intermediates.reconstruction, 255.)
             reconstruction = torch.clamp(reconstruction, min=0., max=255.)
-            return reconstruction, intermediates.total_qbpp
+            return reconstruction, intermediates.qbpp
 
         compression_model_loss = self.compression_loss(intermediates)
 
         if self.use_discriminator:
             discriminator_model_loss = self.discriminator_loss(intermediates)
         
+        return compression_model_loss, discriminator_model_loss
 
 if __name__ == '__main__':
 
     start_time = time.time()
     logger = helpers.logger_setup(logpath=os.path.join(directories.experiments, 'logs'), filepath=os.path.abspath(__file__))
+    logger.info('Starting forward pass ...')
 
     model = HificModel(args, logger)
 
@@ -208,8 +219,9 @@ if __name__ == '__main__':
     for n, p in model.named_parameters():
         logger.info(n)
 
-    x = torch.randn([10, 3, 256, 256])
-    out = model(x)
-    print('Out shape', out.size())
+    x = torch.randn([2, 3, 256, 256])
+    compression_loss, disc_loss = model(x)
+    print('Compression loss shape', compression_loss.size())
+    print('Disc loss shape', disc_loss.size())
 
     logger.info('Delta t {:.3f}s'.format(time.time() - start_time))

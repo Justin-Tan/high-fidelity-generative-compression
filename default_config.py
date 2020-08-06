@@ -7,11 +7,11 @@ command line arguments in `train.py`.
 [1]: arXiv 2006.09965
 """
 
-class model_types(object):
+class ModelTypes(object):
     COMPRESSION = 'compression'
     COMPRESSION_GAN = 'compression_gan'
 
-class model_modes(object):
+class ModelModes(object):
     TRAINING = 'training'
     VALIDATION = 'validation'  # Monitoring
     EVALUATION = 'evaluation'
@@ -39,7 +39,7 @@ class args(object):
     use_channel_norm = True
 
     # Shapes
-    input_dims = (3,256,256)
+    image_dims = (3,256,256)
     latent_dims = (latent_channels,16,16)
     
     # Optimizer params
@@ -52,21 +52,22 @@ class args(object):
     target_schedule = dict(vals=[0.20/0.14, 1.], steps=[50000])
 
     # match target rate to lambda_A coefficient
-    target_rate = 0.14
-    perceptual_weight = 1.
-    lambda_A_R = dict(0.14=2**1, 0.30=2**0, 0.45==2**(-1))
-    lambda_A = lambda_A_R[target_rate]
+    target_rate = 'low'  # 0.14
+    mode_rate = dict(low=0.14, med=0.3, high=0.45)
+    lambda_A_rate = dict(low=2**1, med=2**0, high=2**(-1))
+    lambda_A = lambda_A_rate[target_rate]  # High rate
 
     # Constrain rate:
     # Loss = C * (1/lambda * R + CD * D) + CP * P
     # where lambda = lambda_a if current_bpp > target_rate
     # lambda_b otherwise.
-    C = 0.1 * 2. ** -5  # R-D joint coefficient
-    CD = 0.75  # distortion
-    CP = None  # Generator loss
+    # C = 0.1 * 2. ** -5  # R-D joint coefficient
+    # CD = 0.75  # distortion
+    # CP = None  # Generator loss
+    # perceptual_weight = 1.
 
-    lambda_A = 0.1 * 2. ** -6
-    lambda_B = 0.1 * 2. ** 1
+    # lambda_A = 0.1 * 2. ** -6
+    # lambda_B = 0.1 * 2. ** 1
 
 
 class mse_lpips_args(args):
@@ -74,14 +75,14 @@ class mse_lpips_args(args):
     Config for model trained with distortion and 
     perceptual loss only.
     """
-    model_type = model_types.COMPRESSION
+    model_type = ModelTypes.COMPRESSION
 
 class hific_args(args):
     """
     Config for model trained with full generative
     loss terms.
     """
-    model_type = model_types.COMPRESSION_GAN
+    model_type = ModelTypes.COMPRESSION_GAN
     gan_loss = 'non_saturating'  # ('non_saturating', 'least_squares')
     discriminator_steps = 1
     CP=0.15  # Sweep over 0.1 * 1.5 ** x
