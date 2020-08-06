@@ -174,8 +174,6 @@ class HyperpriorDensity(nn.Module):
 
             if update_parameters is False:
                 H_k, a_k, b_k = H_k.detach(), a_k.detach(), b_k.detach()
-            print(H_k.size())
-            print(logits.size())
             logits = torch.bmm(F.softplus(H_k), logits)  # [C,filters[k+1],B]
             logits += b_k
             logits += torch.tanh(a_k) * torch.tanh(logits)

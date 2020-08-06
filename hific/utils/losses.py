@@ -11,13 +11,13 @@ def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter):
     some target r_t, otherwise penalize with lambda_B
     """
     lambda_A = get_scheduled_params(config.lambda_A, config.lambda_schedule, step_counter)
-    lambda_B = get_scheduled_params(config.lambda_A, config.lambda_schedule, step_counter)
+    lambda_B = get_scheduled_params(config.lambda_B, config.lambda_schedule, step_counter)
 
     assert lambda_A > lambda_B, "Expected lambda_A > lambda_B, got (A) {} <= (B) {}".format(
         lambda_A, lambda_B)
 
     target_bpp = get_scheduled_params(config.target_rate, config.target_schedule, step_counter)
-    rate_penalty = float(np.where(total_qbpp.cpu().numpy() > target_bpp, lambda_A, lambda_B))
+    rate_penalty = float(np.where(total_qbpp.detach().cpu().numpy() > target_bpp, lambda_A, lambda_B))
 
     # Tensorboard
 

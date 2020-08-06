@@ -64,8 +64,7 @@ def get_scheduled_params(param, param_schedule, step_counter):
     # reduces param value by a factor of 0.1 after N steps
     vals, steps = param_schedule['vals'], param_schedule['steps']
     assert(len(vals) == len(steps)+1), 'Mispecified schedule! - {}'.format(param_schedule)
-    steps.extend([int(step_counter)])
-    idx = np.where(step_counter < np.array(s['steps']))[0][0]
+    idx = np.where(step_counter < np.array(steps + [step_counter+1]))[0][0]
     param *= vals[idx]
 
     return param

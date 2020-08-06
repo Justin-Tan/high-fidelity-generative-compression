@@ -15,12 +15,12 @@ import hific.perceptual_similarity as ps
 from hific.models import network, hyperprior
 from hific.utils import helpers, datasets, math, losses
 
-from default_config import ModelModes, ModelTypes, args, directories
+from default_config import ModelModes, ModelTypes, hific_args, directories
 
 Intermediates = namedtuple("Intermediates",
     ["input_image",             # [0, 1] (after scaling from [0, 255])
      "reconstruction",          # [0, 1]
-     "latent_quantized",        # Latents post-quantization.
+     "latents_quantized",        # Latents post-quantization.
      "n_bpp",                   # Differential entropy estimate.
      "q_bpp"])                  # Shannon entropy estimate.
 
@@ -74,9 +74,9 @@ class HificModel(nn.Module):
             self.Discriminator = None
 
         
-        self.squared_difference = torch.nn.MSELoss(reduction='None')
+        self.squared_difference = torch.nn.MSELoss(reduction='none')
         # Expects [-1,1] images or [0,1] with normalize=True flag
-        self.perceptual_loss = ps.PerceptualLoss(model='net_lin', net='alex', use_gpu=True)
+        self.perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=True)
         
 
     def compression_forward(self, x):
@@ -90,7 +90,7 @@ class HificModel(nn.Module):
         Outputs
         intermediates: NamedTuple of intermediate values
         """
-        image_dims = tuple(torch.size(x)[1:])  # (C,H,W)
+        image_dims = tuple(x.size()[1:])  # (C,H,W)
 
         if self.model_mode == ModelModes.VALIDATION and (self.training is False):
             n_downsamples = self.Encoder.n_downsampling_layers
@@ -134,9 +134,10 @@ class HificModel(nn.Module):
         latents = torch.repeat_interleave(latents, 2, dim=0)
 
         D_out, D_out_logits = self.Discriminator(D_in, latents)
+        print(D_out.size())
 
-        D_real, D_gen = torch.split(D_out, 2, dim=0)
-        D_real_logits, D_gen_logits = torch.split(D_out_logits, 2, dim=0)
+        D_real, D_gen = torch.chunk(D_out, 2, dim=0)
+        D_real_logits, D_gen_logits = torch.chunk(D_out_logits, 2, dim=0)
 
         # Tensorboard
         # real_response, gen_response = D_real.mean(), D_fake.mean()
@@ -148,9 +149,10 @@ class HificModel(nn.Module):
         mse = self.squared_difference(x_gen, x_real) # / 255.
         return torch.mean(mse)
 
-    def perceptual_loss(self, x_gen, x_real):
+    def perceptual_loss_wrapper(self, x_gen, x_real):
         """ Assumes inputs are in [0, 1]. """
-        return torch.mean(self.perceptual_loss(x_gen, x_real, normalize=True))
+        LPIPS_loss = self.perceptual_loss.forward(x_gen, x_real, normalize=True)
+        return torch.mean(LPIPS_loss)
 
     def compression_loss(self, intermediates):
         
@@ -158,7 +160,7 @@ class HificModel(nn.Module):
         x_gen = intermediates.reconstruction
 
         weighted_distortion = self.args.k_M * self.distortion_loss(x_gen, x_real)
-        weighted_perceptual = self.args.k_P * self.perceptual_loss(x_gen, x_real)
+        weighted_perceptual = self.args.k_P * self.perceptual_loss_wrapper(x_gen, x_real)
         print('Distortion loss size', weighted_distortion.size())
         print('Perceptual loss size', weighted_perceptual.size())
 
@@ -202,16 +204,19 @@ class HificModel(nn.Module):
 
         if self.use_discriminator:
             discriminator_model_loss = self.discriminator_loss(intermediates)
-        
-        return compression_model_loss, discriminator_model_loss
+            return compression_model_loss, discriminator_model_loss
+
+        return compression_model_loss
 
 if __name__ == '__main__':
 
     start_time = time.time()
     logger = helpers.logger_setup(logpath=os.path.join(directories.experiments, 'logs'), filepath=os.path.abspath(__file__))
     logger.info('Starting forward pass ...')
-
-    model = HificModel(args, logger)
+    device = helpers.get_device()
+    logger.info('Using device {}'.format(device))
+    model = HificModel(hific_args, logger, model_type=ModelTypes.COMPRESSION_GAN)
+    model.to(device)
 
     logger.info(model)
     logger.info("Number of trainable parameters: {}".format(helpers.count_parameters(model)))
@@ -219,9 +224,10 @@ if __name__ == '__main__':
     for n, p in model.named_parameters():
         logger.info(n)
 
-    x = torch.randn([2, 3, 256, 256])
+    x = torch.randn([2, 3, 256, 256]).to(device)
     compression_loss, disc_loss = model(x)
     print('Compression loss shape', compression_loss.size())
     print('Disc loss shape', disc_loss.size())
 
     logger.info('Delta t {:.3f}s'.format(time.time() - start_time))
+

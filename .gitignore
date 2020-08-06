@@ -13,11 +13,11 @@ __pycache__/
 **/*.h5
 **/*.hdf
 **/*.pt
-**/*.pth
+# **/*.pth
 **/*.npy
 graphs/
 results/
-experiments/
+# experiments/
 imgs/*.pdf
 data/*.jpg
 hific_dev/

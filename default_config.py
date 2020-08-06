@@ -36,7 +36,7 @@ class args(object):
     k_M = 0.075 * 2**(-5)       # Distortion
     k_P = 1.                    # Perceptual loss
     beta = 0.15                 # Generator loss
-    use_channel_norm = True
+    use_channel_norm = False  #True
 
     # Shapes
     image_dims = (3,256,256)
@@ -52,10 +52,11 @@ class args(object):
     target_schedule = dict(vals=[0.20/0.14, 1.], steps=[50000])
 
     # match target rate to lambda_A coefficient
-    target_rate = 'low'  # 0.14
-    mode_rate = dict(low=0.14, med=0.3, high=0.45)
-    lambda_A_rate = dict(low=2**1, med=2**0, high=2**(-1))
-    lambda_A = lambda_A_rate[target_rate]  # High rate
+    regime = 'low'  # 0.14
+    target_rate_map = dict(low=0.14, med=0.3, high=0.45)
+    lambda_A_map = dict(low=2**1, med=2**0, high=2**(-1))
+    target_rate = target_rate_map[regime]
+    lambda_A = lambda_A_map[regime]  # High rate
 
     # Constrain rate:
     # Loss = C * (1/lambda * R + CD * D) + CP * P
