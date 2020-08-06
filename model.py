@@ -12,7 +12,7 @@ import torch.nn.functional as F
 
 # Custom modules
 import hific.perceptual_similarity as ps
-from hific.models import network, hyperprior
+from hific.submodels import network, hyperprior
 from hific.utils import helpers, datasets, math, losses
 
 from default_config import ModelModes, ModelTypes, hific_args, directories
@@ -52,9 +52,12 @@ class HificModel(nn.Module):
         self.Encoder = network.Encoder(self.image_dims, self.batch_size, C=self.args.latent_channels,
             channel_norm=self.args.use_channel_norm)
         self.Generator = network.Generator(self.image_dims, self.batch_size, C=self.args.latent_channels,
-            channel_norm=self.args.use_channel_norm)
+            n_residual_blocks=self.args.n_residual_blocks, channel_norm=self.args.use_channel_norm)
 
         self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.args.latent_channels)
+
+        self.amortization_models = [self.Encoder, self.Generator]
+        self.amortization_models.extend(self.Hyperprior.amortization_models)
 
         # Use discriminator if GAN mode enabled and in training/validation
         self.use_discriminator = (
@@ -76,7 +79,7 @@ class HificModel(nn.Module):
         
         self.squared_difference = torch.nn.MSELoss(reduction='none')
         # Expects [-1,1] images or [0,1] with normalize=True flag
-        self.perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=True)
+        self.perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available())
         
 
     def compression_forward(self, x):
@@ -224,7 +227,7 @@ if __name__ == '__main__':
     for n, p in model.named_parameters():
         logger.info(n)
 
-    x = torch.randn([2, 3, 256, 256]).to(device)
+    x = torch.randn([10, 3, 256, 256]).to(device)
     compression_loss, disc_loss = model(x)
     print('Compression loss shape', compression_loss.size())
     print('Disc loss shape', disc_loss.size())

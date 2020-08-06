@@ -16,7 +16,7 @@ class ResidualBlock(nn.Module):
 
         self.activation = getattr(F, activation)
         in_channels = input_dims[1]
-        norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=True)
+        norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=False)
 
         if channel_norm is True:
             self.interlayer_norm = normalization.ChannelNorm2D_wrap
@@ -27,8 +27,8 @@ class ResidualBlock(nn.Module):
         self.pad = nn.ReflectionPad2d(pad_size)
         self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size, stride=stride)
         self.conv2 = nn.Conv2d(in_channels, in_channels, kernel_size, stride=stride)
-        self.norm1 = self.interlayer_norm(input_dims, **norm_kwargs)
-        self.norm2 = self.interlayer_norm(input_dims, **norm_kwargs)
+        self.norm1 = self.interlayer_norm(in_channels, **norm_kwargs)
+        self.norm2 = self.interlayer_norm(in_channels, **norm_kwargs)
 
     def forward(self, x):
 
@@ -74,7 +74,7 @@ class Encoder(nn.Module):
 
         # Layer / normalization options
         cnn_kwargs = dict(stride=2, padding=0, padding_mode='reflect')
-        norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=True)
+        norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=False)
         activation_d = dict(relu='ReLU', elu='ELU', leaky_relu='LeakyReLU')
         self.activation = getattr(nn, activation_d[activation])  # (leaky_relu, relu, elu)
         self.n_downsampling_layers = 4
@@ -97,7 +97,7 @@ class Encoder(nn.Module):
         self.conv_block1 = nn.Sequential(
             self.pre_pad,
             nn.Conv2d(im_channels, filters[0], kernel_size=(7,7), stride=1),
-            self.interlayer_norm((batch_size, filters[0], H1, W1), **norm_kwargs),
+            self.interlayer_norm(filters[0], **norm_kwargs),
             self.activation(),
         )
 
@@ -105,7 +105,7 @@ class Encoder(nn.Module):
         self.conv_block2 = nn.Sequential(
             self.asymmetric_pad,
             nn.Conv2d(filters[0], filters[1], kernel_dim, **cnn_kwargs),
-            self.interlayer_norm((batch_size, filters[1], H2, W2), **norm_kwargs),
+            self.interlayer_norm(filters[1], **norm_kwargs),
             self.activation(),
         )
 
@@ -113,7 +113,7 @@ class Encoder(nn.Module):
         self.conv_block3 = nn.Sequential(
             self.asymmetric_pad,
             nn.Conv2d(filters[1], filters[2], kernel_dim, **cnn_kwargs),
-            self.interlayer_norm((batch_size, filters[2], H3, W3), **norm_kwargs),
+            self.interlayer_norm(filters[2], **norm_kwargs),
             self.activation(),
         )
 
@@ -121,7 +121,7 @@ class Encoder(nn.Module):
         self.conv_block4 = nn.Sequential(
             self.asymmetric_pad,
             nn.Conv2d(filters[2], filters[3], kernel_dim, **cnn_kwargs),
-            self.interlayer_norm((batch_size, filters[3], H4, W4), **norm_kwargs),
+            self.interlayer_norm(filters[3], **norm_kwargs),
             self.activation(),
         )
 
@@ -129,7 +129,7 @@ class Encoder(nn.Module):
         self.conv_block5 = nn.Sequential(
             self.asymmetric_pad,
             nn.Conv2d(filters[3], filters[4], kernel_dim, **cnn_kwargs),
-            self.interlayer_norm((batch_size, filters[4], H5, W5), **norm_kwargs),
+            self.interlayer_norm(filters[4], **norm_kwargs),
             self.activation(),
         )
         
@@ -181,7 +181,7 @@ class Generator(nn.Module):
 
         # Layer / normalization options
         cnn_kwargs = dict(stride=2, padding=1, output_padding=1)
-        norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=True)
+        norm_kwargs = dict(momentum=0.1, affine=True, track_running_stats=False)
         activation_d = dict(relu='ReLU', elu='ELU', leaky_relu='LeakyReLU')
         self.activation = getattr(nn, activation_d[activation])  # (leaky_relu, relu, elu)
         self.n_upsampling_layers = 4
@@ -203,10 +203,10 @@ class Generator(nn.Module):
 
         # (16,16) -> (16,16), with implicit padding
         self.conv_block_init = nn.Sequential(
-            self.interlayer_norm((batch_size, C, H0, W0), **norm_kwargs),
+            self.interlayer_norm(C, **norm_kwargs),
             self.pre_pad,
             nn.Conv2d(C, filters[0], kernel_size=(3,3), stride=1),
-            self.interlayer_norm((batch_size, filters[0], H0, W0), **norm_kwargs),
+            self.interlayer_norm(filters[0], **norm_kwargs),
         )
 
         for m in range(n_residual_blocks):
@@ -217,25 +217,25 @@ class Generator(nn.Module):
         # (16,16) -> (32,32)
         self.upconv_block1 = nn.Sequential(
             nn.ConvTranspose2d(filters[0], filters[1], kernel_dim, **cnn_kwargs),
-            self.interlayer_norm((batch_size, filters[1], H1, W1), **norm_kwargs),
+            self.interlayer_norm(filters[1], **norm_kwargs),
             self.activation(),
         )
 
         self.upconv_block2 = nn.Sequential(
             nn.ConvTranspose2d(filters[1], filters[2], kernel_dim, **cnn_kwargs),
-            self.interlayer_norm((batch_size, filters[2], H2, W2), **norm_kwargs),
+            self.interlayer_norm(filters[2], **norm_kwargs),
             self.activation(),
         )
 
         self.upconv_block3 = nn.Sequential(
             nn.ConvTranspose2d(filters[2], filters[3], kernel_dim, **cnn_kwargs),
-            self.interlayer_norm((batch_size, filters[3], H3, W3), **norm_kwargs),
+            self.interlayer_norm(filters[3], **norm_kwargs),
             self.activation(),
         )
 
         self.upconv_block4 = nn.Sequential(
             nn.ConvTranspose2d(filters[3], filters[4], kernel_dim, **cnn_kwargs),
-            self.interlayer_norm((batch_size, filters[4], H4, W4), **norm_kwargs),
+            self.interlayer_norm(filters[4], **norm_kwargs),
             self.activation(),
         )
 
@@ -262,8 +262,9 @@ class Generator(nn.Module):
         x = self.upconv_block3(x)
         x = self.upconv_block4(x)
         out = self.conv_block_out(x)
+        # out = torch.tanh(out)
 
-        return torch.tanh(out)
+        return out
 
 
 class Discriminator(nn.Module):

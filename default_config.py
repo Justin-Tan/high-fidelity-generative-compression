@@ -16,6 +16,9 @@ class ModelModes(object):
     VALIDATION = 'validation'  # Monitoring
     EVALUATION = 'evaluation'
 
+class Datasets(object):
+    OPENIMAGES = 'openimages'
+
 class args(object):
     """
     Common config
@@ -25,18 +28,19 @@ class args(object):
     n_epochs = 42  # Paper says 2M training steps
     batch_size = 2048
     multigpu = True
-    DATASETS = [...]
+    dataset = Datasets.OPENIMAGES
     save_interval = 42
     shuffle = True
     discriminator_steps = 0
 
     # Architecture params - Table 3a) of [1]
     latent_channels = 220
+    n_residual_blocks = 5  # Authors use 9 blocks
     lambda_B = 2**(-4)          # Loose rate
     k_M = 0.075 * 2**(-5)       # Distortion
     k_P = 1.                    # Perceptual loss
     beta = 0.15                 # Generator loss
-    use_channel_norm = False  #True
+    use_channel_norm = True
 
     # Shapes
     image_dims = (3,256,256)

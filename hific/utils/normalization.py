@@ -5,23 +5,22 @@ import torch.nn.functional as F
 
 from torch.nn import Parameter
 
-def InstanceNorm2D_wrap(input_dim, momentum=0.1, affine=True,
+def InstanceNorm2D_wrap(input_channels, momentum=0.1, affine=True,
                         track_running_stats=False, **kwargs):
     """ 
     Wrapper around default Torch instancenorm
     """
-    input_channels = input_dim[1]
     instance_norm_layer = nn.InstanceNorm2d(input_channels, 
         momentum=momentum, affine=affine,
         track_running_stats=track_running_stats)
     return instance_norm_layer
 
-def ChannelNorm2D_wrap(input_dim, momentum=0.1, affine=True,
+def ChannelNorm2D_wrap(input_channels, momentum=0.1, affine=True,
                        track_running_stats=False, **kwargs):
     """
     Wrapper around Channel Norm module
     """
-    channel_norm_layer = ChannelNorm2D(input_dim, 
+    channel_norm_layer = ChannelNorm2D(input_channels, 
         momentum=momentum, affine=affine,
         track_running_stats=track_running_stats)
 
@@ -34,61 +33,29 @@ class ChannelNorm2D(nn.Module):
     Expects input_dim in format (B,C,H,W)
     """
 
-    def __init__(self, input_dim, momentum=0.1, eps=1e-5,
-                 affine=True, track_running_stats=False):
+    def __init__(self, input_channels, momentum=0.1, eps=1e-3,
+                 affine=True, **kwargs):
         super(ChannelNorm2D, self).__init__()
 
         self.momentum = momentum
         self.eps = eps
         self.affine = affine
-        self.track_running_stats = track_running_stats
 
         if affine is True:
-            self.log_gamma = nn.Parameter(torch.zeros(input_dim))
-            self.beta = nn.Parameter(torch.zeros(input_dim))
-        
-        if track_running_stats is True:  
-            # Probably not a good idea
-            # Actually maybe OK - TODO test
-            self.register_buffer('running_mean', torch.zeros(input_dim))
-            self.register_buffer('running_var', torch.ones(input_dim))
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-
-        if self.track_running_stats is True:
-            self.running_mean.zero_()
-            self.running_var.fill_(1)
-
-        if self.affine is True:
-            self.log_gamma.data.zero_()
-            self.beta.data.zero_()
+            self.gamma = nn.Parameter(torch.ones(1, input_channels, 1, 1))
+            self.beta = nn.Parameter(torch.zeros(1, input_channels, 1, 1))
 
     def forward(self, x):
         """
-        Calculate moments over channel dim using minibatch statistics, 
-        update running mean/var. Use running estimates during evaluation.
+        Calculate moments over channel dim, normalize.
         x:  Image tensor, shape (B,C,H,W)
         """
-        if (self.training is False) and (self.track_running_stats is True):
-            # Normalize using running stats during eval
-            mu, var = self.running_mean, self.running_var
-        else:
-            # Channel moments
-            mu, var = torch.mean(x, dim=1, keepdim=True), torch.var(x, dim=1, keepdim=True)
+        mu, var = torch.mean(x, dim=1, keepdim=True), torch.var(x, dim=1, keepdim=True)
 
-        if ((self.training and self.track_running_stats) is True):
-            self.running_mean.mul_(self.momentum)
-            self.running_var.mul_(self.momentum)
-
-            self.running_mean.add_(mu.data * (1 - self.momentum))
-            self.running_var.add_(var.data * (1 - self.momentum))
-
-        x_normed = (x - mu) * 1./torch.sqrt(var + self.eps)
+        x_normed = (x - mu) * torch.rsqrt(var + self.eps)
 
         if self.affine is True:
-            x_normed = torch.exp(self.log_gamma) * x_normed + self.beta
+            x_normed = self.gamma * x_normed + self.beta
 
         return x_normed
 

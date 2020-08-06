@@ -2,11 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import functools
 from collections import namedtuple
 
 # Custom
-from hific.models import network
+from hific.submodels import network
 from hific.utils import math, distributions, initialization, helpers
 
 MIN_SCALE = 0.11
@@ -238,6 +237,8 @@ class Hyperprior(CodingModel):
         self.synthesis_mu = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
         self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters,
             final_activation='softplus')
+        
+        self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
         self.hyperlatent_likelihood = HyperpriorDensity(n_channels=hyperlatent_filters)
         self.latent_likelihood = PriorDensity(n_channels=bottleneck_capacity)

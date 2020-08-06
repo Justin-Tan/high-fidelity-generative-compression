@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from hific.utils import math, normalization
-from hific.models import network
 
 EPS = 1e-8
 
