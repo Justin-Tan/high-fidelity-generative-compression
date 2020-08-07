@@ -3,6 +3,7 @@ Stitches submodels together.
 """
 import numpy as np
 import time, os
+import itertools
 
 from collections import defaultdict, namedtuple
 
@@ -29,7 +30,7 @@ Disc_out= namedtuple("disc_out",
 
 class HificModel(nn.Module):
 
-    def __init__(self, args, logger, model_mode=ModelModes.TRAINING, model_type=ModelTypes.COMPRESSION):
+    def __init__(self, args, logger, storage, model_mode=ModelModes.TRAINING, model_type=ModelTypes.COMPRESSION):
         super(HificModel, self).__init__()
 
         """
@@ -39,6 +40,8 @@ class HificModel(nn.Module):
         self.model_mode = model_mode
         self.model_type = model_type
         self.logger = logger
+        self.log_interval = args.log_interval
+        self.storage = storage
         self.step_counter = 0
 
         if not hasattr(ModelTypes, self.model_type.upper()):
@@ -81,6 +84,9 @@ class HificModel(nn.Module):
         # Expects [-1,1] images or [0,1] with normalize=True flag
         self.perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available())
         
+    def store_loss(self, key, loss):
+        assert type(loss) == float, 'Call .item() on loss before storage'
+        self.storage[key].append(loss)
 
     def compression_forward(self, x):
         """
@@ -162,12 +168,16 @@ class HificModel(nn.Module):
         x_real = intermediates.input_image
         x_gen = intermediates.reconstruction
 
-        weighted_distortion = self.args.k_M * self.distortion_loss(x_gen, x_real)
-        weighted_perceptual = self.args.k_P * self.perceptual_loss_wrapper(x_gen, x_real)
+        distortion_loss = self.distortion_loss(x_gen, x_real)
+        perceptual_loss = self.perceptual_loss_wrapper(x_gen, x_real)
+
+        weighted_distortion = self.args.k_M * distortion_loss
+        weighted_perceptual = self.args.k_P * perceptual_loss
+
         print('Distortion loss size', weighted_distortion.size())
         print('Perceptual loss size', weighted_perceptual.size())
 
-        weighted_rate = losses.weighted_rate_loss(self.args, total_nbpp=intermediates.n_bpp,
+        weighted_rate, rate_penalty = losses.weighted_rate_loss(self.args, total_nbpp=intermediates.n_bpp,
             total_qbpp=intermediates.q_bpp, step_counter=self.step_counter)
 
         print('Weighted rate loss size', weighted_rate.size())
@@ -175,62 +185,113 @@ class HificModel(nn.Module):
         weighted_compression_loss = weighted_R_D_loss + weighted_perceptual
 
         print('Weighted R-D loss size', weighted_R_D_loss.size())
+        print('Weighted compression loss size', weighted_compression_loss.size())
 
-        if self.use_discriminator is True:
-            disc_out = self.discriminator_forward(intermediates, generator_train=True)
-            G_loss = losses.gan_loss(disc_out, mode='generator_loss')
-            print('G loss size', G_loss.size())
-            weighted_G_loss = self.args.beta * G_loss
-            weighted_compression_loss += weighted_G_loss
+        # Bookkeeping 
+        if (self.step_counter % self.log_interval == 1):
+            self.store_loss('Rate penalty', rate_penalty)
+            self.store_loss('distortion', distortion_loss.item())
+            self.store_loss('perceptual', perceptual_loss.item())
+            self.store_loss('n_rate', intermediates.n_bpp.item())
+            self.store_loss('q_rate', intermediates.q_bpp.item())
+
+            self.store_loss('weighted_rate', weighted_rate.item())
+            self.store_loss('weighted_distortion', weighted_distortion.item())
+            self.store_loss('weighted_perceptual', weighted_perceptual.item())
+            self.store_loss('weighted_R_D', weighted_R_D_loss.item())
+            self.store_loss('weighted_compression_loss_sans_G', weighted_compression_loss.item())
 
         return weighted_compression_loss
 
 
-    def discriminator_loss(self, intermediates):
-
-        disc_out = self.discriminator_forward(intermediates, generator_train=False)
+    def GAN_loss(self, intermediates, generator_train=False):
+        """
+        generator_train: Flag to send gradients to generator
+        """
+        disc_out = self.discriminator_forward(intermediates, generator_train)
         D_loss = losses.gan_loss(disc_out, mode='discriminator_loss')
+        G_loss = losses.gan_loss(disc_out, mode='generator_loss')
 
-        return D_loss
+        # Bookkeeping 
+        if (self.step_counter % self.log_interval == 1):
+            self.store_loss('D_gen', torch.mean(disc_out.D_gen).item())
+            self.store_loss('D_real', torch.mean(disc_out.D_real).item())
+            self.store_loss('disc_loss', D_loss.item())
+            self.store_loss('gen_loss', G_loss.item())
+            self.store_loss('weighted_gen_loss', (self.args.beta * G_loss).item())
 
-    def forward(self, x):
+        return D_loss, G_loss
 
-        self.step_counter += 1
+    def forward(self, x, generator_train=False):
+
+        losses = dict()
+        if generator_train is True:
+            # Define a 'step' as one cycle of G-D training
+            self.step_counter += 1
+
         intermediates = self.compression_forward(x)
 
         if self.model_mode == ModelModes.EVALUATION:
             reconstruction = torch.mul(intermediates.reconstruction, 255.)
             reconstruction = torch.clamp(reconstruction, min=0., max=255.)
-            return reconstruction, intermediates.qbpp
+            return reconstruction, intermediates.q_bpp
 
         compression_model_loss = self.compression_loss(intermediates)
 
-        if self.use_discriminator:
-            discriminator_model_loss = self.discriminator_loss(intermediates)
-            return compression_model_loss, discriminator_model_loss
+        if self.use_discriminator is True:
+            # Only send gradients to generator when training generator via
+            # `generator_train` flag
+            D_loss, G_loss = self.GAN_loss(intermediates, generator_train)
+            weighted_G_loss = self.args.beta * G_loss
+            compression_model_loss += weighted_G_loss
+            losses['disc'] = D_loss
+        
+        losses['compression'] = compression_model_loss
 
-        return compression_model_loss
+        # Bookkeeping 
+        if (self.step_counter % self.log_interval == 1):
+            self.store_loss('weighted_compression_loss', compression_model_loss.item())
+
+        return losses
 
 if __name__ == '__main__':
 
-    start_time = time.time()
     logger = helpers.logger_setup(logpath=os.path.join(directories.experiments, 'logs'), filepath=os.path.abspath(__file__))
-    logger.info('Starting forward pass ...')
     device = helpers.get_device()
     logger.info('Using device {}'.format(device))
     model = HificModel(hific_args, logger, model_type=ModelTypes.COMPRESSION_GAN)
     model.to(device)
 
     logger.info(model)
-    logger.info("Number of trainable parameters: {}".format(helpers.count_parameters(model)))
 
+    logger.info('ALL PARAMETERS')
     for n, p in model.named_parameters():
-        logger.info(n)
+        logger.info('{} - {}'.format(n, p.shape))
 
+    logger.info('AMORTIZATION PARAMETERS')
+    amortization_named_parameters = itertools.chain.from_iterable(
+            [am.named_parameters() for am in model.amortization_models])
+    for n, p in amortization_named_parameters:
+        logger.info('{} - {}'.format(n, p.shape))
+
+    logger.info('HYPERPRIOR PARAMETERS')
+    for n, p in model.Hyperprior.hyperlatent_likelihood.named_parameters():
+        logger.info('{} - {}'.format(n, p.shape))
+
+    logger.info('DISCRIMINATOR PARAMETERS')
+    for n, p in model.Discriminator.named_parameters():
+        logger.info('{} - {}'.format(n, p.shape))
+
+    logger.info("Number of trainable parameters: {}".format(helpers.count_parameters(model)))
+    logger.info("Estimated size: {} MB".format(helpers.count_parameters(model) * 4. / 10**6))
+
+    logger.info('Starting forward pass ...')
+    start_time = time.time()
     x = torch.randn([10, 3, 256, 256]).to(device)
     compression_loss, disc_loss = model(x)
     print('Compression loss shape', compression_loss.size())
     print('Disc loss shape', disc_loss.size())
 
     logger.info('Delta t {:.3f}s'.format(time.time() - start_time))
+
 

@@ -21,7 +21,7 @@ def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter):
 
     # Tensorboard
 
-    return rate_penalty * total_nbpp
+    return rate_penalty * total_nbpp, rate_penalty
 
 def gan_loss(disc_out, mode='generator_loss', gan_type='non_saturating'):
 

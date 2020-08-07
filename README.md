@@ -30,6 +30,7 @@ python3 train.py -h
 ### Notes
 * The reported `bpp` is the theoretical bitrate required to losslessly store the quantized latent representation of an image as determined by the learned probability model provided by the hyperprior using some entropy coding algorithm. Functionality for range encoding/decoding is in-progress.
 * The "size" of the compressed image as reported in `bpp` does not account for the size of the model required to decode the compressed format.
+* The total size of the model is around 737 MB. Forward pass time will scale sublinearly provided everything fits in memory.
 
 ## Contributing / Todo
 All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.

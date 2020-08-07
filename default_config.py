@@ -25,17 +25,19 @@ class args(object):
     """
     name = 'hific_exp'
     silent = True
-    n_epochs = 42  # Paper says 2M training steps
-    batch_size = 2048
+    n_epochs = 8
+    n_steps = 2e6  # Paper says 2M training steps
+    batch_size = 8
+    log_interval = 100
+    save_interval = 100000
     multigpu = True
     dataset = Datasets.OPENIMAGES
-    save_interval = 42
     shuffle = True
     discriminator_steps = 0
 
     # Architecture params - Table 3a) of [1]
     latent_channels = 220
-    n_residual_blocks = 5  # Authors use 9 blocks
+    n_residual_blocks = 6  # Authors use 9 blocks, performance saturates at 5
     lambda_B = 2**(-4)          # Loose rate
     k_M = 0.075 * 2**(-5)       # Distortion
     k_P = 1.                    # Perceptual loss
@@ -43,6 +45,7 @@ class args(object):
     use_channel_norm = True
 
     # Shapes
+    crop_size = 256
     image_dims = (3,256,256)
     latent_dims = (latent_channels,16,16)
     

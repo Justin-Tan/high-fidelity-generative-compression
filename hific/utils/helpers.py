@@ -10,13 +10,20 @@ import logging
 
 from scipy.stats import entropy
 from collections import OrderedDict
-from sklearn.metrics import mutual_info_score
 
-META_FILENAME = "specs.json"
+META_FILENAME = "metadata.json"
 
 class Struct:
     def __init__(self, **entries):
         self.__dict__.update(entries)
+
+class Swish(nn.Module):
+    def __init__(self):
+        super(Swish, self).__init__()
+        self.beta = nn.Parameter(torch.tensor(1.0))
+
+    def forward(self, x):
+        return x * torch.sigmoid(self.beta * x)
 
 def get_device(is_gpu=True):
     """Return the correct device"""
@@ -24,9 +31,8 @@ def get_device(is_gpu=True):
                         else "cpu")
 
 def get_model_device(model):
-    """Return the device on which a model is."""
+    """Return the device where the model sits."""
     return next(model.parameters()).device
-
 
 def makedirs(directory):
     if not os.path.exists(directory):
@@ -46,15 +52,6 @@ def pad_factor(input_image, spatial_dims, factor):
     pad_H = (factor - (H % factor)) % factor
     pad_W = (factor - (W % factor)) % factor
     return F.pad(input_image, pad=(0, pad_H, 0, pad_W), mode='reflection')
-
-class Swish(nn.Module):
-
-    def __init__(self):
-        super(Swish, self).__init__()
-        self.beta = nn.Parameter(torch.tensor(1.0))
-
-    def forward(self, x):
-        return x * torch.sigmoid(self.beta * x)
 
 def get_scheduled_params(param, param_schedule, step_counter):
     # e.g. schedule = dict(vals=[1., 0.1], steps=[N])
@@ -93,7 +90,7 @@ def save_metadata(metadata, directory='results', filename=META_FILENAME, **kwarg
     metadata:
         Object to save
     directory: string
-        Path to folder where to save model. For example './experiments/mnist'.
+        Path to folder where to save model. For example './experiments/runX'.
     kwargs:
         Additional arguments to `json.dump`
     """
@@ -102,70 +99,56 @@ def save_metadata(metadata, directory='results', filename=META_FILENAME, **kwarg
     with open(path_to_metadata, 'w') as f:
         json.dump(metadata, f, indent=4, sort_keys=True)  #, **kwargs)
 
-def save_model(model, optimizer, mean_loss, directory, epoch, device, args,
-               multigpu=False, second_model=None, second_optimizer=None):
- 
+def save_model(model, optimizers, mean_epoch_loss, epoch, device, args, multigpu=False):
+
+    directory = args.checkpoints_save
     makedirs(directory)
     model.cpu()  # Move model parameters to CPU for consistency when restoring
 
-    metadata = dict(input_dim=args.input_dim, latent_dim=args.latent_dim,
-                    model_loss=args.loss_type)
-
+    metadata = dict(image_dims=args.image_dims, epoch=epoch, steps=model.step_counter)
     args_d = dict((n, getattr(args, n)) for n in dir(args) if not (n.startswith('_') or 'logger' in n))
     metadata.update(args_d)
-    args_d['timestamp'] = '{:%Y_%m_%d_%H:%M}'.format(datetime.datetime.now())
+    timestamp = '{:%Y_%m_%d_%H:%M}'.format(datetime.datetime.now())
+    args_d['timestamp'] = timestamp
     
     model_name = args.name
-    metadata_path = os.path.join(directory, 'metadata/model_{}_metadata_{:%Y_%m_%d_%H:%M}.json'.format(model_name, datetime.datetime.now()))
+    metadata_path = os.path.join(directory, 'metadata/model_{}_metadata_{}.json'.format(model_name, timestamp))
     makedirs(os.path.join(directory, 'metadata'))
     
     if not os.path.isfile(metadata_path):
         with open(metadata_path, 'w') as f:
             json.dump(metadata, f, indent=4, sort_keys=True)
             
-    model_path = os.path.join(directory, '{}_epoch_{}_{:%Y_%m_%d_%H:%M}.pt'.format(model_name, epoch, datetime.datetime.now()))
+    model_path = os.path.join(directory, '{}_epoch_{}_{}_{}.pt'.format(model_name, epoch, timestamp))
 
     if os.path.exists(model_path):
         model_path = os.path.join(directory, '{}_epoch_{}_{:%Y_%m_%d_%H:%M:%S}.pt'.format(model_name, epoch, datetime.datetime.now()))
 
     save_dict = {   'model_state_dict': model.module.state_dict() if args.multigpu is True else model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
+                    'compression_optimizer_state_dict': optimizer['amort'].state_dict(),
+                    'hyperprior_optimizer_state_dict': optimizer['hyper'].state_dict(),
                     'epoch': epoch,
-                    'mean_epoch_loss': mean_loss,
+                    'steps': model.step_counter,
                     'args': args_d,
                 }
 
-    if (second_model is not None) and (second_optimizer is not None):
-        save_dict.update({'second_model_state_dict': second_model.module.state_dict() if args.multigpu is True else second_model.state_dict(),
-                          'second_optimizer_state_dict': second_optimizer.state_dict()})
+    if model.use_discriminator is True:
+        save_dict['discriminator_state_dict'] = model.module.Discriminator.state_dict() \
+            if args.multigpu is True else model.Discriminator.state_dict()
+        save_dict['discriminator_optimizer_state_dict'] = optimizer['disc'].state_dict()
 
     torch.save(save_dict, f=model_path)
-    print('Saved model at Epoch {} to {}'.format(epoch, model_path))
+    print('Saved model at Epoch {}, step {} to {}'.format(epoch, model.step_counter, model_path))
     
     model.to(device)  # Move back to device
-
-    print('Model saved to path {}'.format(model_path))
     return model_path
    
 
-def save_model_online(model, optimizer, epoch, save_dir, name):
-    save_path = os.path.join(save_dir, '{}_epoch{}.pt'.format(name, epoch))
-    torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            }, save_path)
-    print('Model saved to path {}'.format(save_path))
-    
-def load_model(save_path, device, logger, current_args_d=None, optimizer=None, prediction=True, partial=False):
+def load_model(save_path, model_class, device, logger, current_args_d=None, optimizers=None, prediction=True):
 
+    from hific.model import HificModel
     checkpoint = torch.load(save_path)
     loaded_args_d = checkpoint['args']
-    vae_args_keys = ['dataset', 'loss_type', 'latent_dim', 'supervision', 'supervision_lagrange_m', 'sensitive_latent_idx', 
-            'beta', 'gamma', 'gamma_fvae', 'alpha_btcvae', 'beta_btcvae', 'gamma_btcvae']
-    cnf_args_keys = ['dims', 'num_blocks', 'time_length', 'train_T', 'divergence_fn', 'nonlinearity', 'rank', 'solver', 
-            'atol', 'rtol', 'step_size', 'layer_type', 'test_solver', 'test_atol', 'test_rtol', 'residual', 'rademacher', 
-            'batch_norm', 'bn_lag']
 
     args = Struct(**loaded_args_d)
 
@@ -180,47 +163,26 @@ def load_model(save_path, device, logger, current_args_d=None, optimizer=None, p
             if loaded_args_d[k] !=v:
                 logger.warning('Current argument {} (value {}) does not match recorded argument (value {}). May be overriden using recorded.'.format(k, v, loaded_args_d[k]))
 
-        loaded_vae_args_d = {k: loaded_args_d[k] for k in vae_args_keys}
-        current_args_d.update(loaded_vae_args_d)  # Override current VAE-model related args with saved args
-
-        try:
-            if current_args_d['flow'] != 'cnf_freeze_vae':
-                loaded_cnf_args_d = {k: loaded_args_d[k] for k in cnf_args_keys}
-                current_args_d.update(loaded_cnf_args_d) # Override current CNF-model related args with saved args
-        except KeyError:
-            pass
-
         # HACK
         current_args_d.update(loaded_args_d)
-
         args = Struct(**current_args_d)
 
-    try:
-        if args.flow == 'no_flow':
-            model = vae.VAE(args)
-        elif args.flow == 'real_nvp':
-            model = vae.realNVP_VAE(args)
-        elif args.flow == 'cnf' or args.flow == 'cnf_freeze_vae':
-            model = vae.VAE_ODE(args)
-        elif args.flow == 'cnf_amort':
-            model = vae.VAE_ODE_amortized(args)
-            
-    except AttributeError:
-        model = vae.VAE(args)
-
-    model.load_state_dict(checkpoint['model_state_dict'], strict=not partial)
+    model = HificModel(args, logger, model_type=args.model_type)
+    model.load_state_dict(checkpoint['model_state_dict'])
 
     if prediction:
         model.eval()
     else:
         model.train()
         
-    if optimizer is not None:
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        return args, model.to(device), optimizer
+    if optimizers is not None:
+        optimizers['amort'].load_state_dict(checkpoint['compression_optimizer_state_dict'])
+        optimizers['hyper'].load_state_dict(checkpoint['hyperprior_optimizer_state_dict'])
+        if model.use_discriminator is True:
+            optimizers['disc'].load_state_dict(checkpoint['discriminator_optimizer_state_dict'])
+        return args, model, optimizers
 
     return args, model # model.to(device)
-
 
 
 def logger_setup(logpath, filepath, package_files=[]):
@@ -249,26 +211,19 @@ def logger_setup(logpath, filepath, package_files=[]):
     return logger
 
 
-def log(storage, epoch, counter, mean_epoch_loss, total_loss, best_loss, start_time, epoch_start_time, 
-        batch_size, header='[TRAIN]', log_interval=100, logger=None):
+def log(storage, epoch, idx, counter, mean_epoch_loss, current_loss, best_loss, start_time, epoch_start_time, 
+        batch_size, header='[TRAIN]', logger=None, **kwargs):
     
     improved = ''
     t0 = epoch_start_time
     
-    if total_loss < best_loss:
-        best_loss = total_loss
+    if current_loss < best_loss:
+        best_loss = current_loss
         improved = '[*]'  
     
     storage['epoch'].append(epoch)
-    storage['mean_epoch_loss'].append(mean_epoch_loss)
+    storage['mean_compression_loss'].append(mean_epoch_loss)
     storage['time'].append(time.time())
-
-    try:
-        reconstruction_loss = storage['reconstruction_loss'][-1]
-        kl_loss = storage['kl_loss'][-1]
-        elbo = storage['ELBO'][-1]
-    except IndexError:
-        reconstruction_loss, kl_loss, elbo = np.nan, np.nan, np.nan
 
     if logger is not None:
         report_f = logger.info   
@@ -276,51 +231,20 @@ def log(storage, epoch, counter, mean_epoch_loss, total_loss, best_loss, start_t
         report_f = print
 
     report_f(header)
-
+    report_f('=====')
     if header == '[TRAIN]':
-        report_f("Epoch {} | Mean epoch loss: {:.3f} | Total loss: {:.3f} | ELBO: {:.3f} | Reco Loss: {:.3f} | KL Loss: {:.3f} | "
-                 "Rate: {} examples/s | Time: {:.1f} s | Improved: {}".format(epoch, mean_epoch_loss, total_loss, elbo, 
-                 reconstruction_loss, kl_loss, int(batch_size*counter*log_interval / ((time.time()-t0))), time.time()-start_time, improved))
-    else:
-        report_f("Epoch {} | Mean epoch loss: {:.3f} | Total loss: {:.3f} | ELBO: {:.3f} | Reco Loss: {:.3f} | KL Loss: {:.3f} | "
-                 "Time: {:.1f} s | Improved: {}".format(epoch, mean_epoch_loss, total_loss, elbo, reconstruction_loss,
-                 kl_loss, time.time()-start_time, improved))
+        report_f("Epoch {} | Mean epoch comp. loss: {:.3f} | Current comp. loss: {:.3f} | "
+                 "Rate: {} examples/s | Time: {:.1f} s | Improved: {}".format(epoch, mean_epoch_loss, current_loss,
+                 int(batch_size*idx / ((time.time()-t0))), time.time()-start_time, improved))
+        report_f("Rate-Distortion:")
+        report_f("Weighted R-D: {:3f} | Weighted Rate: {:.3f} | Weighted Distortion: {:.3f} | Weighted Perceptual: {:.3f} | "
+                 "n_bpp: {:.3f} | q_bpp: {:.3f} | Distortion: {:.3f} | Rate Penalty: {:.3f}".format(storage['weighted_R_D'],
+                 storage['weighted_rate'], storage['weighted_distortion'], storage['weighted_perceptual'], storage['n_rate'],
+                 storage['q_rate'], storage['distortion'], storage['rate_penalty']))
+        if model.use_discriminator is True:
+            report_f("Generator-Discriminator:")
+            report_f("G Loss: {:3f} | D Loss: {:.3f} | D(gen): {:.3f} | D(real): {:.3f}".format(storage['gen_loss'],
+                    storage['disc_loss'], storage['D_gen'], storage['D_real']))
 
     return best_loss
 
-def log_flow(storage, epoch, counter, mean_epoch_loss, total_loss, best_loss, start_time, epoch_start_time, 
-        batch_size, header='[TRAIN]', log_interval=100, logger=None):
-    
-    improved = ''
-    t0 = epoch_start_time
-    
-    if total_loss < best_loss:
-        best_loss = total_loss
-        improved = '[*]'  
-    
-    storage['epoch'].append(epoch)
-    storage['mean_epoch_loss'].append(mean_epoch_loss)
-    storage['time'].append(time.time())
-
-    try:
-        log_prob = storage['log_prob_per_dim'][-1]
-    except IndexError:
-        log_prob = np.nan
-
-    if logger is not None:
-        report_f = logger.info   
-    else:
-        report_f = print
-
-    report_f(header)
-
-    if header == '[TRAIN]':
-        report_f("Epoch {} | Mean epoch loss: {:.3f} | Total loss: {:.3f} | LL/D: {:.3f} | "
-                 "Rate: {} examples/s | Time: {:.1f} s | Improved: {}".format(epoch, mean_epoch_loss, total_loss, log_prob, 
-                 int(batch_size*counter*log_interval / ((time.time()-t0))), time.time()-start_time, improved))
-    else:
-        report_f("Epoch {} | Mean epoch loss: {:.3f} | Total loss: {:.3f} | LL/D: {:.3f} | "
-                 "Time: {:.1f} s | Improved: {}".format(epoch, mean_epoch_loss, total_loss, log_prob,
-                 time.time()-start_time, improved))
-
-    return best_loss
