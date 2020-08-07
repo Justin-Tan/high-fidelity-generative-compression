@@ -292,7 +292,8 @@ if __name__ == '__main__':
     logger.info('Starting forward pass ...')
     start_time = time.time()
     x = torch.randn([10, 3, 256, 256]).to(device)
-    compression_loss, disc_loss = model(x)
+    losses = model(x)
+    compression_loss, disc_loss = losses['compression'], losses['disc']
     print('Compression loss shape', compression_loss.size())
     print('Disc loss shape', disc_loss.size())
 

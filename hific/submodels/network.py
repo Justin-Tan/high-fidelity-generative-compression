@@ -433,5 +433,5 @@ if __name__ == '__main__':
     print('Generator output', g.size())
 
     D = Discriminator(image_dims=x_dims[1:], context_dims=tuple(g.size())[1:], C=C)
-    d = D(x,y)
+    d, d_logits = D(x,y)
     print('Discriminator output', d.size())
