@@ -16,6 +16,7 @@ from tqdm import tqdm, trange
 from collections import defaultdict
 
 import torch
+import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -51,16 +52,22 @@ def optimize_loss(loss, opt, retain_graph=False):
     opt.zero_grad()
 
 
-def test(model, epoch, idx, data, device, epoch_test_loss, storage, best_test_loss, 
+def test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, storage, best_test_loss, 
          start_time, epoch_start_time, logger):
 
     model.eval()  
     with torch.no_grad():
         data = data.to(device, dtype=torch.float)
-        
-        losses = model(data)
+
+        losses, intermediates = model(data, return_intermediates=True)
+        helpers.save_images(intermediates.input_images, intermediates.reconstruction,
+            fname=os.path.join(args.figures_save, 'recon_epoch{}_idx{}_TRAIN_{:%Y_%m_%d_%H:%M}.jpg'.format(epoch, idx, datetime.datetime.now())))
+
+        losses, intermediates = model(test_data, return_intermediates=True)
+        helpers.save_images(intermediates.input_images, intermediates.reconstruction,
+            fname=os.path.join(args.figures_save, 'recon_epoch{}_idx{}_TEST_{:%Y_%m_%d_%H:%M}.jpg'.format(epoch, idx, datetime.datetime.now())))
+
         compression_loss = losses['compression'] 
-            
         epoch_test_loss.append(compression_loss.item())
         mean_test_loss = np.mean(epoch_test_loss)
         
@@ -78,7 +85,8 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
     test_loader_iter = iter(test_loader)
     model.train()
     start_time = time.time()
-    
+    current_D_steps, train_generator = 0, True
+
     amortization_parameters = itertools.chain.from_iterable(
         [am.parameters() for am in model.amortization_models])
     hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
@@ -129,20 +137,23 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
             data = data.to(device, dtype=torch.float)
             
             try:
-                # Train D for D_steps, then G, using distinct batches
                 if model.use_discriminator is True:
-                    
-                    if parity_bit == 0:
-                        losses = model(data, generator_train=False)
-                        disc_loss = losses['disc']
-                        optimize_loss(disc_loss, disc_opt)
-
-                    else:
+                    # Train D for D_steps, then G, using distinct batches
+                    if train_generator is True:
                         losses = model(data, generator_train=True)
                         compression_loss = losses['compression']
                         optimize_loss(compression_loss, amortization_opt)
                         optimize_loss(compression_loss, hyperlatent_likelihood_opt)
+                        train_generator = False
+                    else:
+                        losses = model(data, generator_train=False)
+                        disc_loss = losses['disc']
+                        optimize_loss(disc_loss, disc_opt)
+                        current_D_steps += 1
 
+                        if current_D_steps == args.discriminator_steps:
+                            current_D_steps = 0
+                            train_generator = True
                 else:
                     losses = model(data, generator_train=True)
                     compression_loss = losses['compression']
@@ -153,7 +164,7 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
                 if model.step_counter > args.log_interval+1:
                     logger.warning('Exiting, saving ...')
                     ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args)
-                    return ckpt_path
+                    return model, ckpt_path
                 else:
                     return
 
@@ -171,7 +182,7 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
                     test_loader_iter = iter(test_loader)
                     test_data = test_loader_iter.next()
 
-                best_test_loss, epoch_test_loss = test(model, epoch, idx, test_data, device, epoch_test_loss, storage_test,
+                best_test_loss, epoch_test_loss = test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, storage_test,
                      best_test_loss, start_time, epoch_start_time, logger)
 
                 if args.smoke_test:
@@ -179,8 +190,6 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
 
                 with open(os.path.join(args.storage_save, 'storage_{}_tmp.pkl'.format(args.name)), 'wb') as handle:
                     pickle.dump(storage, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-                # Visualization
 
                 model.train()
 

@@ -222,7 +222,7 @@ class HificModel(nn.Module):
 
         return D_loss, G_loss
 
-    def forward(self, x, generator_train=False):
+    def forward(self, x, generator_train=False, return_intermediates=False):
 
         losses = dict()
         if generator_train is True:
@@ -252,14 +252,18 @@ class HificModel(nn.Module):
         if (self.step_counter % self.log_interval == 1):
             self.store_loss('weighted_compression_loss', compression_model_loss.item())
 
-        return losses
+        if return_intermediates is True:
+            return losses, intermediates
+        else:
+            return losses
 
 if __name__ == '__main__':
 
     logger = helpers.logger_setup(logpath=os.path.join(directories.experiments, 'logs'), filepath=os.path.abspath(__file__))
     device = helpers.get_device()
     logger.info('Using device {}'.format(device))
-    model = HificModel(hific_args, logger, model_type=ModelTypes.COMPRESSION_GAN)
+    storage = defaultdict(list)
+    model = HificModel(hific_args, logger, storage, model_type=ModelTypes.COMPRESSION_GAN)
     model.to(device)
 
     logger.info(model)

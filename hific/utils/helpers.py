@@ -10,6 +10,7 @@ import logging
 
 from scipy.stats import entropy
 from collections import OrderedDict
+from torchvision.utils import save_image
 
 META_FILENAME = "metadata.json"
 
@@ -248,3 +249,8 @@ def log(storage, epoch, idx, counter, mean_epoch_loss, current_loss, best_loss, 
 
     return best_loss
 
+
+def save_images(real, decoded, fname):
+
+    imgs = torch.cat((real,decoded), dim=0)
+    save_image(imgs, fname, nrow=4, normalize=True, scale_each=True)
