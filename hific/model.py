@@ -189,7 +189,7 @@ class HificModel(nn.Module):
 
         # Bookkeeping 
         if (self.step_counter % self.log_interval == 1):
-            self.store_loss('Rate penalty', rate_penalty)
+            self.store_loss('rate_penalty', rate_penalty)
             self.store_loss('distortion', distortion_loss.item())
             self.store_loss('perceptual', perceptual_loss.item())
             self.store_loss('n_rate', intermediates.n_bpp.item())

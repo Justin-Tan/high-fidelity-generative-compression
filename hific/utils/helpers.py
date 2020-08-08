@@ -64,6 +64,11 @@ def get_scheduled_params(param, param_schedule, step_counter):
 
     return param
 
+def update_lr(optimizer, itr):
+    lr = get_scheduled_params(args.learning_rate, args.lr_schedule, itr)
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+
 def setup_generic_signature(args, special_info):
 
     time_signature = '{:%Y_%m_%d_%H:%M}'.format(datetime.datetime.now()).replace(':', '_')
@@ -77,10 +82,14 @@ def setup_generic_signature(args, special_info):
     args.checkpoints_save = os.path.join(args.snapshot, 'checkpoints')
     args.figures_save = os.path.join(args.snapshot, 'figures')
     args.storage_save = os.path.join(args.snapshot, 'storage')
+    args.tensorboard_runs = os.path.join(args.snapshot, 'tensorboard')
+
     makedirs(args.snapshot)
     makedirs(args.checkpoints_save)
     makedirs(args.figures_save)
     makedirs(args.storage_save)
+    makedirs(os.path.join(args.tensorboard_runs, 'train'))
+    makedirs(os.path.join(args.tensorboard_runs, 'test'))
 
     return args
 
@@ -211,9 +220,40 @@ def logger_setup(logpath, filepath, package_files=[]):
 
     return logger
 
+def log_summaries(writer, storage, step, use_discriminator=False):
 
-def log(storage, epoch, idx, counter, mean_epoch_loss, current_loss, best_loss, start_time, epoch_start_time, 
-        batch_size, header='[TRAIN]', logger=None, **kwargs):
+    weighted_compression_scalars = ['weighted_compression_loss',
+                                    'weighted_R_D',
+                                    'weighted_rate',
+                                    'weighted_distortion',
+                                    'weighted_perceptual',
+                                    'rate_penalty']
+
+    compression_scalars = ['n_rate', 'q_rate', 'distortion', 'perceptual']
+    gan_scalars = ['disc_loss', 'gen_loss', 'weighted_gen_loss', 'D_gen', 'D_real']
+
+    compression_loss_breakdown = dict(total_comp=storage['weighted_compression_loss'],
+                                      weighted_rate=storage['weighted_rate'],
+                                      weighted_distortion=storage['weighted_distortion'],
+                                      weighted_perceptual=storage['weighted_perceptual']))
+
+    for scalar in weighted_compression_scalars:
+        writer.add_scalar('weighted_compression/{}'.format(scalar), storage[scalar], step)]
+
+    for scalar in compression_scalars:
+        writer.add_scalar('compression/{}'.format(scalar), storage[scalar], step)]
+
+    if use_discriminator is True:
+        compression_loss_breakdown['weighted_gen_loss'] = weighted_gen_loss
+        for scalar in gan_scalars:
+            writer.add_scalar('GAN/{}'.format(scalar), storage[scalar], step)]
+
+    # Breakdown overall loss
+    writer.add_scalars('compression_loss_breakdown', compression_loss_breakdown, step)
+
+
+def log(storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, start_time, epoch_start_time, 
+        batch_size, header='[TRAIN]', logger=None, writer=None, **kwargs):
     
     improved = ''
     t0 = epoch_start_time
@@ -225,6 +265,10 @@ def log(storage, epoch, idx, counter, mean_epoch_loss, current_loss, best_loss, 
     storage['epoch'].append(epoch)
     storage['mean_compression_loss'].append(mean_epoch_loss)
     storage['time'].append(time.time())
+
+    # Tensorboard
+    if writer is not None:
+        log_summaries(storage, writer, model.step_counter, use_discriminator=model.use_discriminator)
 
     if logger is not None:
         report_f = logger.info   
@@ -250,7 +294,18 @@ def log(storage, epoch, idx, counter, mean_epoch_loss, current_loss, best_loss, 
     return best_loss
 
 
-def save_images(real, decoded, fname):
+def save_images(writer, step, real, decoded, fname):
 
     imgs = torch.cat((real,decoded), dim=0)
     save_image(imgs, fname, nrow=4, normalize=True, scale_each=True)
+    writer.add_images('gen_recon', imgs, step)
+
+def add_noise(x):
+    """
+    [0, 1] -> [0, 255] -> add noise -> [0, 1]
+    """
+    if args.add_noise:
+        noise = x.new().resize_as_(x).uniform_()
+        x = x * 255 + noise
+        x = x / 256
+    return x
