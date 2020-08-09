@@ -20,7 +20,7 @@ COLOUR_WHITE = 1
 NUM_DATASET_WORKERS = 4
 SCALE_LOW = 0.75
 SCALE_HIGH = 0.95
-DATASETS_DICT = {"openimages": "OpenImages", "jetimages": "JetImages"}
+DATASETS_DICT = {"openimages": "OpenImages", "cityscapes": "CityScapes", "jetimages": "JetImages"}
 DATASETS = list(DATASETS_DICT.keys())
 
 def get_dataset(dataset):
@@ -86,7 +86,7 @@ class BaseDataset(Dataset, abc.ABC):
         self.root = root
         self.train_data = os.path.join(root, self.files["train"])
         self.test_data = os.path.join(root, self.files["test"])
-        self.val_data = os.path.join(root, self.files["validation"])
+        self.val_data = os.path.join(root, self.files["val"])
 
         self.transforms = transforms.Compose(transforms_list)
         self.logger = logger
@@ -126,7 +126,7 @@ class OpenImages(BaseDataset):
     [1] https://storage.googleapis.com/openimages/web/factsfigures.html
 
     """
-    files = {"train": "train", "test": "test", "validation": "validation"}
+    files = {"train": "train", "test": "test", "val": "validation"}
 
     def __init__(self, root=os.path.join(DIR, 'data/openimages'), crop_size=256, **kwargs):
         super().__init__(root, [transforms.ToTensor()], **kwargs)
@@ -143,7 +143,7 @@ class OpenImages(BaseDataset):
         self.scale_low = SCALE_LOW
         self.scale_high = SCALE_HIGH
 
-    def _transforms(self, scale):
+    def _transforms(self, scale, H, W):
         """
         Up(down)scale and randomly crop to `crop_size` x `crop_size`
         """
@@ -180,12 +180,34 @@ class OpenImages(BaseDataset):
         scale_high = max(scale_low, self.scale_high)
         scale = np.random.uniform(scale_low, scale_high)
 
-        dynamic_transform = self._transforms(scale)
+        dynamic_transform = self._transforms(scale, H, W)
 
         # apply random scaling + crop, put each pixel 
         # in [0.,1.] and reshape to (C x H x W)
         return dynamic_transform(img)
 
+class CityScapes(datasets.Cityscapes):
+    """CityScapes wrapper. Docs: `datasets.Cityscapes.`"""
+    img_size = (1, 32, 32)
+
+    def _transforms(self, scale, H, W):
+        """
+        Up(down)scale and randomly crop to `crop_size` x `crop_size`
+        """
+        return transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.RandomHorizontalFlip(),
+            transforms.Resize((math.ceil(scale * H), 
+                               math.ceil(scale * W))),
+            transforms.RandomCrop(self.crop_size),
+            transforms.ToTensor(),
+            ])
+
+    def __init__(self, mode, root=os.path.join(DIR, 'data/cityscapes'), **kwargs):
+        super().__init__(root,
+                         split=mode,
+                         transform=self._transforms(scale=np.random.uniform(0.5,1.0), 
+                            H=512, W=1024))
 
 def preprocess(root, size=(64, 64), img_format='JPEG', center_crop=None):
     """Preprocess a folder of images.

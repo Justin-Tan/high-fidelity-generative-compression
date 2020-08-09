@@ -18,6 +18,8 @@ class ModelModes(object):
 
 class Datasets(object):
     OPENIMAGES = 'openimages'
+    CITYSCAPES = 'cityscapes'
+    JETS = 'jetimages'
 
 class args(object):
     """
