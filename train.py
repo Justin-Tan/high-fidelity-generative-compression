@@ -272,12 +272,14 @@ if __name__ == '__main__':
     logger.info('Using dataset: {}'.format(args.dataset))
 
     test_loader = datasets.get_dataloaders(args.dataset,
+                                root=args.dataset_path,
                                 batch_size=args.batch_size,
                                 logger=logger,
                                 mode='validation',
                                 shuffle=True)
 
     train_loader = datasets.get_dataloaders(args.dataset,
+                                root=args.dataset_path,
                                 batch_size=args.batch_size,
                                 logger=logger,
                                 mode='train',

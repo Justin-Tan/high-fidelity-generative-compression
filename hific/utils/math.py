@@ -144,8 +144,8 @@ def _FSpecialGauss(size, sigma):
     offset = 0.0
     start, stop = -radius, radius + 1
     if size % 2 == 0:
-    offset = 0.5
-    stop -= 1
+        offset = 0.5
+        stop -= 1
     x, y = np.mgrid[offset + start:stop, offset + start:stop]
     assert len(x) == size
     g = np.exp(-((x**2 + y**2)/(2.0 * sigma**2)))
@@ -181,11 +181,11 @@ def _SSIMForMultiScale(img1, img2, max_val=255, filter_size=11,
         dimensions: [batch_size, height, width, depth].
     """
     if img1.shape != img2.shape:
-    raise RuntimeError('Input images must have the same shape (%s vs. %s).',
-                        img1.shape, img2.shape)
+        raise RuntimeError('Input images must have the same shape (%s vs. %s).',
+                            img1.shape, img2.shape)
     if img1.ndim != 4:
-    raise RuntimeError('Input images must have four dimensions, not %d',
-                        img1.ndim)
+        raise RuntimeError('Input images must have four dimensions, not %d',
+                            img1.ndim)
 
     img1 = img1.astype(np.float64)
     img2 = img2.astype(np.float64)
@@ -198,18 +198,18 @@ def _SSIMForMultiScale(img1, img2, max_val=255, filter_size=11,
     sigma = size * filter_sigma / filter_size if filter_size else 0
 
     if filter_size:
-    window = np.reshape(_FSpecialGauss(size, sigma), (1, size, size, 1))
-    mu1 = signal.fftconvolve(img1, window, mode='valid')
-    mu2 = signal.fftconvolve(img2, window, mode='valid')
-    sigma11 = signal.fftconvolve(img1 * img1, window, mode='valid')
-    sigma22 = signal.fftconvolve(img2 * img2, window, mode='valid')
-    sigma12 = signal.fftconvolve(img1 * img2, window, mode='valid')
+        window = np.reshape(_FSpecialGauss(size, sigma), (1, size, size, 1))
+        mu1 = signal.fftconvolve(img1, window, mode='valid')
+        mu2 = signal.fftconvolve(img2, window, mode='valid')
+        sigma11 = signal.fftconvolve(img1 * img1, window, mode='valid')
+        sigma22 = signal.fftconvolve(img2 * img2, window, mode='valid')
+        sigma12 = signal.fftconvolve(img1 * img2, window, mode='valid')
     else:
-    # Empty blur kernel so no need to convolve.
-    mu1, mu2 = img1, img2
-    sigma11 = img1 * img1
-    sigma22 = img2 * img2
-    sigma12 = img1 * img2
+        # Empty blur kernel so no need to convolve.
+        mu1, mu2 = img1, img2
+        sigma11 = img1 * img1
+        sigma22 = img2 * img2
+        sigma12 = img1 * img2
 
     mu11 = mu1 * mu1
     mu22 = mu2 * mu2
@@ -262,11 +262,11 @@ def MultiScaleSSIM(img1, img2, max_val=255, filter_size=11, filter_sigma=1.5,
         dimensions: [batch_size, height, width, depth].
     """
     if img1.shape != img2.shape:
-    raise RuntimeError('Input images must have the same shape (%s vs. %s).',
-                        img1.shape, img2.shape)
+        raise RuntimeError('Input images must have the same shape (%s vs. %s).',
+                            img1.shape, img2.shape)
     if img1.ndim != 4:
-    raise RuntimeError('Input images must have four dimensions, not %d',
-                        img1.ndim)
+        raise RuntimeError('Input images must have four dimensions, not %d',
+                            img1.ndim)
 
     # Note: default weights don't sum to 1.0 but do match the paper / matlab code.
     weights = np.array(weights if weights else
@@ -277,13 +277,13 @@ def MultiScaleSSIM(img1, img2, max_val=255, filter_size=11, filter_sigma=1.5,
     mssim = np.array([])
     mcs = np.array([])
     for _ in xrange(levels):
-    ssim, cs = _SSIMForMultiScale(
-        im1, im2, max_val=max_val, filter_size=filter_size,
-        filter_sigma=filter_sigma, k1=k1, k2=k2)
-    mssim = np.append(mssim, ssim)
-    mcs = np.append(mcs, cs)
-    filtered = [convolve(im, downsample_filter, mode='reflect')
-                for im in [im1, im2]]
-    im1, im2 = [x[:, ::2, ::2, :] for x in filtered]
+        ssim, cs = _SSIMForMultiScale(
+            im1, im2, max_val=max_val, filter_size=filter_size,
+            filter_sigma=filter_sigma, k1=k1, k2=k2)
+        mssim = np.append(mssim, ssim)
+        mcs = np.append(mcs, cs)
+        filtered = [convolve(im, downsample_filter, mode='reflect')
+                    for im in [im1, im2]]
+        im1, im2 = [x[:, ::2, ::2, :] for x in filtered]
     return (np.prod(mcs[0:levels-1] ** weights[0:levels-1]) *
             (mssim[levels-1] ** weights[levels-1]))

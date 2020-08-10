@@ -235,18 +235,18 @@ def log_summaries(writer, storage, step, use_discriminator=False):
     compression_loss_breakdown = dict(total_comp=storage['weighted_compression_loss'],
                                       weighted_rate=storage['weighted_rate'],
                                       weighted_distortion=storage['weighted_distortion'],
-                                      weighted_perceptual=storage['weighted_perceptual']))
+                                      weighted_perceptual=storage['weighted_perceptual'])
 
     for scalar in weighted_compression_scalars:
-        writer.add_scalar('weighted_compression/{}'.format(scalar), storage[scalar], step)]
+        writer.add_scalar('weighted_compression/{}'.format(scalar), storage[scalar], step)
 
     for scalar in compression_scalars:
-        writer.add_scalar('compression/{}'.format(scalar), storage[scalar], step)]
+        writer.add_scalar('compression/{}'.format(scalar), storage[scalar], step)
 
     if use_discriminator is True:
         compression_loss_breakdown['weighted_gen_loss'] = weighted_gen_loss
         for scalar in gan_scalars:
-            writer.add_scalar('GAN/{}'.format(scalar), storage[scalar], step)]
+            writer.add_scalar('GAN/{}'.format(scalar), storage[scalar], step)
 
     # Breakdown overall loss
     writer.add_scalars('compression_loss_breakdown', compression_loss_breakdown, step)
