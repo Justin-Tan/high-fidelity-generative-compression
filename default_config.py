@@ -68,7 +68,7 @@ class args(object):
     target_schedule = dict(vals=[0.20/0.14, 1.], steps=[50000])
 
     # match target rate to lambda_A coefficient
-    regime = 'low'  # 0.14
+    regime = 'high' # 'med' # 'low'  # 0.14
     target_rate_map = dict(low=0.14, med=0.3, high=0.45)
     lambda_A_map = dict(low=2**1, med=2**0, high=2**(-1))
     target_rate = target_rate_map[regime]

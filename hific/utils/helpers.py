@@ -129,14 +129,14 @@ def save_model(model, optimizers, mean_epoch_loss, epoch, device, args, multigpu
         with open(metadata_path, 'w') as f:
             json.dump(metadata, f, indent=4, sort_keys=True)
             
-    model_path = os.path.join(directory, '{}_epoch_{}_{}_{}.pt'.format(model_name, epoch, timestamp))
+    model_path = os.path.join(directory, '{}_epoch{}_idx{}_{}.pt'.format(model_name, epoch, model.step_counter, timestamp))
 
     if os.path.exists(model_path):
-        model_path = os.path.join(directory, '{}_epoch_{}_{:%Y_%m_%d_%H:%M:%S}.pt'.format(model_name, epoch, datetime.datetime.now()))
+        model_path = os.path.join(directory, '{}_epoch{}_idx{}_{:%Y_%m_%d_%H:%M:%S}.pt'.format(model_name, epoch, model.step_counter, datetime.datetime.now()))
 
     save_dict = {   'model_state_dict': model.module.state_dict() if args.multigpu is True else model.state_dict(),
-                    'compression_optimizer_state_dict': optimizer['amort'].state_dict(),
-                    'hyperprior_optimizer_state_dict': optimizer['hyper'].state_dict(),
+                    'compression_optimizer_state_dict': optimizers['amort'].state_dict(),
+                    'hyperprior_optimizer_state_dict': optimizers['hyper'].state_dict(),
                     'epoch': epoch,
                     'steps': model.step_counter,
                     'args': args_d,
@@ -145,7 +145,7 @@ def save_model(model, optimizers, mean_epoch_loss, epoch, device, args, multigpu
     if model.use_discriminator is True:
         save_dict['discriminator_state_dict'] = model.module.Discriminator.state_dict() \
             if args.multigpu is True else model.Discriminator.state_dict()
-        save_dict['discriminator_optimizer_state_dict'] = optimizer['disc'].state_dict()
+        save_dict['discriminator_optimizer_state_dict'] = optimizers['disc'].state_dict()
 
     torch.save(save_dict, f=model_path)
     print('Saved model at Epoch {}, step {} to {}'.format(epoch, model.step_counter, model_path))
@@ -232,27 +232,27 @@ def log_summaries(writer, storage, step, use_discriminator=False):
     compression_scalars = ['n_rate', 'q_rate', 'distortion', 'perceptual']
     gan_scalars = ['disc_loss', 'gen_loss', 'weighted_gen_loss', 'D_gen', 'D_real']
 
-    compression_loss_breakdown = dict(total_comp=storage['weighted_compression_loss'],
-                                      weighted_rate=storage['weighted_rate'],
-                                      weighted_distortion=storage['weighted_distortion'],
-                                      weighted_perceptual=storage['weighted_perceptual'])
+    compression_loss_breakdown = dict(total_comp=storage['weighted_compression_loss'][-1],
+                                      weighted_rate=storage['weighted_rate'][-1],
+                                      weighted_distortion=storage['weighted_distortion'][-1],
+                                      weighted_perceptual=storage['weighted_perceptual'][-1])
 
     for scalar in weighted_compression_scalars:
-        writer.add_scalar('weighted_compression/{}'.format(scalar), storage[scalar], step)
+        writer.add_scalar('weighted_compression/{}'.format(scalar), storage[scalar][-1], step)
 
     for scalar in compression_scalars:
-        writer.add_scalar('compression/{}'.format(scalar), storage[scalar], step)
+        writer.add_scalar('compression/{}'.format(scalar), storage[scalar][-1], step)
 
     if use_discriminator is True:
-        compression_loss_breakdown['weighted_gen_loss'] = weighted_gen_loss
+        compression_loss_breakdown['weighted_gen_loss'] = storage['weighted_gen_loss'][-1]
         for scalar in gan_scalars:
-            writer.add_scalar('GAN/{}'.format(scalar), storage[scalar], step)
+            writer.add_scalar('GAN/{}'.format(scalar), storage[scalar][-1], step)
 
     # Breakdown overall loss
     writer.add_scalars('compression_loss_breakdown', compression_loss_breakdown, step)
 
 
-def log(storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, start_time, epoch_start_time, 
+def log(model, storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, start_time, epoch_start_time, 
         batch_size, header='[TRAIN]', logger=None, writer=None, **kwargs):
     
     improved = ''
@@ -268,7 +268,7 @@ def log(storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, start_tim
 
     # Tensorboard
     if writer is not None:
-        log_summaries(storage, writer, model.step_counter, use_discriminator=model.use_discriminator)
+        log_summaries(writer, storage, model.step_counter, use_discriminator=model.use_discriminator)
 
     if logger is not None:
         report_f = logger.info   
@@ -281,15 +281,19 @@ def log(storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, start_tim
         report_f("Epoch {} | Mean epoch comp. loss: {:.3f} | Current comp. loss: {:.3f} | "
                  "Rate: {} examples/s | Time: {:.1f} s | Improved: {}".format(epoch, mean_epoch_loss, current_loss,
                  int(batch_size*idx / ((time.time()-t0))), time.time()-start_time, improved))
-        report_f("Rate-Distortion:")
-        report_f("Weighted R-D: {:3f} | Weighted Rate: {:.3f} | Weighted Distortion: {:.3f} | Weighted Perceptual: {:.3f} | "
-                 "n_bpp: {:.3f} | q_bpp: {:.3f} | Distortion: {:.3f} | Rate Penalty: {:.3f}".format(storage['weighted_R_D'],
-                 storage['weighted_rate'], storage['weighted_distortion'], storage['weighted_perceptual'], storage['n_rate'],
-                 storage['q_rate'], storage['distortion'], storage['rate_penalty']))
-        if model.use_discriminator is True:
-            report_f("Generator-Discriminator:")
-            report_f("G Loss: {:3f} | D Loss: {:.3f} | D(gen): {:.3f} | D(real): {:.3f}".format(storage['gen_loss'],
-                    storage['disc_loss'], storage['D_gen'], storage['D_real']))
+    else:
+        report_f("Epoch {} | Mean epoch comp. loss: {:.3f} | Current comp. loss: {:.3f} | Improved: {}".format(epoch, 
+                 mean_epoch_loss, current_loss, improved))
+
+    report_f("Rate-Distortion:")
+    report_f("Weighted R-D: {:3f} | Weighted Rate: {:.3f} | Weighted Distortion: {:.3f} | Weighted Perceptual: {:.3f} | "
+             "n_bpp: {:.3f} | q_bpp: {:.3f} | Distortion: {:.3f} | Rate Penalty: {:.3f}".format(storage['weighted_R_D'][-1],
+             storage['weighted_rate'][-1], storage['weighted_distortion'][-1], storage['weighted_perceptual'][-1], storage['n_rate'][-1],
+             storage['q_rate'][-1], storage['distortion'][-1], storage['rate_penalty'][-1]))
+    if model.use_discriminator is True:
+        report_f("Generator-Discriminator:")
+        report_f("G Loss: {:3f} | D Loss: {:.3f} | D(gen): {:.3f} | D(real): {:.3f}".format(storage['gen_loss'][-1],
+                storage['disc_loss'][-1], storage['D_gen'][-1], storage['D_real'][-1]))
 
     return best_loss
 

@@ -30,10 +30,10 @@ from default_config import hific_args, mse_lpips_args, directories, ModelModes, 
 # Optimizes cuda kernels by benchmarking - no dynamic input sizes or u will have a BAD time
 torch.backends.cudnn.benchmark = True
 
-def create_model(args, device, logger):
+def create_model(args, device, logger, storage, storage_test):
 
     start_time = time.time()
-    model = HificModel(args, logger, model_type=args.model_type)
+    model = HificModel(args, logger, storage, storage_test, model_type=args.model_type)
     logger.info(model)
 
     logger.info('Trainable parameters:')
@@ -48,10 +48,9 @@ def create_model(args, device, logger):
     return model
 
 def optimize_loss(loss, opt, retain_graph=False):
-    loss.backward()
+    loss.backward(retain_graph=retain_graph)
     opt.step()
     opt.zero_grad()
-
 
 def test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, storage, best_test_loss, 
          start_time, epoch_start_time, logger, train_writer, test_writer):
@@ -60,19 +59,20 @@ def test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, stor
     with torch.no_grad():
         data = data.to(device, dtype=torch.float)
 
-        losses, intermediates = model(data, return_intermediates=True)
-        helpers.save_images(train_writer, model.step_counter, intermediates.input_images, intermediates.reconstruction,
+        losses, intermediates = model(data, return_intermediates=True, writeout=False)
+        helpers.save_images(train_writer, model.step_counter, intermediates.input_image, intermediates.reconstruction,
             fname=os.path.join(args.figures_save, 'recon_epoch{}_idx{}_TRAIN_{:%Y_%m_%d_%H:%M}.jpg'.format(epoch, idx, datetime.datetime.now())))
 
+        test_data = test_data.to(device, dtype=torch.float)
         losses, intermediates = model(test_data, return_intermediates=True)
-        helpers.save_images(test_writer, model.step_counter, intermediates.input_images, intermediates.reconstruction,
+        helpers.save_images(test_writer, model.step_counter, intermediates.input_image, intermediates.reconstruction,
             fname=os.path.join(args.figures_save, 'recon_epoch{}_idx{}_TEST_{:%Y_%m_%d_%H:%M}.jpg'.format(epoch, idx, datetime.datetime.now())))
     
         compression_loss = losses['compression'] 
         epoch_test_loss.append(compression_loss.item())
         mean_test_loss = np.mean(epoch_test_loss)
         
-        best_test_loss = helpers.log(storage, epoch, idx, mean_test_loss, compression_loss.item(), 
+        best_test_loss = helpers.log(model, storage, epoch, idx, mean_test_loss, compression_loss.item(), 
                                      best_test_loss, start_time, epoch_start_time, 
                                      batch_size=data.shape[0], header='[TEST]', 
                                      logger=logger, writer=test_writer)
@@ -117,14 +117,14 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
     # param_groups = {'amortization': amortization_params, 'hyperlatent_likelihood': hyperlatent_likelihood_params}
 
     # Decay lr for all optimizers by factor of 0.1 after first epoch
-    amort_scheduler = torch.optim.lr_scheduler.MultiStepLR(amortization_opt, milestones=[1], gamma=0.1, verbose=True)
-    hpl_scheduler = torch.optim.lr_scheduler.MultiStepLR(hyperlatent_likelihood_opt, milestones=[1], gamma=0.1, verbose=True)
+    amort_scheduler = torch.optim.lr_scheduler.MultiStepLR(amortization_opt, milestones=[1], gamma=0.1)
+    hpl_scheduler = torch.optim.lr_scheduler.MultiStepLR(hyperlatent_likelihood_opt, milestones=[1], gamma=0.1)
 
     if model.use_discriminator is True:
         # param_groups['discriminator'] = discriminator_params
         discriminator_parameters = model.Discriminator.parameters()
         disc_opt = torch.optim.Adam(discriminator_parameters, lr=args.learning_rate)
-        disc_scheduler = torch.optim.lr_scheduler.MultiStepLR(disc_opt, milestones=[1], gamma=0.1, verbose=True)
+        disc_scheduler = torch.optim.lr_scheduler.MultiStepLR(disc_opt, milestones=[1], gamma=0.1)
         optimizers['disc'] = disc_opt
     
     for epoch in trange(args.n_epochs, desc='Epoch'):
@@ -133,7 +133,7 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
         epoch_start_time = time.time()
         
         if epoch > 0:
-            ckpt_path = helpers.save_model(model, optimizer, mean_epoch_loss, args.checkpoints_save, epoch, device, args=args)
+            ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args)
         
         for idx, data in enumerate(tqdm(train_loader, desc='Train'), 0):
 
@@ -145,24 +145,34 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
                     if train_generator is True:
                         losses = model(data, generator_train=True)
                         compression_loss = losses['compression']
-                        optimize_loss(compression_loss, amortization_opt)
-                        optimize_loss(compression_loss, hyperlatent_likelihood_opt)
+                        compression_loss.backward()
+                        amortization_opt.step()
+                        hyperlatent_likelihood_opt.step()
+                        amortization_opt.zero_grad()
+                        hyperlatent_likelihood_opt.zero_grad()
+                        # optimize_loss(compression_loss, amortization_opt, retain_graph=True)
+                        # optimize_loss(compression_loss, hyperlatent_likelihood_opt)
                         train_generator = False
                     else:
                         losses = model(data, generator_train=False)
                         disc_loss = losses['disc']
                         optimize_loss(disc_loss, disc_opt)
                         current_D_steps += 1
-                        model.step_counter -= 1  # Only count full G-D cycle as a 'step'
 
                         if current_D_steps == args.discriminator_steps:
                             current_D_steps = 0
                             train_generator = True
                 else:
-                    losses = model(data, generator_train=True)
-                    compression_loss = losses['compression']
-                    optimize_loss(compression_loss, amortization_opt)
-                    optimize_loss(compression_loss, hyperlatent_likelihood_opt)
+                    with torch.autograd.set_detect_anomaly(True):
+                        losses = model(data, generator_train=True)
+                        compression_loss = losses['compression']
+                        compression_loss.backward()
+                        amortization_opt.step()
+                        hyperlatent_likelihood_opt.step()
+                        amortization_opt.zero_grad()
+                        hyperlatent_likelihood_opt.zero_grad()
+                        # optimize_loss(compression_loss, amortization_opt, retain_graph=True)
+                        # optimize_loss(compression_loss, hyperlatent_likelihood_opt)
 
             except KeyboardInterrupt:
                 if model.step_counter > args.log_interval+1:
@@ -172,12 +182,11 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
                 else:
                     return
 
-            if idx % args.log_interval == 1:
-                counter += 1
+            if model.step_counter % args.log_interval == 1:
                 epoch_loss.append(compression_loss.item())
                 mean_epoch_loss = np.mean(epoch_loss)
 
-                best_loss = helpers.log(storage, epoch, idx, mean_epoch_loss, loss.item(),
+                best_loss = helpers.log(model, storage, epoch, idx, mean_epoch_loss, compression_loss.item(),
                                 best_loss, start_time, epoch_start_time, batch_size=data.shape[0],
                                 logger=logger, writer=train_writer)
                 try:
@@ -189,13 +198,14 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
                 best_test_loss, epoch_test_loss = test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, storage_test,
                      best_test_loss, start_time, epoch_start_time, logger, train_writer, test_writer)
 
-                if args.smoke_test:
-                   return None 
-
                 with open(os.path.join(args.storage_save, 'storage_{}_tmp.pkl'.format(args.name)), 'wb') as handle:
                     pickle.dump(storage, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
                 model.train()
+
+                if model.step_counter > args.n_steps:
+                    logger.info('Reached step limit [args.n_steps = {}]'.format(args.n_steps))
+                    break
 
         # End epoch
         mean_epoch_loss = np.mean(epoch_loss)
@@ -208,6 +218,9 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
 
         logger.info('===>> Epoch {} | Mean train loss: {:.3f} | Mean test loss: {:.3f}'.format(epoch, 
             mean_epoch_loss, mean_epoch_test_loss))    
+
+        if model.step_counter > args.n_steps:
+            break
     
     with open(os.path.join(args.storage_save, 'storage_{}_{:%Y_%m_%d_%H:%M:%S}.pkl'.format(args.name, datetime.datetime.now())), 'wb') as handle:
         pickle.dump(storage, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -231,8 +244,8 @@ if __name__ == '__main__':
     general.add_argument("-mt", "--model_type", required=True, choices=(ModelTypes.COMPRESSION, ModelTypes.COMPRESSION_GAN), 
         help="Type of model - with or without GAN component")
     general.add_argument("-gpu", "--gpu", type=int, default=0, help="GPU ID.")
-    general.add_argument("-log_intv", "--log_interval", type=int, default=100, help="Number of steps between logs.")
-    general.add_argument("-save_intv", "--save_interval", type=int, default=100000, help="Number of steps between checkpoints.")
+    general.add_argument("-log_intv", "--log_interval", type=int, default=500, help="Number of steps between logs.")
+    general.add_argument("-save_intv", "--save_interval", type=int, default=50000, help="Number of steps between checkpoints.")
     general.add_argument("-multigpu", "--multigpu", help="Toggle data parallel capability using torch DataParallel", action="store_true")
     general.add_argument('-bs', '--batch_size', type=int, default=8, help='input batch size for training')
     general.add_argument('--save', type=str, default='experiments', help='Parent directory for stored information (checkpoints, logs, etc.)')
@@ -291,7 +304,9 @@ if __name__ == '__main__':
     args.image_dims = train_loader.dataset.image_dims
     logger.info('Input Dimensions: {}'.format(args.image_dims))
 
-    model = create_model(args, device, logger)
+    storage = defaultdict(list)
+    storage_test = defaultdict(list)
+    model = create_model(args, device, logger, storage, storage_test)
 
     n_gpus = torch.cuda.device_count()
     if n_gpus > 1 and args.multigpu is True:
@@ -307,8 +322,6 @@ if __name__ == '__main__':
     """
     Train
     """
-    storage = defaultdict(list)
-    storage_test = defaultdict(list)
     model, ckpt_path = train(args, model, train_loader, test_loader, device, storage, storage_test, logger)
 
     """

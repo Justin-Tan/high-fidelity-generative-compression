@@ -7,7 +7,7 @@ import numpy as np
 
 from skimage.io import imread
 from scipy.stats import norm
-from PIL import Image
+import PIL
 from tqdm import tqdm
 
 import torch
@@ -18,8 +18,8 @@ DIR = os.path.abspath(os.path.dirname(__file__))
 COLOUR_BLACK = 0
 COLOUR_WHITE = 1
 NUM_DATASET_WORKERS = 4
-SCALE_LOW = 0.75
-SCALE_HIGH = 0.95
+SCALE_MIN = 0.75
+SCALE_MAX = 0.95
 DATASETS_DICT = {"openimages": "OpenImages", "cityscapes": "CityScapes", "jetimages": "JetImages"}
 DATASETS = list(DATASETS_DICT.keys())
 
@@ -40,6 +40,10 @@ def get_background(dataset):
     """Return the image background color."""
     return get_dataset(dataset).background_color
 
+def exception_collate_fn(batch):
+    batch = list(filter(lambda x: x is not None, batch))
+    return torch.utils.data.dataloader.default_collate(batch)
+
 def get_dataloaders(dataset, mode='train', root=None, shuffle=True, pin_memory=True, 
                     batch_size=8, logger=logging.getLogger(__name__), **kwargs):
     """A generic data loader
@@ -59,15 +63,17 @@ def get_dataloaders(dataset, mode='train', root=None, shuffle=True, pin_memory=T
     Dataset = get_dataset(dataset)
 
     if root is None:
-        dataset = Dataset(logger=logger, mode=mode, evaluate=evaluate, **kwargs)
+        dataset = Dataset(logger=logger, mode=mode, **kwargs)
     else:
-        dataset = Dataset(root=root, logger=logger, mode=mode, evaluate=evaluate, **kwargs)
+        dataset = Dataset(root=root, logger=logger, mode=mode, **kwargs)
 
     return DataLoader(dataset,
                       batch_size=batch_size,
                       shuffle=shuffle,
                       num_workers=NUM_DATASET_WORKERS,
+                      collate_fn=exception_collate_fn,
                       pin_memory=pin_memory)
+
 
 class BaseDataset(Dataset, abc.ABC):
     """Base Class for datasets.
@@ -128,7 +134,7 @@ class OpenImages(BaseDataset):
     """
     files = {"train": "train", "test": "test", "val": "validation"}
 
-    def __init__(self, root=os.path.join(DIR, 'data/openimages'), crop_size=256, **kwargs):
+    def __init__(self, root=os.path.join(DIR, 'data/openimages'), mode='train', crop_size=256, **kwargs):
         super().__init__(root, [transforms.ToTensor()], **kwargs)
 
         if mode == 'train':
@@ -140,15 +146,16 @@ class OpenImages(BaseDataset):
 
         self.imgs = glob.glob(os.path.join(data_dir, '*.jpg'))
         self.crop_size = crop_size
-        self.scale_low = SCALE_LOW
-        self.scale_high = SCALE_HIGH
+        self.image_dims = (3, self.crop_size, self.crop_size)
+        self.scale_min = SCALE_MIN
+        self.scale_max = SCALE_MAX
 
     def _transforms(self, scale, H, W):
         """
         Up(down)scale and randomly crop to `crop_size` x `crop_size`
         """
         return transforms.Compose([
-            transforms.ToPILImage(),
+            # transforms.ToPILImage(),
             transforms.RandomHorizontalFlip(),
             transforms.Resize((math.ceil(scale * H), 
                                math.ceil(scale * W))),
@@ -168,19 +175,28 @@ class OpenImages(BaseDataset):
         """
         # img values already between 0 and 255
         img_path = self.imgs[idx]
-        # H X W X C `ndarray`
-        img = imread(img_path)
 
-        img_dims = img.shape
-        H, W = img_dims[0], img_dims[1]
-        shortest_side_length = min(H,W)
+        try:
+            # H X W X C `ndarray`
+            # img = imread(img_path)
+            # img_dims = img.shape
+            # H, W = img_dims[0], img_dims[1]
+            # PIL
+            img = PIL.Image.open(img_path)
+            img = img.convert('RGB') 
+            W, H = img.size  # slightly confusing
 
-        minimum_scale_factor = float(self.crop_size) / float(shortest_side_length)
-        scale_low = max(minimum_scale_factor, self.scale_low)
-        scale_high = max(scale_low, self.scale_high)
-        scale = np.random.uniform(scale_low, scale_high)
+            shortest_side_length = min(H,W)
 
-        dynamic_transform = self._transforms(scale, H, W)
+            minimum_scale_factor = float(self.crop_size) / float(shortest_side_length)
+            scale_low = max(minimum_scale_factor, self.scale_min)
+            scale_high = max(scale_low, self.scale_max)
+            scale = np.random.uniform(scale_low, scale_high)
+
+            dynamic_transform = self._transforms(scale, H, W)
+            transformed = dynamic_transform(img)
+        except:
+            return None
 
         # apply random scaling + crop, put each pixel 
         # in [0.,1.] and reshape to (C x H x W)
@@ -232,11 +248,11 @@ def preprocess(root, size=(64, 64), img_format='JPEG', center_crop=None):
         imgs += glob.glob(os.path.join(root, '*' + ext))
 
     for img_path in tqdm(imgs):
-        img = Image.open(img_path)
+        img = PIL.Image.open(img_path)
         width, height = img.size
 
         if size is not None and width != size[1] or height != size[0]:
-            img = img.resize(size, Image.ANTIALIAS)
+            img = img.resize(size, PIL.Image.ANTIALIAS)
 
         if center_crop is not None:
             new_width, new_height = center_crop

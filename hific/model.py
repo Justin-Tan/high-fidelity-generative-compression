@@ -30,7 +30,8 @@ Disc_out= namedtuple("disc_out",
 
 class HificModel(nn.Module):
 
-    def __init__(self, args, logger, storage, model_mode=ModelModes.TRAINING, model_type=ModelTypes.COMPRESSION):
+    def __init__(self, args, logger, storage_train, storage_test, model_mode=ModelModes.TRAINING, 
+            model_type=ModelTypes.COMPRESSION):
         super(HificModel, self).__init__()
 
         """
@@ -41,7 +42,8 @@ class HificModel(nn.Module):
         self.model_type = model_type
         self.logger = logger
         self.log_interval = args.log_interval
-        self.storage = storage
+        self.storage_train = storage_train
+        self.storage_test = storage_test
         self.step_counter = 0
 
         if not hasattr(ModelTypes, self.model_type.upper()):
@@ -86,14 +88,21 @@ class HificModel(nn.Module):
         
     def store_loss(self, key, loss):
         assert type(loss) == float, 'Call .item() on loss before storage'
-        self.storage[key].append(loss)
+
+        if self.training is True:
+            storage = self.storage_train
+        else:
+            storage = self.storage_test
+
+        if self.writeout is True:
+            storage[key].append(loss)
 
     def compression_forward(self, x):
         """
         Forward pass through encoder, hyperprior, and decoder.
 
         Inputs
-        x:  Input image. Format (N,C,H,W), range [0, 255].
+        x:  Input image. Format (N,C,H,W), range [0,1].
             torch.Tensor
         
         Outputs
@@ -107,12 +116,10 @@ class HificModel(nn.Module):
             logger.info('Padding to {}'.format(factor))
             x = helpers.pad_factor(x, image_dims, factor)
 
-        # Scale range to [0,1]
-        x = torch.div(x, 255.)
 
         # Encoder forward pass
         y = self.Encoder(x)
-        hyperinfo = self.Hyperprior(y)
+        hyperinfo = self.Hyperprior(y, spatial_shape=image_dims[2:])
 
         latents_quantized = hyperinfo.decoded
         total_nbpp = hyperinfo.total_nbpp
@@ -120,7 +127,9 @@ class HificModel(nn.Module):
 
         reconstruction = self.Generator(y)
         # Undo padding
-        reconstruction = reconstruction[:, :, :image_dims[1], :image_dims[2]]
+        if self.model_mode == ModelModes.VALIDATION and (self.training is False):
+            print('UNDOING PADDING')
+            reconstruction = reconstruction[:, :, :image_dims[1], :image_dims[2]]
         
         intermediates = Intermediates(x, reconstruction, latents_quantized, 
             total_nbpp, total_qbpp)
@@ -143,7 +152,8 @@ class HificModel(nn.Module):
         latents = torch.repeat_interleave(latents, 2, dim=0)
 
         D_out, D_out_logits = self.Discriminator(D_in, latents)
-        print(D_out.size())
+        D_out = torch.squeeze(D_out)
+        D_out_logits = torch.squeeze(D_out_logits)
 
         D_real, D_gen = torch.chunk(D_out, 2, dim=0)
         D_real_logits, D_gen_logits = torch.chunk(D_out_logits, 2, dim=0)
@@ -155,7 +165,8 @@ class HificModel(nn.Module):
 
     def distortion_loss(self, x_gen, x_real):
         # loss in [0,255] space but normalized by 255 to not be too big
-        mse = self.squared_difference(x_gen, x_real) # / 255.
+        # - Delegate to weighting
+        mse = self.squared_difference(x_gen*255, x_real*255) # / 255.
         return torch.mean(mse)
 
     def perceptual_loss_wrapper(self, x_gen, x_real):
@@ -167,6 +178,8 @@ class HificModel(nn.Module):
         
         x_real = intermediates.input_image
         x_gen = intermediates.reconstruction
+        # print('X GEN MAX', x_gen.max())
+        # print('X GEN MIN', x_gen.min())
 
         distortion_loss = self.distortion_loss(x_gen, x_real)
         perceptual_loss = self.perceptual_loss_wrapper(x_gen, x_real)
@@ -174,18 +187,18 @@ class HificModel(nn.Module):
         weighted_distortion = self.args.k_M * distortion_loss
         weighted_perceptual = self.args.k_P * perceptual_loss
 
-        print('Distortion loss size', weighted_distortion.size())
-        print('Perceptual loss size', weighted_perceptual.size())
+        # print('Distortion loss size', weighted_distortion.size())
+        # print('Perceptual loss size', weighted_perceptual.size())
 
         weighted_rate, rate_penalty = losses.weighted_rate_loss(self.args, total_nbpp=intermediates.n_bpp,
             total_qbpp=intermediates.q_bpp, step_counter=self.step_counter)
 
-        print('Weighted rate loss size', weighted_rate.size())
+        # print('Weighted rate loss size', weighted_rate.size())
         weighted_R_D_loss = weighted_rate + weighted_distortion
         weighted_compression_loss = weighted_R_D_loss + weighted_perceptual
 
-        print('Weighted R-D loss size', weighted_R_D_loss.size())
-        print('Weighted compression loss size', weighted_compression_loss.size())
+        # print('Weighted R-D loss size', weighted_R_D_loss.size())
+        # print('Weighted compression loss size', weighted_compression_loss.size())
 
         # Bookkeeping 
         if (self.step_counter % self.log_interval == 1):
@@ -222,7 +235,9 @@ class HificModel(nn.Module):
 
         return D_loss, G_loss
 
-    def forward(self, x, generator_train=False, return_intermediates=False):
+    def forward(self, x, generator_train=False, return_intermediates=False, writeout=True):
+
+        self.writeout = writeout
 
         losses = dict()
         if generator_train is True:
@@ -262,8 +277,9 @@ if __name__ == '__main__':
     logger = helpers.logger_setup(logpath=os.path.join(directories.experiments, 'logs'), filepath=os.path.abspath(__file__))
     device = helpers.get_device()
     logger.info('Using device {}'.format(device))
-    storage = defaultdict(list)
-    model = HificModel(hific_args, logger, storage, model_type=ModelTypes.COMPRESSION_GAN)
+    storage_train = defaultdict(list)
+    storage_test = defaultdict(list)
+    model = HificModel(hific_args, logger, storage_train, storage_test, model_type=ModelTypes.COMPRESSION_GAN)
     model.to(device)
 
     logger.info(model)

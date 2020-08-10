@@ -50,18 +50,25 @@ class CodingModel(nn.Module):
         
         return x
 
-    def _estimate_entropy(self, x, likelihood):
+    def _estimate_entropy(self, x, likelihood, spatial_shape):
         # x: (N,C,H,W)
         EPS = 1e-9  
-        input_shape = x.size()
         quotient = -np.log(2.)
-
+        input_shape = x.size()
         batch_size = input_shape[0]
-        n_pixels = input_shape[2] * input_shape[3]
+        n_pixels = np.prod(spatial_shape)
 
         log_likelihood = torch.log(likelihood + EPS)
         n_bits = torch.sum(log_likelihood) / (batch_size * quotient)
         bpp = n_bits / n_pixels
+        #print(n_pixels)
+        #print(batch_size)
+        #print('LH', likelihood)
+        #print('LH MAX', likelihood.max())
+        #print('LH MAX', likelihood.min())
+        #print('LH SHape', likelihood.shape)
+        #print('NB', n_bits)
+        #print('BPP', bpp)
 
         return n_bits, bpp
 
@@ -100,7 +107,7 @@ class PriorDensity(nn.Module):
         cdf_upper = self.standardized_CDF((0.5 - x) / scale)
         cdf_lower = self.standardized_CDF(-(0.5 + x) / scale)
         likelihood = cdf_upper - cdf_lower
-        print('LIKELIHOOD shape', likelihood.size())
+        # print('LIKELIHOOD shape', likelihood.size())
 
         return torch.clamp(likelihood, min=self.min_likelihood, max=self.max_likelihood)
 
@@ -174,8 +181,8 @@ class HyperpriorDensity(nn.Module):
             if update_parameters is False:
                 H_k, a_k, b_k = H_k.detach(), a_k.detach(), b_k.detach()
             logits = torch.bmm(F.softplus(H_k), logits)  # [C,filters[k+1],B]
-            logits += b_k
-            logits += torch.tanh(a_k) * torch.tanh(logits)
+            logits = logits + b_k
+            logits = logits + torch.tanh(a_k) * torch.tanh(logits)
 
         return logits
 
@@ -202,7 +209,7 @@ class HyperpriorDensity(nn.Module):
         # Reshape to (N,C,H,W)
         likelihood = torch.reshape(likelihood, (C,N,H,W))
         likelihood = likelihood.permute(1,0,2,3)
-        print('LIKELIHOOD shape', likelihood.size())
+        # print('LIKELIHOOD shape', likelihood.size())
 
         return torch.clamp(likelihood, min=self.min_likelihood, max=self.max_likelihood)
 
@@ -253,7 +260,7 @@ class Hyperprior(CodingModel):
         return values
 
 
-    def forward(self, latents, **kwargs):
+    def forward(self, latents, spatial_shape, **kwargs):
 
         hyperlatents = self.analysis_net(latents)
         
@@ -262,13 +269,13 @@ class Hyperprior(CodingModel):
         noisy_hyperlatents = self._quantize(hyperlatents, mode='noise')
         noisy_hyperlatent_likelihood = self.hyperlatent_likelihood(noisy_hyperlatents)
         noisy_hyperlatent_bits, noisy_hyperlatent_bpp = self._estimate_entropy(hyperlatents, 
-            noisy_hyperlatent_likelihood)
+            noisy_hyperlatent_likelihood, spatial_shape)
 
         # Discrete entropy, hyperlatents
         quantized_hyperlatents = self._quantize(hyperlatents, mode='quantize')
         quantized_hyperlatent_likelihood = self.hyperlatent_likelihood(quantized_hyperlatents)
         quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy(quantized_hyperlatents, 
-            quantized_hyperlatent_likelihood)
+            quantized_hyperlatent_likelihood, spatial_shape)
 
         if self.training is True:
             hyperlatents_decoded = noisy_hyperlatents
@@ -283,19 +290,19 @@ class Hyperprior(CodingModel):
         noisy_latent_likelihood = self.latent_likelihood(noisy_latents, mean=latent_means,
             scale=latent_scales)
         noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(latents, 
-            noisy_latent_likelihood)     
+            noisy_latent_likelihood, spatial_shape)     
 
         # Discrete entropy, latents
         quantized_latents = self._quantize(latents, mode='quantize')
         quantized_latent_likelihood = self.latent_likelihood(quantized_latents, mean=latent_means,
             scale=latent_scales)
         quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(quantized_latents,
-            quantized_latent_likelihood)
+            quantized_latent_likelihood, spatial_shape)
 
         if self.training is True:
             latents_decoded = self.quantize_latents(latents, latent_means)
         else:
-            latents_decoder = quantized_latents
+            latents_decoded = quantized_latents
 
         info = HyperInfo(
             decoded=latents_decoded,
