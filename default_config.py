@@ -34,6 +34,7 @@ class args(object):
     dataset = Datasets.OPENIMAGES
     shuffle = True
     discriminator_steps = 0
+    model_mode = ModelModes.TRAINING
 
     # Architecture params - Table 3a) of [1]
     latent_channels = 220

@@ -227,7 +227,7 @@ if __name__ == '__main__':
     # Optimization-related options
     optim_args = parser.add_argument_group("Optimization-related options")
     optim_args.add_argument('-steps', '--n_steps', type=int, default=2e6, help="Number of gradient steps.")
-    optim_args.add_argument('-epochs', '--n_epochs', type=int, default=32, help="Number of passes over training dataset.")
+    optim_args.add_argument('-epochs', '--n_epochs', type=int, default=10, help="Number of passes over training dataset.")
     optim_args.add_argument("-lr", "--learning_rate", type=float, default=1e-4, help="Optimizer learning rate.")
     optim_args.add_argument("-wd", "--weight_decay", type=float, default=1e-6, help="Coefficient of L2 regularization.")
 
@@ -243,17 +243,18 @@ if __name__ == '__main__':
 
     start_time = time.time()
     device = helpers.get_device()
-    logger.info('Using device {}'.format(device))
 
     # Override default arguments from config file with provided command line arguments
     dictify = lambda x: dict((n, getattr(x, n)) for n in dir(x) if not (n.startswith('__') or 'logger' in n))
     args_d, cmd_args_d = dictify(args), vars(cmd_args)
     args_d.update(cmd_args_d)
     args = helpers.Struct(**args_d)
-    args = cmd_args
 
     args = helpers.setup_generic_signature(args, special_info=args.model_type)
     logger = helpers.logger_setup(logpath=os.path.join(args.snapshot, 'logs'), filepath=os.path.abspath(__file__))
+    logger.info('MODEL TYPE: {}'.format(args.model_type))
+    logger.info('MODEL MODE: {}'.format(args.model_mode))
+    logger.info('Using device {}'.format(device))
     logger.info('SAVING LOGS/CHECKPOINTS/RECORDS TO {}'.format(args.snapshot))
     logger.info('Using GPU ID {}'.format(args.gpu))
 
