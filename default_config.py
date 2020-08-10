@@ -18,6 +18,13 @@ class ModelModes(object):
 
 class Datasets(object):
     OPENIMAGES = 'openimages'
+    CITYSCAPES = 'cityscapes'
+    JETS = 'jetimages'
+
+class DatasetPaths(object):
+    OPENIMAGES = '/home/jtan/gpu/jtan/data/compression'
+    CITYSCAPES = ''
+    JETS = ''
 
 class args(object):
     """
@@ -32,6 +39,7 @@ class args(object):
     save_interval = 100000
     multigpu = True
     dataset = Datasets.OPENIMAGES
+    dataset_path = DatasetPaths.OPENIMAGES
     shuffle = True
     discriminator_steps = 0
     model_mode = ModelModes.TRAINING

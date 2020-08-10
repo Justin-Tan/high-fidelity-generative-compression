@@ -16,8 +16,10 @@ from tqdm import tqdm, trange
 from collections import defaultdict
 
 import torch
+import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 
 # Custom modules
 from hific.model import HificModel
@@ -51,23 +53,29 @@ def optimize_loss(loss, opt, retain_graph=False):
     opt.zero_grad()
 
 
-def test(model, epoch, idx, data, device, epoch_test_loss, storage, best_test_loss, 
-         start_time, epoch_start_time, logger):
+def test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, storage, best_test_loss, 
+         start_time, epoch_start_time, logger, train_writer, test_writer):
 
     model.eval()  
     with torch.no_grad():
         data = data.to(device, dtype=torch.float)
-        
-        losses = model(data)
+
+        losses, intermediates = model(data, return_intermediates=True)
+        helpers.save_images(train_writer, model.step_counter, intermediates.input_images, intermediates.reconstruction,
+            fname=os.path.join(args.figures_save, 'recon_epoch{}_idx{}_TRAIN_{:%Y_%m_%d_%H:%M}.jpg'.format(epoch, idx, datetime.datetime.now())))
+
+        losses, intermediates = model(test_data, return_intermediates=True)
+        helpers.save_images(test_writer, model.step_counter, intermediates.input_images, intermediates.reconstruction,
+            fname=os.path.join(args.figures_save, 'recon_epoch{}_idx{}_TEST_{:%Y_%m_%d_%H:%M}.jpg'.format(epoch, idx, datetime.datetime.now())))
+    
         compression_loss = losses['compression'] 
-            
         epoch_test_loss.append(compression_loss.item())
         mean_test_loss = np.mean(epoch_test_loss)
         
         best_test_loss = helpers.log(storage, epoch, idx, mean_test_loss, compression_loss.item(), 
                                      best_test_loss, start_time, epoch_start_time, 
                                      batch_size=data.shape[0], header='[TEST]', 
-                                     logger=logger)
+                                     logger=logger, writer=test_writer)
         
     return best_test_loss, epoch_test_loss
 
@@ -78,7 +86,10 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
     test_loader_iter = iter(test_loader)
     model.train()
     start_time = time.time()
-    
+    current_D_steps, train_generator = 0, True
+    train_writer = SummaryWriter(os.path.join(args.tensorboard_runs, 'train'))
+    test_writer = SummaryWriter(os.path.join(args.tensorboard_runs, 'test'))
+
     amortization_parameters = itertools.chain.from_iterable(
         [am.parameters() for am in model.amortization_models])
     hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
@@ -129,20 +140,24 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
             data = data.to(device, dtype=torch.float)
             
             try:
-                # Train D for D_steps, then G, using distinct batches
                 if model.use_discriminator is True:
-                    
-                    if parity_bit == 0:
-                        losses = model(data, generator_train=False)
-                        disc_loss = losses['disc']
-                        optimize_loss(disc_loss, disc_opt)
-
-                    else:
+                    # Train D for D_steps, then G, using distinct batches
+                    if train_generator is True:
                         losses = model(data, generator_train=True)
                         compression_loss = losses['compression']
                         optimize_loss(compression_loss, amortization_opt)
                         optimize_loss(compression_loss, hyperlatent_likelihood_opt)
+                        train_generator = False
+                    else:
+                        losses = model(data, generator_train=False)
+                        disc_loss = losses['disc']
+                        optimize_loss(disc_loss, disc_opt)
+                        current_D_steps += 1
+                        model.step_counter -= 1  # Only count full G-D cycle as a 'step'
 
+                        if current_D_steps == args.discriminator_steps:
+                            current_D_steps = 0
+                            train_generator = True
                 else:
                     losses = model(data, generator_train=True)
                     compression_loss = losses['compression']
@@ -153,7 +168,7 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
                 if model.step_counter > args.log_interval+1:
                     logger.warning('Exiting, saving ...')
                     ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args)
-                    return ckpt_path
+                    return model, ckpt_path
                 else:
                     return
 
@@ -164,23 +179,21 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
 
                 best_loss = helpers.log(storage, epoch, idx, mean_epoch_loss, loss.item(),
                                 best_loss, start_time, epoch_start_time, batch_size=data.shape[0],
-                                logger=logger)
+                                logger=logger, writer=train_writer)
                 try:
                     test_data = test_loader_iter.next()
                 except StopIteration:
                     test_loader_iter = iter(test_loader)
                     test_data = test_loader_iter.next()
 
-                best_test_loss, epoch_test_loss = test(model, epoch, idx, test_data, device, epoch_test_loss, storage_test,
-                     best_test_loss, start_time, epoch_start_time, logger)
+                best_test_loss, epoch_test_loss = test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, storage_test,
+                     best_test_loss, start_time, epoch_start_time, logger, train_writer, test_writer)
 
                 if args.smoke_test:
                    return None 
 
                 with open(os.path.join(args.storage_save, 'storage_{}_tmp.pkl'.format(args.name)), 'wb') as handle:
                     pickle.dump(storage, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-                # Visualization
 
                 model.train()
 
@@ -257,26 +270,21 @@ if __name__ == '__main__':
     logger.info('Using device {}'.format(device))
     logger.info('SAVING LOGS/CHECKPOINTS/RECORDS TO {}'.format(args.snapshot))
     logger.info('Using GPU ID {}'.format(args.gpu))
-
     logger.info('Using dataset: {}'.format(args.dataset))
+
     test_loader = datasets.get_dataloaders(args.dataset,
+                                root=args.dataset_path,
                                 batch_size=args.batch_size,
                                 logger=logger,
-                                train=False,
-                                shuffle=True,
-                                signal_region=args.signal_region,
-                                sideband_region=args.sideband_region,
-                                context_dim=args.context_dim)
-
+                                mode='validation',
+                                shuffle=True)
 
     train_loader = datasets.get_dataloaders(args.dataset,
+                                root=args.dataset_path,
                                 batch_size=args.batch_size,
                                 logger=logger,
-                                train=True,
-                                shuffle=True,
-                                signal_region=args.signal_region,
-                                sideband_region=args.sideband_region,
-                                context_dim=args.context_dim)
+                                mode='train',
+                                shuffle=True)
 
 
     args.n_data = len(train_loader.dataset)
