@@ -7,6 +7,7 @@ import numpy as np
 import json
 import os, time, datetime
 import logging
+import itertools
 
 from scipy.stats import entropy
 from collections import OrderedDict
@@ -158,7 +159,7 @@ def save_model(model, optimizers, mean_epoch_loss, epoch, device, args, logger, 
     return model_path
    
 
-def load_model(save_path, model_type, logger, current_args_d=None, optimizers=None, prediction=True, strict=False):
+def load_model(save_path, model_type, logger, current_args_d=None, prediction=True, strict=False):
 
     from hific.model import HificModel
     checkpoint = torch.load(save_path)
@@ -185,19 +186,32 @@ def load_model(save_path, model_type, logger, current_args_d=None, optimizers=No
     # `strict` False if warmstarting
     model.load_state_dict(checkpoint['model_state_dict'], strict=strict)
 
+    amortization_parameters = itertools.chain.from_iterable(
+        [am.parameters() for am in model.amortization_models])
+    hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
+
+    amortization_opt = torch.optim.Adam(amortization_parameters,
+        lr=args.learning_rate)
+    hyperlatent_likelihood_opt = torch.optim.Adam(hyperlatent_likelihood_parameters, 
+        lr=args.learning_rate)
+    optimizers = dict(amort=amortization_opt, hyper=hyperlatent_likelihood_opt)
+
+    if model.use_discriminator is True:
+        discriminator_parameters = model.Discriminator.parameters()
+        disc_opt = torch.optim.Adam(discriminator_parameters, lr=args.learning_rate)
+        optimizers['disc'] = disc_opt
+        
+    optimizers['amort'].load_state_dict(checkpoint['compression_optimizer_state_dict'])
+    optimizers['hyper'].load_state_dict(checkpoint['hyperprior_optimizer_state_dict'])
+    if (model.use_discriminator is True) and ('disc' in optimizers.keys()):
+        optimizers['disc'].load_state_dict(checkpoint['discriminator_optimizer_state_dict'])
+
     if prediction:
         model.eval()
     else:
         model.train()
-        
-    if optimizers is not None:
-        optimizers['amort'].load_state_dict(checkpoint['compression_optimizer_state_dict'])
-        optimizers['hyper'].load_state_dict(checkpoint['hyperprior_optimizer_state_dict'])
-        if (model.use_discriminator is True) and ('disc' in optimizers.keys()):
-            optimizers['disc'].load_state_dict(checkpoint['discriminator_optimizer_state_dict'])
-        return args, model, optimizers
 
-    return args, model
+    return args, model, optimizers
 
 
 def logger_setup(logpath, filepath, package_files=[]):

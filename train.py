@@ -87,7 +87,7 @@ def test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, stor
     return best_test_loss, epoch_test_loss
 
 
-def train(args, model, train_loader, test_loader, device, storage, storage_test, logger):
+def train(args, model, train_loader, test_loader, device, storage, storage_test, logger, optimizers):
 
     best_loss, best_test_loss, mean_epoch_loss = np.inf, np.inf, np.inf     
     test_loader_iter = iter(test_loader)
@@ -97,39 +97,7 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
     train_writer = SummaryWriter(os.path.join(args.tensorboard_runs, 'train'))
     test_writer = SummaryWriter(os.path.join(args.tensorboard_runs, 'test'))
 
-    amortization_parameters = itertools.chain.from_iterable(
-        [am.parameters() for am in model.amortization_models])
-    hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
 
-    amortization_opt = torch.optim.Adam(amortization_parameters,
-        lr=args.learning_rate)
-    hyperlatent_likelihood_opt = torch.optim.Adam(hyperlatent_likelihood_parameters, 
-        lr=args.learning_rate)
-    optimizers = dict(amort=amortization_opt, hyper=hyperlatent_likelihood_opt)
-
-    # Contingency
-    logger.info('Optimizing over:')
-    amortization_params, hyperlatent_likelihood_params, discriminator_params = list(), list(), list()
-    # for name, param in model.named_parameters():
-    #     logger.info(name)
-    #     if 'hyperlatent_likelihood' in name:
-    #         logger.info('Adding {} to hyperlatent likelihood params'.format(name))
-    #         hyperlatent_likelihood_params.append(param)
-    #     if ('hyperlatent_likelihood' not in name) and ('Discriminator' not in name):
-    #         logger.info('Adding {} to amortization params'.format(name))
-    #         amortization_params.append(param)
-    #     if 'Discriminator' in name:
-    #         logger.info('Adding {} to discriminator params'.format(name))
-    #         discriminator_params.append(param)
-    # param_groups = {'amortization': amortization_params, 'hyperlatent_likelihood': hyperlatent_likelihood_params}
-
-    if model.use_discriminator is True:
-        # param_groups['discriminator'] = discriminator_params
-        discriminator_parameters = model.Discriminator.parameters()
-        disc_opt = torch.optim.Adam(discriminator_parameters, lr=args.learning_rate)
-        optimizers['disc'] = disc_opt
-
-    
     for epoch in trange(args.n_epochs, desc='Epoch'):
 
         epoch_loss, epoch_test_loss = [], []  
@@ -138,6 +106,8 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
         if epoch > 0:
             ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
         
+        model.train()
+
         for idx, data in enumerate(tqdm(train_loader, desc='Train'), 0):
 
             data = data.to(device, dtype=torch.float)
@@ -257,6 +227,11 @@ if __name__ == '__main__':
     optim_args.add_argument("-lr", "--learning_rate", type=float, default=1e-4, help="Optimizer learning rate.")
     optim_args.add_argument("-wd", "--weight_decay", type=float, default=1e-6, help="Coefficient of L2 regularization.")
 
+    # Warmstart adversarial training from autoencoder/hyperprior
+    warmstart_args = parser.add_argument_group("Warmstart options")
+    warmstart_args.add_argument("-warmstart", "--warmstart", help="Warmstart adversarial training from autoencoder + hyperprior ckpt.", action="store_true")
+    warmstart_args.add_argument("-ckpt", "--warmstart_ckpt", default=None, help="Path to autoencoder + hyperprior ckpt.")
+
     cmd_args = parser.parse_args()
 
     if cmd_args.gpu != 0:
@@ -309,7 +284,36 @@ if __name__ == '__main__':
 
     storage = defaultdict(list)
     storage_test = defaultdict(list)
-    model = create_model(args, device, logger, storage, storage_test)
+
+    amortization_opt = torch.optim.Adam(amortization_parameters,
+        lr=args.learning_rate)
+    hyperlatent_likelihood_opt = torch.optim.Adam(hyperlatent_likelihood_parameters, 
+        lr=args.learning_rate)
+    optimizers = dict(amort=amortization_opt, hyper=hyperlatent_likelihood_opt)
+
+    if args.warmstart is True:
+        assert args.warmstart_ckpt is not None, 'Must provide checkpoint to previously trained AE/HP model.'
+        logger.info('Warmstarting discriminator/generator from autoencoder/hyperprior model.')
+        if args.model_type != ModelTypes.COMPRESSION_GAN:
+            logger.warning('Should warmstart compression-gan model.')
+        args, model, optimizers = helpers.load_model(args.warmstart_ckpt, args.model_type, logger, 
+            current_args_d=dictify(args), strict=False)
+    else:
+        model = create_model(args, device, logger, storage, storage_test)
+        amortization_parameters = itertools.chain.from_iterable(
+            [am.parameters() for am in model.amortization_models])
+        hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
+
+        amortization_opt = torch.optim.Adam(amortization_parameters,
+            lr=args.learning_rate)
+        hyperlatent_likelihood_opt = torch.optim.Adam(hyperlatent_likelihood_parameters, 
+            lr=args.learning_rate)
+        optimizers = dict(amort=amortization_opt, hyper=hyperlatent_likelihood_opt)
+
+        if model.use_discriminator is True:
+            discriminator_parameters = model.Discriminator.parameters()
+            disc_opt = torch.optim.Adam(discriminator_parameters, lr=args.learning_rate)
+            optimizers['disc'] = disc_opt
 
     n_gpus = torch.cuda.device_count()
     if n_gpus > 1 and args.multigpu is True:
@@ -325,7 +329,8 @@ if __name__ == '__main__':
     """
     Train
     """
-    model, ckpt_path = train(args, model, train_loader, test_loader, device, storage, storage_test, logger)
+    model, ckpt_path = train(args, model, train_loader, test_loader, device, storage, storage_test, logger,
+        optimizers=optimizers)
 
     """
     TODO

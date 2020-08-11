@@ -2,12 +2,7 @@
 Generative Image Compression, the remix. Pytorch implementation of the paper ["High-Fidelity Generative Image Compression" by Mentzer et. al.](https://hific.github.io/)
 
 ## Warning
-This is a PRELIMINARY VERSION. There may be sharp edges.
-
-## TODO
-* Check input images format, [0,255], [0,1] or [-1,1]. LPIPS assumes [-1,1].
-* Check if using [-1,1] for images works better.
-* Check generator final activation - or just clip to [0,1].
+This is a preliminary version. There may be sharp edges.
 
 ## Note
 The generator is trained to achieve realistic and not exact reconstruction. Therefore, in theory **images which are compressed and decoded may be arbitrarily different from the input**. This precludes usage for sensitive applications. An important caveat from the authors is reproduced here: 
@@ -28,9 +23,9 @@ python3 train.py -h
 ```
 
 ### Notes
-* The reported `bpp` is the theoretical bitrate required to losslessly store the quantized latent representation of an image as determined by the learned probability model provided by the hyperprior using some entropy coding algorithm. Functionality for range encoding/decoding is in-progress.
+* The reported `bpp` is the theoretical bitrate required to losslessly store the quantized latent representation of an image as determined by the learned probability model provided by the hyperprior using some entropy coding algorithm. We're working on an rANS entropy coder.
 * The "size" of the compressed image as reported in `bpp` does not account for the size of the model required to decode the compressed format.
-* The total size of the model is around 737 MB. Forward pass time will scale sublinearly provided everything fits in memory.
+* The total size of the model is around 737 MB. Forward pass time should scale sublinearly provided everything fits in memory.
 
 ## Contributing / Todo
 All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.
