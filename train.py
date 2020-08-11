@@ -35,14 +35,13 @@ def create_model(args, device, logger, storage, storage_test):
     start_time = time.time()
     model = HificModel(args, logger, storage, storage_test, model_type=args.model_type)
     logger.info(model)
-
     logger.info('Trainable parameters:')
+
     for n, p in model.named_parameters():
         logger.info('{} - {}'.format(n, p.shape))
 
     logger.info("Number of trainable parameters: {}".format(helpers.count_parameters(model)))
     logger.info("Estimated size (under fp32): {:.3f} MB".format(helpers.count_parameters(model) * 4. / 10**6))
-
     logger.info('Model init {:.3f}s'.format(time.time() - start_time))
 
     return model
@@ -87,15 +86,19 @@ def test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, stor
     return best_test_loss, epoch_test_loss
 
 
-def train(args, model, train_loader, test_loader, device, storage, storage_test, logger, optimizers):
+def train(args, model, train_loader, test_loader, device, logger, optimizers):
 
-    best_loss, best_test_loss, mean_epoch_loss = np.inf, np.inf, np.inf     
-    test_loader_iter = iter(test_loader)
-    model.train()
     start_time = time.time()
+    test_loader_iter = iter(test_loader)
     current_D_steps, train_generator = 0, True
+    best_loss, best_test_loss, mean_epoch_loss = np.inf, np.inf, np.inf     
     train_writer = SummaryWriter(os.path.join(args.tensorboard_runs, 'train'))
     test_writer = SummaryWriter(os.path.join(args.tensorboard_runs, 'test'))
+    storage, storage_test = model.storage_train, model.storage_test
+
+    amortization_opt, hyperlatent_likelihood_opt = optimizers['amort'], optimizers['hyper']
+    if model.use_discriminator is True:
+        disc_opt = optimizers['disc']
 
 
     for epoch in trange(args.n_epochs, desc='Epoch'):
@@ -252,7 +255,7 @@ if __name__ == '__main__':
     args = helpers.Struct(**args_d)
     args = helpers.setup_generic_signature(args, special_info=args.model_type)
     args.target_rate = args.target_rate_map[args.regime]
-    args.lambda_A = args.lambda_A_map[args.regime]  # High rate
+    args.lambda_A = args.lambda_A_map[args.regime]
 
     logger = helpers.logger_setup(logpath=os.path.join(args.snapshot, 'logs'), filepath=os.path.abspath(__file__))
     logger.info('MODEL TYPE: {}'.format(args.model_type))
@@ -285,21 +288,16 @@ if __name__ == '__main__':
     storage = defaultdict(list)
     storage_test = defaultdict(list)
 
-    amortization_opt = torch.optim.Adam(amortization_parameters,
-        lr=args.learning_rate)
-    hyperlatent_likelihood_opt = torch.optim.Adam(hyperlatent_likelihood_parameters, 
-        lr=args.learning_rate)
-    optimizers = dict(amort=amortization_opt, hyper=hyperlatent_likelihood_opt)
-
     if args.warmstart is True:
         assert args.warmstart_ckpt is not None, 'Must provide checkpoint to previously trained AE/HP model.'
         logger.info('Warmstarting discriminator/generator from autoencoder/hyperprior model.')
         if args.model_type != ModelTypes.COMPRESSION_GAN:
             logger.warning('Should warmstart compression-gan model.')
-        args, model, optimizers = helpers.load_model(args.warmstart_ckpt, args.model_type, logger, 
+        args, model, optimizers = helpers.load_model(args.warmstart_ckpt, args.model_type, logger, device,
             current_args_d=dictify(args), strict=False)
     else:
         model = create_model(args, device, logger, storage, storage_test)
+        model = model.to(device)
         amortization_parameters = itertools.chain.from_iterable(
             [am.parameters() for am in model.amortization_models])
         hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
@@ -320,7 +318,6 @@ if __name__ == '__main__':
         logger.info('Using {} GPUs.'.format(n_gpus))
         model = nn.DataParallel(model)
 
-    model = model.to(device)
     logger.info('Using device {}'.format(device))
 
     metadata = dict((n, getattr(args, n)) for n in dir(args) if not (n.startswith('__') or 'logger' in n))
@@ -329,8 +326,7 @@ if __name__ == '__main__':
     """
     Train
     """
-    model, ckpt_path = train(args, model, train_loader, test_loader, device, storage, storage_test, logger,
-        optimizers=optimizers)
+    model, ckpt_path = train(args, model, train_loader, test_loader, device, logger, optimizers=optimizers)
 
     """
     TODO

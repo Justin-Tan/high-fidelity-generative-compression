@@ -159,8 +159,9 @@ def save_model(model, optimizers, mean_epoch_loss, epoch, device, args, logger, 
     return model_path
    
 
-def load_model(save_path, model_type, logger, current_args_d=None, prediction=True, strict=False):
+def load_model(save_path, model_type, logger, device, current_args_d=None, prediction=True, strict=False):
 
+    start_time = time.time()
     from hific.model import HificModel
     checkpoint = torch.load(save_path)
     loaded_args_d = checkpoint['args']
@@ -186,6 +187,16 @@ def load_model(save_path, model_type, logger, current_args_d=None, prediction=Tr
     # `strict` False if warmstarting
     model.load_state_dict(checkpoint['model_state_dict'], strict=strict)
 
+    logger.info(model)
+    logger.info('Trainable parameters:')
+    for n, p in model.named_parameters():
+        logger.info('{} - {}'.format(n, p.shape))
+
+    logger.info("Number of trainable parameters: {}".format(count_parameters(model)))
+    logger.info("Estimated size (under fp32): {:.3f} MB".format(count_parameters(model) * 4. / 10**6))
+    logger.info('Model init {:.3f}s'.format(time.time() - start_time))
+
+    model = model.to(device)
     amortization_parameters = itertools.chain.from_iterable(
         [am.parameters() for am in model.amortization_models])
     hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
@@ -204,12 +215,16 @@ def load_model(save_path, model_type, logger, current_args_d=None, prediction=Tr
     optimizers['amort'].load_state_dict(checkpoint['compression_optimizer_state_dict'])
     optimizers['hyper'].load_state_dict(checkpoint['hyperprior_optimizer_state_dict'])
     if (model.use_discriminator is True) and ('disc' in optimizers.keys()):
-        optimizers['disc'].load_state_dict(checkpoint['discriminator_optimizer_state_dict'])
+        try:
+            optimizers['disc'].load_state_dict(checkpoint['discriminator_optimizer_state_dict'])
+        except KeyError:
+            pass
 
     if prediction:
         model.eval()
     else:
         model.train()
+
 
     return args, model, optimizers
 
