@@ -136,7 +136,7 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
         epoch_start_time = time.time()
         
         if epoch > 0:
-            ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args)
+            ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
         
         for idx, data in enumerate(tqdm(train_loader, desc='Train'), 0):
 
@@ -170,13 +170,12 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
             except KeyboardInterrupt:
                 if model.step_counter > args.log_interval+1:
                     logger.warning('Exiting, saving ...')
-                    ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args)
+                    ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
                     return model, ckpt_path
                 else:
                     return model, None
 
-            if model.step_counter % args.log_interval == 1:
-                print(model.step_counter)
+            if idx % args.log_interval == 1:
                 epoch_loss.append(compression_loss.item())
                 mean_epoch_loss = np.mean(epoch_loss)
 
@@ -207,6 +206,9 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
                     logger.info('Reached step limit [args.n_steps = {}]'.format(args.n_steps))
                     break
 
+            if idx % args.save_interval == 1:
+                ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
+
         # End epoch
         mean_epoch_loss = np.mean(epoch_loss)
         mean_epoch_test_loss = np.mean(epoch_test_loss)
@@ -220,7 +222,7 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
     with open(os.path.join(args.storage_save, 'storage_{}_{:%Y_%m_%d_%H:%M:%S}.pkl'.format(args.name, datetime.datetime.now())), 'wb') as handle:
         pickle.dump(storage, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-    ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args)
+    ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
     args.ckpt = ckpt_path
     logger.info("Training complete. Time elapsed: {:.3f} s. Number of steps: {}".format((time.time()-start_time), model.step_counter))
     
@@ -240,7 +242,7 @@ if __name__ == '__main__':
         help="Type of model - with or without GAN component")
     general.add_argument("-regime", "--regime", choices=('low','med','high'), default='low', help="Set target bit rate - Low (0.14), Med (0.30), High (0.45)")
     general.add_argument("-gpu", "--gpu", type=int, default=0, help="GPU ID.")
-    general.add_argument("-log_intv", "--log_interval", type=int, default=500, help="Number of steps between logs.")
+    general.add_argument("-log_intv", "--log_interval", type=int, default=100, help="Number of steps between logs.")
     general.add_argument("-save_intv", "--save_interval", type=int, default=50000, help="Number of steps between checkpoints.")
     general.add_argument("-multigpu", "--multigpu", help="Toggle data parallel capability using torch DataParallel", action="store_true")
     general.add_argument('-bs', '--batch_size', type=int, default=8, help='input batch size for training')
@@ -248,8 +250,10 @@ if __name__ == '__main__':
 
     # Optimization-related options
     optim_args = parser.add_argument_group("Optimization-related options")
-    optim_args.add_argument('-steps', '--n_steps', type=int, default=2e6, help="Number of gradient steps.")
-    optim_args.add_argument('-epochs', '--n_epochs', type=int, default=10, help="Number of passes over training dataset.")
+    optim_args.add_argument('-steps', '--n_steps', type=int, default=2e6, 
+        help="Number of gradient steps. Optimization stops at the earlier of n_steps/n_epochs.")
+    optim_args.add_argument('-epochs', '--n_epochs', type=int, default=10, 
+        help="Number of passes over training dataset. Optimization stops at the earlier of n_steps/n_epochs.")
     optim_args.add_argument("-lr", "--learning_rate", type=float, default=1e-4, help="Optimizer learning rate.")
     optim_args.add_argument("-wd", "--weight_decay", type=float, default=1e-6, help="Coefficient of L2 regularization.")
 

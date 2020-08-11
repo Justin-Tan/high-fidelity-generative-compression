@@ -113,7 +113,7 @@ def save_metadata(metadata, directory='results', filename=META_FILENAME, **kwarg
     with open(path_to_metadata, 'w') as f:
         json.dump(metadata, f, indent=4, sort_keys=True)  #, **kwargs)
 
-def save_model(model, optimizers, mean_epoch_loss, epoch, device, args, multigpu=False):
+def save_model(model, optimizers, mean_epoch_loss, epoch, device, args, logger, multigpu=False):
 
     directory = args.checkpoints_save
     makedirs(directory)
@@ -152,13 +152,13 @@ def save_model(model, optimizers, mean_epoch_loss, epoch, device, args, multigpu
         save_dict['discriminator_optimizer_state_dict'] = optimizers['disc'].state_dict()
 
     torch.save(save_dict, f=model_path)
-    print('Saved model at Epoch {}, step {} to {}'.format(epoch, model.step_counter, model_path))
+    logger.info('Saved model at Epoch {}, step {} to {}'.format(epoch, model.step_counter, model_path))
     
     model.to(device)  # Move back to device
     return model_path
    
 
-def load_model(save_path, model_class, device, logger, current_args_d=None, optimizers=None, prediction=True):
+def load_model(save_path, model_type, logger, current_args_d=None, optimizers=None, prediction=True, strict=False):
 
     from hific.model import HificModel
     checkpoint = torch.load(save_path)
@@ -174,15 +174,16 @@ def load_model(save_path, model_class, device, logger, current_args_d=None, opti
                 logger.warning('Argument {} (value {}) not present in recorded arguments. Overriding with current.'.format(k,v))
                 continue
 
-            if loaded_args_d[k] !=v:
-                logger.warning('Current argument {} (value {}) does not match recorded argument (value {}). May be overriden using recorded.'.format(k, v, loaded_args_d[k]))
+            if loaded_v !=v:
+                logger.warning('Current argument {} (value {}) does not match recorded argument (value {}). May be overriden using recorded.'.format(k, v, loaded_v))
 
         # HACK
         current_args_d.update(loaded_args_d)
         args = Struct(**current_args_d)
 
-    model = HificModel(args, logger, model_type=args.model_type)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    model = HificModel(args, logger, model_type=model_type)
+    # `strict` False if warmstarting
+    model.load_state_dict(checkpoint['model_state_dict'], strict=strict)
 
     if prediction:
         model.eval()
@@ -192,11 +193,11 @@ def load_model(save_path, model_class, device, logger, current_args_d=None, opti
     if optimizers is not None:
         optimizers['amort'].load_state_dict(checkpoint['compression_optimizer_state_dict'])
         optimizers['hyper'].load_state_dict(checkpoint['hyperprior_optimizer_state_dict'])
-        if model.use_discriminator is True:
+        if (model.use_discriminator is True) and ('disc' in optimizers.keys()):
             optimizers['disc'].load_state_dict(checkpoint['discriminator_optimizer_state_dict'])
         return args, model, optimizers
 
-    return args, model # model.to(device)
+    return args, model
 
 
 def logger_setup(logpath, filepath, package_files=[]):
