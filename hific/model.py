@@ -134,7 +134,7 @@ class HificModel(nn.Module):
         intermediates = Intermediates(x, reconstruction, latents_quantized, 
             total_nbpp, total_qbpp)
 
-        return intermediates
+        return intermediates, hyperinfo
 
     def discriminator_forward(self, intermediates, generator_train):
         """ Train on gen/real batches simultaneously. """
@@ -166,15 +166,15 @@ class HificModel(nn.Module):
     def distortion_loss(self, x_gen, x_real):
         # loss in [0,255] space but normalized by 255 to not be too big
         # - Delegate to weighting
-        mse = self.squared_difference(x_gen*255, x_real*255) # / 255.
-        return torch.mean(mse)
+        sq_err = self.squared_difference(x_gen*255., x_real*255.) # / 255.
+        return torch.mean(sq_err)
 
     def perceptual_loss_wrapper(self, x_gen, x_real):
         """ Assumes inputs are in [0, 1]. """
         LPIPS_loss = self.perceptual_loss.forward(x_gen, x_real, normalize=True)
         return torch.mean(LPIPS_loss)
 
-    def compression_loss(self, intermediates):
+    def compression_loss(self, intermediates, hyperinfo):
         
         x_real = intermediates.input_image
         x_gen = intermediates.reconstruction
@@ -207,6 +207,10 @@ class HificModel(nn.Module):
             self.store_loss('perceptual', perceptual_loss.item())
             self.store_loss('n_rate', intermediates.n_bpp.item())
             self.store_loss('q_rate', intermediates.q_bpp.item())
+            self.store_loss('n_rate_latent', hyperinfo.latent_nbpp.item())
+            self.store_loss('q_rate_latent', hyperinfo.latent_qbpp.item())
+            self.store_loss('n_rate_hyperlatent', hyperinfo.hyperlatent_nbpp.item())
+            self.store_loss('q_rate_hyperlatent', hyperinfo.hyperlatent_q_bpp.item())
 
             self.store_loss('weighted_rate', weighted_rate.item())
             self.store_loss('weighted_distortion', weighted_distortion.item())
@@ -244,14 +248,14 @@ class HificModel(nn.Module):
             # Define a 'step' as one cycle of G-D training
             self.step_counter += 1
 
-        intermediates = self.compression_forward(x)
+        intermediates, hyperinfo = self.compression_forward(x)
 
         if self.model_mode == ModelModes.EVALUATION:
             reconstruction = torch.mul(intermediates.reconstruction, 255.)
             reconstruction = torch.clamp(reconstruction, min=0., max=255.)
             return reconstruction, intermediates.q_bpp
 
-        compression_model_loss = self.compression_loss(intermediates)
+        compression_model_loss = self.compression_loss(intermediates, hyperinfo)
 
         if self.use_discriminator is True:
             # Only send gradients to generator when training generator via

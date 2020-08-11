@@ -109,7 +109,7 @@ class PriorDensity(nn.Module):
         likelihood = cdf_upper - cdf_lower
         # print('LIKELIHOOD shape', likelihood.size())
 
-        return torch.clamp(likelihood, min=self.min_likelihood, max=self.max_likelihood)
+        return torch.clamp(likelihood, min=self.min_likelihood) # , max=self.max_likelihood)
 
 
     def forward(self, x, mean, scale):
@@ -180,7 +180,7 @@ class HyperpriorDensity(nn.Module):
 
             if update_parameters is False:
                 H_k, a_k, b_k = H_k.detach(), a_k.detach(), b_k.detach()
-            logits = torch.bmm(F.softplus(H_k), logits)  # [C,filters[k+1],B]
+            logits = torch.bmm(F.softplus(H_k), logits)  # [C,filters[k+1],*]
             logits = logits + b_k
             logits = logits + torch.tanh(a_k) * torch.tanh(logits)
 
@@ -211,7 +211,7 @@ class HyperpriorDensity(nn.Module):
         likelihood = likelihood.permute(1,0,2,3)
         # print('LIKELIHOOD shape', likelihood.size())
 
-        return torch.clamp(likelihood, min=self.min_likelihood, max=self.max_likelihood)
+        return torch.clamp(likelihood, min=self.min_likelihood)  #, max=self.max_likelihood)
 
     def forward(self, x, **kwargs):
         return self.likelihood(x)
