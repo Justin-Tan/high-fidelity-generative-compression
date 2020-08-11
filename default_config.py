@@ -26,14 +26,17 @@ class DatasetPaths(object):
     CITYSCAPES = ''
     JETS = ''
 
+class directories(object):
+    experiments = 'experiments'
+
 class args(object):
     """
-    Common config
+    Shared config
     """
-    name = 'hific_exp'
+    name = 'hific_v0'
     silent = True
     n_epochs = 8
-    n_steps = 2e6  # Paper says 2M training steps
+    n_steps = 2e6
     batch_size = 8
     log_interval = 100
     save_interval = 100000
@@ -45,8 +48,8 @@ class args(object):
     model_mode = ModelModes.TRAINING
 
     # Architecture params - Table 3a) of [1]
-    latent_channels = 50 # 220
-    n_residual_blocks = 3  # Authors use 9 blocks, performance saturates at 5
+    latent_channels = 220
+    n_residual_blocks = 7  # Authors use 9 blocks, performance saturates at 5
     lambda_B = 2**(-4)          # Loose rate
     k_M = 0.075 * 2**(-5)       # Distortion
     k_P = 1.                    # Perceptual loss
@@ -65,14 +68,14 @@ class args(object):
     # Scheduling
     lambda_schedule = dict(vals=[2., 1.], steps=[50000])
     lr_schedule = dict(vals=[1., 0.1], steps=[500000])
-    target_schedule = dict(vals=[0.20/0.14, 1.], steps=[50000])
+    target_schedule = dict(vals=[0.20/0.14, 1.], steps=[50000])  # Rate allowance
 
     # match target rate to lambda_A coefficient
-    regime = 'high' # 'med' # 'low'  # 0.14
+    regime = 'low'  # -> 0.14
     target_rate_map = dict(low=0.14, med=0.3, high=0.45)
     lambda_A_map = dict(low=2**1, med=2**0, high=2**(-1))
     target_rate = target_rate_map[regime]
-    lambda_A = lambda_A_map[regime]  # High rate
+    lambda_A = lambda_A_map[regime]
 
     # Constrain rate:
     # Loss = C * (1/lambda * R + CD * D) + CP * P
@@ -86,6 +89,9 @@ class args(object):
     # lambda_A = 0.1 * 2. ** -6
     # lambda_B = 0.1 * 2. ** 1
 
+"""
+Specialized configs
+"""
 
 class mse_lpips_args(args):
     """
@@ -102,7 +108,3 @@ class hific_args(args):
     model_type = ModelTypes.COMPRESSION_GAN
     gan_loss = 'non_saturating'  # ('non_saturating', 'least_squares')
     discriminator_steps = 1
-    CP=0.15  # Sweep over 0.1 * 1.5 ** x
-
-class directories(object):
-    experiments = 'experiments'

@@ -128,7 +128,7 @@ class HificModel(nn.Module):
         reconstruction = self.Generator(y)
         # Undo padding
         if self.model_mode == ModelModes.VALIDATION and (self.training is False):
-            print('UNDOING PADDING')
+            print('Undoing padding.')
             reconstruction = reconstruction[:, :, :image_dims[1], :image_dims[2]]
         
         intermediates = Intermediates(x, reconstruction, latents_quantized, 

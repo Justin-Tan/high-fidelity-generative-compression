@@ -19,8 +19,6 @@ def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter):
     target_bpp = get_scheduled_params(config.target_rate, config.target_schedule, step_counter)
     rate_penalty = float(np.where(total_qbpp.detach().cpu().numpy() > target_bpp, lambda_A, lambda_B))
 
-    # Tensorboard
-
     return rate_penalty * total_nbpp, rate_penalty
 
 def gan_loss(disc_out, mode='generator_loss', gan_type='non_saturating'):

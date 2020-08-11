@@ -91,10 +91,14 @@ class PriorDensity(nn.Module):
         self.max_likelihood = float(max_likelihood)
         self.scale_lower_bound = scale_lower_bound
 
-    def standardized_CDF(self, value):
+    def standardized_CDF_gaussian(self, value):
         # Gaussian
         # return 0.5 * (1. + torch.erf(value/ np.sqrt(2)))
         return 0.5 * torch.erfc(value * (-1./np.sqrt(2)))
+
+    def standardized_CDF_logistic(self, value):
+        # Logistic
+        return torch.sigmoid(value)
 
     def likelihood(self, x, mean, scale):
 
@@ -105,10 +109,9 @@ class PriorDensity(nn.Module):
         # Assumes 1 - CDF(x) = CDF(-x)
         x = x - mean
         x = torch.abs(x)
-        cdf_upper = self.standardized_CDF((0.5 - x) / scale)
-        cdf_lower = self.standardized_CDF(-(0.5 + x) / scale)
+        cdf_upper = self.standardized_CDF_gaussian((0.5 - x) / scale)
+        cdf_lower = self.standardized_CDF_gaussian(-(0.5 + x) / scale)
         likelihood = cdf_upper - cdf_lower
-        # print('LIKELIHOOD shape', likelihood.size())
 
         return torch.clamp(likelihood, min=self.min_likelihood) # , max=self.max_likelihood)
 
@@ -244,7 +247,7 @@ class Hyperprior(CodingModel):
         # TODO: Combine scale, loc into single network
         self.synthesis_mu = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
         self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters,
-            final_activation=None)#'softplus')
+            final_activation='softplus')
         
         self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
@@ -283,7 +286,7 @@ class Hyperprior(CodingModel):
         else:
             hyperlatents_decoded = quantized_hyperlatents
 
-        latent_scales = F.softplus(self.synthesis_std(hyperlatents_decoded))
+        latent_scales = self.synthesis_std(hyperlatents_decoded)
         latent_means = self.synthesis_mu(hyperlatents_decoded)
 
         # Differential entropy, latents
@@ -313,8 +316,8 @@ class Hyperprior(CodingModel):
             latent_qbpp=quantized_latent_bpp,
             hyperlatent_qbpp=quantized_hyperlatent_bpp,
             total_qbpp=quantized_latent_bpp + quantized_hyperlatent_bpp,
-            bitstring=None,
-            side_bitstring=None
+            bitstring=None,  # TODO
+            side_bitstring=None  # TODO
         )
 
         return info
