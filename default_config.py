@@ -68,7 +68,8 @@ class args(object):
     # Scheduling
     lambda_schedule = dict(vals=[2., 1.], steps=[50000])
     lr_schedule = dict(vals=[1., 0.1], steps=[500000])
-    target_schedule = dict(vals=[0.20/0.14, 1.], steps=[50000])  # Rate allowance
+    # target_schedule = dict(vals=[0.20/0.14, 1.], steps=[50000])  # Rate allowance
+    target_schedule = dict(vals=[10., 1.], steps=[50000])  # Rate allowance
 
     # match target rate to lambda_A coefficient
     regime = 'low'  # -> 0.14

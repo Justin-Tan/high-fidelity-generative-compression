@@ -10,10 +10,11 @@ The generator is trained to achieve realistic and not exact reconstruction. Ther
 > "_Therefore, we emphasize that our method is not suitable for sensitive image contents, such as, e.g., storing medical images, or important documents._" 
 
 ## Usage
-* Install Pytorch and dependencies from [https://pytorch.org/](https://pytorch.org/). Then install other requirements.
+* Install Pytorch nightly and dependencies from [https://pytorch.org/](https://pytorch.org/). Then install other requirements.
 ```
 pip install -r requirements.txt
 ```
+* Download a large (> 100,000) dataset of reasonably diverse color images. We found that using 1-2 training divisions of the [OpenImages](https://storage.googleapis.com/openimages/web/index.html) dataset was able to produce satisfactory results. Add the dataset path to the `DatasetPaths` class in `default_config.py`.
 * Clone this repository, `cd` in and view command line options.
 ```
 git clone https://github.com/Justin-Tan/high-fidelity-generative-compression.git
@@ -22,13 +23,33 @@ cd high-fidelity-generative-compression
 python3 train.py -h
 ```
 
+### Training
+* For best results, as described in the paper, train an initial base model using the rate-distortion loss only, together with the hyperprior model, e.g. to target low bitrates:
+```
+python3 train.py --model_type compression --regime low --n_steps 1e6
+```
+
+* Then use the checkpoint of the trained base model to 'warmstart' the GAN architecture. Training the generator and discriminator from scratch was found to result in unstable training, but YMMV.
+```
+python3 train.py --model_type compression_gan --regime low --n_steps 1e6 --warmstart --ckpt path/to/base/checkpoint
+```
+
+### Compression
+* To obtain a _theoretical_ measure of the bitrate under some trained model, run `compress.py`. This will report the bits-per-pixel attainable by the compressed representation (`bpp`) and other fun metrics.
+```
+python3 compress.py --img path/to/your/image --ckpt path/to/trained/model
+```
+* The reported `bpp` is the theoretical bitrate required to losslessly store the quantized latent representation of an image as determined by the learned probability model provided by the hyperprior using some entropy coding algorithm. Comparing this against the original size of the image will give you an idea of the reduction in memory footprint. This repository does not currently support actual compression to a bitstring ([TensorFlow Compression](https://github.com/tensorflow/compression) does this well). We're working on an ANS entropy coder to support this in the future.
+
 ### Notes
-* The reported `bpp` is the theoretical bitrate required to losslessly store the quantized latent representation of an image as determined by the learned probability model provided by the hyperprior using some entropy coding algorithm. We're working on an rANS entropy coder.
 * The "size" of the compressed image as reported in `bpp` does not account for the size of the model required to decode the compressed format.
 * The total size of the model is around 737 MB. Forward pass time should scale sublinearly provided everything fits in memory.
 
 ## Contributing / Todo
 All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.
+
+## Known Issues
+* Training is unstable for high bitrate models (passing the `--regime high` flag in `train.py`). Currently unsure whether this is due to the dataset, or a flaw in the model.
 
 ## Acknowledgements
 * The code under `hific/perceptual_similarity/` implementing the perceptual distortion loss is modified from the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
