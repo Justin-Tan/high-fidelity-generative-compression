@@ -180,7 +180,7 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
                     ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args)
                     return model, ckpt_path
                 else:
-                    return
+                    return model, None
 
             if model.step_counter % args.log_interval == 1:
                 epoch_loss.append(compression_loss.item())

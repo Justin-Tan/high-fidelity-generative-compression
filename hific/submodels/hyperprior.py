@@ -99,8 +99,9 @@ class PriorDensity(nn.Module):
     def likelihood(self, x, mean, scale):
 
         scale = torch.clamp(scale, min=self.scale_lower_bound).float()
-        print('mean', mean)
-        print('scale', scale)
+        # print('mean', mean)
+        # print('scale', scale.mean())
+        # print('scale', scale)
         # Assumes 1 - CDF(x) = CDF(-x)
         x = x - mean
         x = torch.abs(x)
@@ -243,7 +244,7 @@ class Hyperprior(CodingModel):
         # TODO: Combine scale, loc into single network
         self.synthesis_mu = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
         self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters,
-            final_activation='softplus')
+            final_activation=None)#'softplus')
         
         self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
@@ -282,7 +283,7 @@ class Hyperprior(CodingModel):
         else:
             hyperlatents_decoded = quantized_hyperlatents
 
-        latent_scales = self.synthesis_std(hyperlatents_decoded)
+        latent_scales = F.softplus(self.synthesis_std(hyperlatents_decoded))
         latent_means = self.synthesis_mu(hyperlatents_decoded)
 
         # Differential entropy, latents

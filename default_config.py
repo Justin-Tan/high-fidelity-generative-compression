@@ -45,8 +45,8 @@ class args(object):
     model_mode = ModelModes.TRAINING
 
     # Architecture params - Table 3a) of [1]
-    latent_channels = 220
-    n_residual_blocks = 6  # Authors use 9 blocks, performance saturates at 5
+    latent_channels = 50 # 220
+    n_residual_blocks = 3  # Authors use 9 blocks, performance saturates at 5
     lambda_B = 2**(-4)          # Loose rate
     k_M = 0.075 * 2**(-5)       # Distortion
     k_P = 1.                    # Perceptual loss
