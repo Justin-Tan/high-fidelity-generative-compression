@@ -30,7 +30,7 @@ Disc_out= namedtuple("disc_out",
 
 class HificModel(nn.Module):
 
-    def __init__(self, args, logger, storage_train, storage_test, model_mode=ModelModes.TRAINING, 
+    def __init__(self, args, logger, storage_train=defaultdict(list), storage_test=defaultdict(list), model_mode=ModelModes.TRAINING, 
             model_type=ModelTypes.COMPRESSION):
         super(HificModel, self).__init__()
 

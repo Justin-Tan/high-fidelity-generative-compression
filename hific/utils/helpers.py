@@ -175,11 +175,11 @@ def load_model(save_path, model_type, logger, current_args_d=None, optimizers=No
                 continue
 
             if loaded_v !=v:
-                logger.warning('Current argument {} (value {}) does not match recorded argument (value {}). May be overriden using recorded.'.format(k, v, loaded_v))
+                logger.warning('Current argument {} (value {}) does not match recorded argument (value {}). Recorded argument will be overriden.'.format(k, v, loaded_v))
 
         # HACK
-        current_args_d.update(loaded_args_d)
-        args = Struct(**current_args_d)
+        loaded_args_d.update(current_args_d)
+        args = Struct(**loaded_args_d)
 
     model = HificModel(args, logger, model_type=model_type)
     # `strict` False if warmstarting

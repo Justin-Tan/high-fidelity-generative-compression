@@ -71,7 +71,7 @@ def test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, stor
             fname=os.path.join(args.figures_save, 'recon_epoch{}_idx{}_TRAIN_{:%Y_%m_%d_%H:%M}.jpg'.format(epoch, idx, datetime.datetime.now())))
 
         test_data = test_data.to(device, dtype=torch.float)
-        losses, intermediates = model(test_data, return_intermediates=True)
+        losses, intermediates = model(test_data, return_intermediates=True, writeout=True)
         helpers.save_images(test_writer, model.step_counter, intermediates.input_image, intermediates.reconstruction,
             fname=os.path.join(args.figures_save, 'recon_epoch{}_idx{}_TEST_{:%Y_%m_%d_%H:%M}.jpg'.format(epoch, idx, datetime.datetime.now())))
     
@@ -175,7 +175,7 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
                 else:
                     return model, None
 
-            if idx % args.log_interval == 1:
+            if model.step_counter % args.log_interval == 1:
                 epoch_loss.append(compression_loss.item())
                 mean_epoch_loss = np.mean(epoch_loss)
 
@@ -206,7 +206,7 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
                     logger.info('Reached step limit [args.n_steps = {}]'.format(args.n_steps))
                     break
 
-            if idx % args.save_interval == 1:
+            if (idx % args.save_interval == 1) and (idx > args.save_interval):
                 ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
 
         # End epoch
