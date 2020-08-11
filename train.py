@@ -27,7 +27,7 @@ from hific.utils import helpers, initialization, datasets, math
 from default_config import hific_args, mse_lpips_args, directories, ModelModes, ModelTypes
 
 # go fast boi!!
-# Optimizes cuda kernels by benchmarking - no dynamic input sizes or u will have a BAD time
+# Optimizes cuda kernels by benchmarking - no dynamic input sizes!
 torch.backends.cudnn.benchmark = True
 
 def create_model(args, device, logger, storage, storage_test):
@@ -51,6 +51,13 @@ def optimize_loss(loss, opt, retain_graph=False):
     loss.backward(retain_graph=retain_graph)
     opt.step()
     opt.zero_grad()
+
+def optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt):
+    compression_loss.backward()
+    amortization_opt.step()
+    hyperlatent_likelihood_opt.step()
+    amortization_opt.zero_grad()
+    hyperlatent_likelihood_opt.zero_grad()
 
 def test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, storage, best_test_loss, 
          start_time, epoch_start_time, logger, train_writer, test_writer):
@@ -116,16 +123,12 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
     #         discriminator_params.append(param)
     # param_groups = {'amortization': amortization_params, 'hyperlatent_likelihood': hyperlatent_likelihood_params}
 
-    # Decay lr for all optimizers by factor of 0.1 after first epoch
-    amort_scheduler = torch.optim.lr_scheduler.MultiStepLR(amortization_opt, milestones=[1], gamma=0.1)
-    hpl_scheduler = torch.optim.lr_scheduler.MultiStepLR(hyperlatent_likelihood_opt, milestones=[1], gamma=0.1)
-
     if model.use_discriminator is True:
         # param_groups['discriminator'] = discriminator_params
         discriminator_parameters = model.Discriminator.parameters()
         disc_opt = torch.optim.Adam(discriminator_parameters, lr=args.learning_rate)
-        disc_scheduler = torch.optim.lr_scheduler.MultiStepLR(disc_opt, milestones=[1], gamma=0.1)
         optimizers['disc'] = disc_opt
+
     
     for epoch in trange(args.n_epochs, desc='Epoch'):
 
@@ -142,37 +145,27 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
             try:
                 if model.use_discriminator is True:
                     # Train D for D_steps, then G, using distinct batches
+                    losses = model(data, train_generator=train_generator)
+                    compression_loss = losses['compression']
+                    disc_loss = losses['disc']
+
                     if train_generator is True:
-                        losses = model(data, generator_train=True)
-                        compression_loss = losses['compression']
-                        compression_loss.backward()
-                        amortization_opt.step()
-                        hyperlatent_likelihood_opt.step()
-                        amortization_opt.zero_grad()
-                        hyperlatent_likelihood_opt.zero_grad()
-                        # optimize_loss(compression_loss, amortization_opt, retain_graph=True)
-                        # optimize_loss(compression_loss, hyperlatent_likelihood_opt)
+                        optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
                         train_generator = False
                     else:
-                        losses = model(data, generator_train=False)
-                        disc_loss = losses['disc']
                         optimize_loss(disc_loss, disc_opt)
                         current_D_steps += 1
 
                         if current_D_steps == args.discriminator_steps:
                             current_D_steps = 0
                             train_generator = True
+
+                        continue
                 else:
-                    with torch.autograd.set_detect_anomaly(True):
-                        losses = model(data, generator_train=True)
-                        compression_loss = losses['compression']
-                        compression_loss.backward()
-                        amortization_opt.step()
-                        hyperlatent_likelihood_opt.step()
-                        amortization_opt.zero_grad()
-                        hyperlatent_likelihood_opt.zero_grad()
-                        # optimize_loss(compression_loss, amortization_opt, retain_graph=True)
-                        # optimize_loss(compression_loss, hyperlatent_likelihood_opt)
+                    # Rate, distortion, perceptual only
+                    losses = model(data, train_generator=True)
+                    compression_loss = losses['compression']
+                    optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
 
             except KeyboardInterrupt:
                 if model.step_counter > args.log_interval+1:
@@ -183,6 +176,7 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
                     return model, None
 
             if model.step_counter % args.log_interval == 1:
+                print(model.step_counter)
                 epoch_loss.append(compression_loss.item())
                 mean_epoch_loss = np.mean(epoch_loss)
 
@@ -203,6 +197,12 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
 
                 model.train()
 
+                # LR scheduling
+                helpers.update_lr(args, amortization_opt, model.step_counter, logger)
+                helpers.update_lr(args, hyperlatent_likelihood_opt, model.step_counter, logger)
+                if model.use_discriminator is True:
+                    helpers.update_lr(args, disc_opt, model.step_counter, logger)
+
                 if model.step_counter > args.n_steps:
                     logger.info('Reached step limit [args.n_steps = {}]'.format(args.n_steps))
                     break
@@ -210,11 +210,6 @@ def train(args, model, train_loader, test_loader, device, storage, storage_test,
         # End epoch
         mean_epoch_loss = np.mean(epoch_loss)
         mean_epoch_test_loss = np.mean(epoch_test_loss)
-
-        amort_scheduler.step()
-        hpl_scheduler.step()
-        if model.use_discriminator is True:
-            disc_scheduler.step()
 
         logger.info('===>> Epoch {} | Mean train loss: {:.3f} | Mean test loss: {:.3f}'.format(epoch, 
             mean_epoch_loss, mean_epoch_test_loss))    
@@ -283,7 +278,7 @@ if __name__ == '__main__':
     logger = helpers.logger_setup(logpath=os.path.join(args.snapshot, 'logs'), filepath=os.path.abspath(__file__))
     logger.info('MODEL TYPE: {}'.format(args.model_type))
     logger.info('MODEL MODE: {}'.format(args.model_mode))
-    logger.info('BITRATE REGIME: {}'.format(args.model_mode))
+    logger.info('BITRATE REGIME: {}'.format(args.regime))
     logger.info('SAVING LOGS/CHECKPOINTS/RECORDS TO {}'.format(args.snapshot))
     logger.info('USING DEVICE {}'.format(device))
     logger.info('USING GPU ID {}'.format(args.gpu))

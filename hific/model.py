@@ -136,13 +136,13 @@ class HificModel(nn.Module):
 
         return intermediates, hyperinfo
 
-    def discriminator_forward(self, intermediates, generator_train):
+    def discriminator_forward(self, intermediates, train_generator):
         """ Train on gen/real batches simultaneously. """
         x_gen = intermediates.reconstruction
         x_real = intermediates.input_image
 
         # Alternate between training discriminator and compression models
-        if generator_train is False:
+        if train_generator is False:
             x_gen = x_gen.detach()
 
         D_in = torch.cat([x_real, x_gen], dim=0)
@@ -221,11 +221,11 @@ class HificModel(nn.Module):
         return weighted_compression_loss
 
 
-    def GAN_loss(self, intermediates, generator_train=False):
+    def GAN_loss(self, intermediates, train_generator=False):
         """
-        generator_train: Flag to send gradients to generator
+        train_generator: Flag to send gradients to generator
         """
-        disc_out = self.discriminator_forward(intermediates, generator_train)
+        disc_out = self.discriminator_forward(intermediates, train_generator)
         D_loss = losses.gan_loss(disc_out, mode='discriminator_loss')
         G_loss = losses.gan_loss(disc_out, mode='generator_loss')
 
@@ -239,12 +239,12 @@ class HificModel(nn.Module):
 
         return D_loss, G_loss
 
-    def forward(self, x, generator_train=False, return_intermediates=False, writeout=True):
+    def forward(self, x, train_generator=False, return_intermediates=False, writeout=True):
 
         self.writeout = writeout
 
         losses = dict()
-        if generator_train is True:
+        if train_generator is True:
             # Define a 'step' as one cycle of G-D training
             self.step_counter += 1
 
@@ -259,8 +259,8 @@ class HificModel(nn.Module):
 
         if self.use_discriminator is True:
             # Only send gradients to generator when training generator via
-            # `generator_train` flag
-            D_loss, G_loss = self.GAN_loss(intermediates, generator_train)
+            # `train_generator` flag
+            D_loss, G_loss = self.GAN_loss(intermediates, train_generator)
             weighted_G_loss = self.args.beta * G_loss
             compression_model_loss += weighted_G_loss
             losses['disc'] = D_loss
