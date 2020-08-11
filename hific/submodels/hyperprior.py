@@ -54,8 +54,7 @@ class CodingModel(nn.Module):
         # x: (N,C,H,W)
         EPS = 1e-9  
         quotient = -np.log(2.)
-        input_shape = x.size()
-        batch_size = input_shape[0]
+        batch_size = x.size()[0]
         n_pixels = np.prod(spatial_shape)
 
         log_likelihood = torch.log(likelihood + EPS)
@@ -100,7 +99,8 @@ class PriorDensity(nn.Module):
     def likelihood(self, x, mean, scale):
 
         scale = torch.clamp(scale, min=self.scale_lower_bound).float()
-
+        print('mean', mean)
+        print('scale', scale)
         # Assumes 1 - CDF(x) = CDF(-x)
         x = x - mean
         x = torch.abs(x)
