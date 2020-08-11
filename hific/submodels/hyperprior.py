@@ -289,7 +289,7 @@ class Hyperprior(CodingModel):
         noisy_latents = self._quantize(latents, mode='noise')
         noisy_latent_likelihood = self.latent_likelihood(noisy_latents, mean=latent_means,
             scale=latent_scales)
-        noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(latents, 
+        noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(noisy_latents, 
             noisy_latent_likelihood, spatial_shape)     
 
         # Discrete entropy, latents

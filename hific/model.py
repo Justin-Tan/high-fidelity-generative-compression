@@ -210,7 +210,7 @@ class HificModel(nn.Module):
             self.store_loss('n_rate_latent', hyperinfo.latent_nbpp.item())
             self.store_loss('q_rate_latent', hyperinfo.latent_qbpp.item())
             self.store_loss('n_rate_hyperlatent', hyperinfo.hyperlatent_nbpp.item())
-            self.store_loss('q_rate_hyperlatent', hyperinfo.hyperlatent_q_bpp.item())
+            self.store_loss('q_rate_hyperlatent', hyperinfo.hyperlatent_qbpp.item())
 
             self.store_loss('weighted_rate', weighted_rate.item())
             self.store_loss('weighted_distortion', weighted_distortion.item())

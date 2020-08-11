@@ -288,12 +288,14 @@ def log(model, storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, st
 
     report_f("Rate-Distortion:")
     report_f("Weighted R-D: {:3f} | Weighted Rate: {:.3f} | Weighted Distortion: {:.3f} | Weighted Perceptual: {:.3f} | "
-             "n_bpp (total): {:.3f} | q_bpp (total): {:.3f} | n_bpp (latent): {:.3f} | q_bpp (latent): {:.3f} | "
-             "n_bpp (hyp-latent): {:.3f} | q_bpp (hyp-latent): {:.3f} "
              "Distortion: {:.3f} | Rate Penalty: {:.3f}".format(storage['weighted_R_D'][-1],
-             storage['weighted_rate'][-1], storage['weighted_distortion'][-1], storage['weighted_perceptual'][-1], storage['n_rate'][-1],
-             storage['q_rate'][-1], storage['n_rate_latent'][-1], storage['q_rate_latent'][-1], storage['n_rate_hyperlatent'][-1], 
-             storage['q_rate_hyperlatent'], storage['distortion'][-1], storage['rate_penalty'][-1]))
+             storage['weighted_rate'][-1], storage['weighted_distortion'][-1], storage['weighted_perceptual'][-1],
+             storage['distortion'][-1], storage['rate_penalty'][-1]))
+
+    report_f("Rate Breakdown")
+    report_f("n_bpp (total): {:.3f} | q_bpp (total): {:.3f} | n_bpp (latent): {:.3f} | q_bpp (latent): {:.3f} | "
+             "n_bpp (hyp-latent): {:.3f} | q_bpp (hyp-latent): {:.3f}".format(storage['n_rate'][-1], storage['q_rate'][-1], 
+             storage['n_rate_latent'][-1], storage['q_rate_latent'][-1], storage['n_rate_hyperlatent'][-1], storage['q_rate_hyperlatent'][-1]))
     if model.use_discriminator is True:
         report_f("Generator-Discriminator:")
         report_f("G Loss: {:3f} | D Loss: {:.3f} | D(gen): {:.3f} | D(real): {:.3f}".format(storage['gen_loss'][-1],

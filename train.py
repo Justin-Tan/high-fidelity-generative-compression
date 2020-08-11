@@ -243,6 +243,7 @@ if __name__ == '__main__':
     general.add_argument("-n", "--name", default=None, help="Identifier for checkpoints and metrics.")
     general.add_argument("-mt", "--model_type", required=True, choices=(ModelTypes.COMPRESSION, ModelTypes.COMPRESSION_GAN), 
         help="Type of model - with or without GAN component")
+    general.add_argument("-regime", "--regime", choices=('low','med','high'), default='low', help="Set target bit rate - Low (0.14), Med (0.30), High (0.45)")
     general.add_argument("-gpu", "--gpu", type=int, default=0, help="GPU ID.")
     general.add_argument("-log_intv", "--log_interval", type=int, default=500, help="Number of steps between logs.")
     general.add_argument("-save_intv", "--save_interval", type=int, default=50000, help="Number of steps between checkpoints.")
@@ -275,15 +276,18 @@ if __name__ == '__main__':
     args_d, cmd_args_d = dictify(args), vars(cmd_args)
     args_d.update(cmd_args_d)
     args = helpers.Struct(**args_d)
-
     args = helpers.setup_generic_signature(args, special_info=args.model_type)
+    args.target_rate = args.target_rate_map[args.regime]
+    args.lambda_A = args.lambda_A_map[args.regime]  # High rate
+
     logger = helpers.logger_setup(logpath=os.path.join(args.snapshot, 'logs'), filepath=os.path.abspath(__file__))
     logger.info('MODEL TYPE: {}'.format(args.model_type))
     logger.info('MODEL MODE: {}'.format(args.model_mode))
-    logger.info('Using device {}'.format(device))
+    logger.info('BITRATE REGIME: {}'.format(args.model_mode))
     logger.info('SAVING LOGS/CHECKPOINTS/RECORDS TO {}'.format(args.snapshot))
-    logger.info('Using GPU ID {}'.format(args.gpu))
-    logger.info('Using dataset: {}'.format(args.dataset))
+    logger.info('USING DEVICE {}'.format(device))
+    logger.info('USING GPU ID {}'.format(args.gpu))
+    logger.info('USING DATASET: {}'.format(args.dataset))
 
     test_loader = datasets.get_dataloaders(args.dataset,
                                 root=args.dataset_path,
