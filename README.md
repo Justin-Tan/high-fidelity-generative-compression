@@ -1,5 +1,5 @@
 # high-fidelity-generative-compression
-Generative Image Compression, the remix. Pytorch implementation of the paper ["High-Fidelity Generative Image Compression" by Mentzer et. al.](https://hific.github.io/)
+Pytorch implementation of the paper ["High-Fidelity Generative Image Compression" by Mentzer et. al.](https://hific.github.io/)
 
 ## Warning
 This is a preliminary version. There may be sharp edges.
@@ -14,7 +14,9 @@ The generator is trained to achieve realistic and not exact reconstruction. Ther
 
 <details>
   <summary>Guess which half is the reconstruction? </summary>
-  Bottom row, (average bpp, 0.097) v. the top row originals (JPG, 0.552).
+
+> Bottom row, (average bpp, 0.097) v. the top row originals (JPG, average bpp 0.552).
+
 </details>
 
 ## Usage
@@ -56,8 +58,8 @@ python3 compress.py --img path/to/your/image --ckpt path/to/trained/model
 ## Contributing
 All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.
 
-### Known Issues / Todo
-* Training is unstable for high bitrate models (passing the `--regime high` flag in `train.py`). Currently unsure whether this is due to the dataset, or a flaw in the model.
+<!-- ### Known Issues / Todo
+* Training is unstable for high bitrate models (passing the `--regime high` flag in `train.py`). Currently unsure whether this is due to the dataset, or a flaw in the model. -->
 
 ## Acknowledgements
 * The code under `hific/perceptual_similarity/` implementing the perceptual distortion loss is modified from the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
@@ -66,8 +68,8 @@ All content in this repository is licensed under the Apache-2.0 license. Feel fr
 
 ## References
 The following additional papers were useful to understand implementation details.
-1. Johannes Ballé, David Minnen, Saurabh Singh, Sung Jin Hwang, Nick Johnston. Variational image compression with a scale hyperprior. [arXiv:1802.01436 (2018)](https://arxiv.org/abs/1802.01436).
-2. David Minnen, Johannes Ballé, George Toderici. Joint Autoregressive and Hierarchical Priors for Learned Image Compression. [arXiv 1809.02736 (2018)](https://arxiv.org/abs/1809.02736).
+1. Johannes Ballé, David Minnen, Saurabh Singh, Sung Jin Hwang, Nick Johnston. Variational image compression with a scale hyperprior. [arXiv:1802.01436 (2018)](https://arxiv.org/abs/1802.01436)
+2. David Minnen, Johannes Ballé, George Toderici. Joint Autoregressive and Hierarchical Priors for Learned Image Compression. [arXiv 1809.02736 (2018)](https://arxiv.org/abs/1809.02736)
 3. Johannes Ballé, Valero Laparra, Eero P. Simoncelli. End-to-end optimization of nonlinear transform codes for perceptual quality. [arXiv 1607.05006 (2016)](https://arxiv.org/abs/1607.05006)
 
 ## Citation
