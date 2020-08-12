@@ -9,6 +9,14 @@ The generator is trained to achieve realistic and not exact reconstruction. Ther
 
 > "_Therefore, we emphasize that our method is not suitable for sensitive image contents, such as, e.g., storing medical images, or important documents._" 
 
+
+![guess](assets/recon.jpg)
+
+<details>
+  <summary>Guess which half is the reconstruction? </summary>
+  Bottom row, (average bpp, 0.097) v. the top row originals (JPG, 0.552).
+</details>
+
 ## Usage
 * Install Pytorch nightly and dependencies from [https://pytorch.org/](https://pytorch.org/). Then install other requirements.
 ```
@@ -35,25 +43,26 @@ python3 train.py --model_type compression_gan --regime low --n_steps 1e6 --warms
 ```
 
 ### Compression
-* To obtain a _theoretical_ measure of the bitrate under some trained model, run `compress.py`. This will report the bits-per-pixel attainable by the compressed representation (`bpp`) and other fun metrics.
+* To obtain a _theoretical_ measure of the bitrate under some trained model, run `compress.py`. This will report the bits-per-pixel attainable by the compressed representation (`bpp`) and other fun metrics and perform a forward pass through the model to obtain the reconstructed image.
 ```
 python3 compress.py --img path/to/your/image --ckpt path/to/trained/model
 ```
-* The reported `bpp` is the theoretical bitrate required to losslessly store the quantized latent representation of an image as determined by the learned probability model provided by the hyperprior using some entropy coding algorithm. Comparing this against the original size of the image will give you an idea of the reduction in memory footprint. This repository does not currently support actual compression to a bitstring ([TensorFlow Compression](https://github.com/tensorflow/compression) does this well). We're working on an ANS entropy coder to support this in the future.
+* The reported `bpp` is the theoretical bitrate required to losslessly store the quantized latent representation of an image as determined by the learned probability model provided by the hyperprior using some entropy coding algorithm. Comparing this (not the size of the reconstruction) against the original size of the image will give you an idea of the reduction in memory footprint. This repository does not currently support actual compression to a bitstring ([TensorFlow Compression](https://github.com/tensorflow/compression) does this well). We're working on an ANS entropy coder to support this in the future.
 
 ### Notes
 * The "size" of the compressed image as reported in `bpp` does not account for the size of the model required to decode the compressed format.
 * The total size of the model is around 737 MB. Forward pass time should scale sublinearly provided everything fits in memory.
 
-## Contributing / Todo
+## Contributing
 All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.
 
-## Known Issues
+### Known Issues / Todo
 * Training is unstable for high bitrate models (passing the `--regime high` flag in `train.py`). Currently unsure whether this is due to the dataset, or a flaw in the model.
 
 ## Acknowledgements
 * The code under `hific/perceptual_similarity/` implementing the perceptual distortion loss is modified from the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
 * Kookaburra image (`data/kookaburra.jpg`) by [u/Crispy_Chooken](https://old.reddit.com/r/australia/comments/i3ffpk/best_photo_of_a_kookaburra_ive_taken_yet/).
+* The cat in the main image is my neighbour's.
 
 ## References
 The following additional papers were useful to understand implementation details.

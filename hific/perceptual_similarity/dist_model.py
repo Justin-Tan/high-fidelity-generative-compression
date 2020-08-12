@@ -16,8 +16,6 @@ import functools
 import skimage.transform
 from tqdm import tqdm
 
-from IPython import embed
-
 from . import networks_basic as networks
 from hific import perceptual_similarity as util
 

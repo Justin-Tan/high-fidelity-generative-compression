@@ -6,7 +6,6 @@ import logging
 import numpy as np
 
 from skimage.io import imread
-from scipy.stats import norm
 import PIL
 from tqdm import tqdm
 
@@ -177,6 +176,7 @@ class OpenImages(BaseDataset):
         img_path = self.imgs[idx]
 
         try:
+            # This is faster but less convenient
             # H X W X C `ndarray`
             # img = imread(img_path)
             # img_dims = img.shape

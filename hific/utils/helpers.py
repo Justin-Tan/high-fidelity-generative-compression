@@ -9,7 +9,6 @@ import os, time, datetime
 import logging
 import itertools
 
-from scipy.stats import entropy
 from collections import OrderedDict
 from torchvision.utils import save_image
 
