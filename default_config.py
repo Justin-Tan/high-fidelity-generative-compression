@@ -22,7 +22,7 @@ class Datasets(object):
     JETS = 'jetimages'
 
 class DatasetPaths(object):
-    OPENIMAGES = '/home/jtan/gpu/jtan/data/compression'
+    OPENIMAGES = 'data/openimages'
     CITYSCAPES = ''
     JETS = ''
 
@@ -66,11 +66,9 @@ class args(object):
     weight_decay = 1e-6
 
     # Scheduling
-    # lambda_schedule = dict(vals=[2., 1.], steps=[50000])
-    lambda_schedule = dict(vals=[12., 1.], steps=[50000])
+    lambda_schedule = dict(vals=[2., 1.], steps=[50000])
     lr_schedule = dict(vals=[1., 0.1], steps=[500000])
-    # target_schedule = dict(vals=[0.20/0.14, 1.], steps=[50000])  # Rate allowance
-    target_schedule = dict(vals=[10., 1.], steps=[50000])  # Rate allowance
+    target_schedule = dict(vals=[0.20/0.14, 1.], steps=[50000])  # Rate allowance
 
     # match target rate to lambda_A coefficient
     regime = 'low'  # -> 0.14
@@ -78,18 +76,6 @@ class args(object):
     lambda_A_map = dict(low=2**1, med=2**0, high=2**(-1))
     target_rate = target_rate_map[regime]
     lambda_A = lambda_A_map[regime]
-
-    # Constrain rate:
-    # Loss = C * (1/lambda * R + CD * D) + CP * P
-    # where lambda = lambda_a if current_bpp > target_rate
-    # lambda_b otherwise.
-    # C = 0.1 * 2. ** -5  # R-D joint coefficient
-    # CD = 0.75  # distortion
-    # CP = None  # Generator loss
-    # perceptual_weight = 1.
-
-    # lambda_A = 0.1 * 2. ** -6
-    # lambda_B = 0.1 * 2. ** 1
 
 """
 Specialized configs
