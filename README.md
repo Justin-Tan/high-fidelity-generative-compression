@@ -61,8 +61,8 @@ All content in this repository is licensed under the Apache-2.0 license. Feel fr
 
 ## Acknowledgements
 * The code under `hific/perceptual_similarity/` implementing the perceptual distortion loss is modified from the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
-* Kookaburra image (`data/kookaburra.jpg`) by [u/Crispy_Chooken](https://old.reddit.com/r/australia/comments/i3ffpk/best_photo_of_a_kookaburra_ive_taken_yet/).
-* The cat in the main image is my neighbour's.
+<!-- * Kookaburra image (`data/kookaburra.jpg`) by [u/Crispy_Chooken](https://old.reddit.com/r/australia/comments/i3ffpk/best_photo_of_a_kookaburra_ive_taken_yet/).
+* The cat in the main image is my neighbour's. -->
 
 ## References
 The following additional papers were useful to understand implementation details.
