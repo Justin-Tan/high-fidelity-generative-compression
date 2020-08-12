@@ -9,6 +9,7 @@ The generator is trained to achieve realistic and not exact reconstruction. Ther
 
 > "_Therefore, we emphasize that our method is not suitable for sensitive image contents, such as, e.g., storing medical images, or important documents._" 
 
+### Example
 
 ![guess](assets/recon.jpg)
 
