@@ -14,7 +14,7 @@ The generator is trained to achieve realistic and not exact reconstruction. Ther
 <details>
   <summary>Guess which half is the reconstruction? (Click side arrow to reveal) </summary>
 
-> Bottom row, (average bpp 0.097) v. the top row originals (JPG, average bpp 0.552).
+> Bottom row, (average bpp 0.097) v. the top row JPG originals (average bpp 0.552).
 
 </details>
 
