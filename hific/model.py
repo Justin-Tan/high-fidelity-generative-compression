@@ -59,7 +59,8 @@ class HificModel(nn.Module):
         self.Generator = network.Generator(self.image_dims, self.batch_size, C=self.args.latent_channels,
             n_residual_blocks=self.args.n_residual_blocks, channel_norm=self.args.use_channel_norm)
 
-        self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.args.latent_channels)
+        self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.args.latent_channels,
+            likelihood_type=args.likelihood_type)
 
         self.amortization_models = [self.Encoder, self.Generator]
         self.amortization_models.extend(self.Hyperprior.amortization_models)

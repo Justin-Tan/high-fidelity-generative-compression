@@ -220,6 +220,7 @@ if __name__ == '__main__':
     general.add_argument("-multigpu", "--multigpu", help="Toggle data parallel capability using torch DataParallel", action="store_true")
     general.add_argument('-bs', '--batch_size', type=int, default=16, help='input batch size for training')
     general.add_argument('--save', type=str, default='experiments', help='Parent directory for stored information (checkpoints, logs, etc.)')
+    general.add_argument("-lt", "--likelihood_type", choices=('gaussian', 'logistic'), default='gaussian', help="Likelihood model for latents.")
 
     # Optimization-related options
     optim_args = parser.add_argument_group("Optimization-related options")
@@ -271,15 +272,16 @@ if __name__ == '__main__':
                                 batch_size=args.batch_size,
                                 logger=logger,
                                 mode='validation',
-                                shuffle=True)
+                                shuffle=True,
+                                normalize=args.normalize_input_image)
 
     train_loader = datasets.get_dataloaders(args.dataset,
                                 root=args.dataset_path,
                                 batch_size=args.batch_size,
                                 logger=logger,
                                 mode='train',
-                                shuffle=True)
-
+                                shuffle=True,
+                                normalize=args.normalize_input_image)
 
     args.n_data = len(train_loader.dataset)
     args.image_dims = train_loader.dataset.image_dims

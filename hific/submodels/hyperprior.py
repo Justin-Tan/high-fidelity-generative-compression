@@ -83,13 +83,20 @@ class PriorDensity(nn.Module):
     """
 
     def __init__(self, n_channels, min_likelihood=MIN_LIKELIHOOD, max_likelihood=MAX_LIKELIHOOD,
-        scale_lower_bound=MIN_SCALE, **kwargs):
+        scale_lower_bound=MIN_SCALE, likelihood='gaussian', **kwargs):
         super(PriorDensity, self).__init__()
 
         self.n_channels = n_channels
         self.min_likelihood = float(min_likelihood)
         self.max_likelihood = float(max_likelihood)
         self.scale_lower_bound = scale_lower_bound
+
+        if likelihood == 'gaussian':
+            self.standardized_CDF = self.standardized_CDF_gaussian
+        elif likelihood == 'logistic':
+            self.standardized_CDF = self.standardized_CDF_logistic
+        else:
+            raise ValueError('Unknown likelihood model: {}'.format(likelihood))
 
     def standardized_CDF_gaussian(self, value):
         # Gaussian
@@ -109,8 +116,8 @@ class PriorDensity(nn.Module):
         # Assumes 1 - CDF(x) = CDF(-x)
         x = x - mean
         x = torch.abs(x)
-        cdf_upper = self.standardized_CDF_gaussian((0.5 - x) / scale)
-        cdf_lower = self.standardized_CDF_gaussian(-(0.5 + x) / scale)
+        cdf_upper = self.standardized_CDF((0.5 - x) / scale)
+        cdf_lower = self.standardized_CDF(-(0.5 + x) / scale)
         likelihood = cdf_upper - cdf_lower
 
         return torch.clamp(likelihood, min=self.min_likelihood) # , max=self.max_likelihood)
@@ -224,7 +231,8 @@ class HyperpriorDensity(nn.Module):
 
 class Hyperprior(CodingModel):
     
-    def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, mode='large'):
+    def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, mode='large',
+        likelihood_type='gaussian'):
         """
         Introduces probabilistic model over latents of 
         latents.
@@ -252,7 +260,7 @@ class Hyperprior(CodingModel):
         self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
         self.hyperlatent_likelihood = HyperpriorDensity(n_channels=hyperlatent_filters)
-        self.latent_likelihood = PriorDensity(n_channels=bottleneck_capacity)
+        self.latent_likelihood = PriorDensity(n_channels=bottleneck_capacity, likelihood_type=likelihood_type)
 
     def quantize_latents(self, values, means):
         # Latents rounded instead of additive uniform noise

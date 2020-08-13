@@ -44,7 +44,7 @@ def exception_collate_fn(batch):
     return torch.utils.data.dataloader.default_collate(batch)
 
 def get_dataloaders(dataset, mode='train', root=None, shuffle=True, pin_memory=True, 
-                    batch_size=8, logger=logging.getLogger(__name__), **kwargs):
+                    batch_size=8, logger=logging.getLogger(__name__), normalize=False, **kwargs):
     """A generic data loader
 
     Parameters
@@ -62,9 +62,9 @@ def get_dataloaders(dataset, mode='train', root=None, shuffle=True, pin_memory=T
     Dataset = get_dataset(dataset)
 
     if root is None:
-        dataset = Dataset(logger=logger, mode=mode, **kwargs)
+        dataset = Dataset(logger=logger, mode=mode, normalize=normalize, **kwargs)
     else:
-        dataset = Dataset(root=root, logger=logger, mode=mode, **kwargs)
+        dataset = Dataset(root=root, logger=logger, mode=mode, normalize=normalize, **kwargs)
 
     return DataLoader(dataset,
                       batch_size=batch_size,
@@ -133,7 +133,8 @@ class OpenImages(BaseDataset):
     """
     files = {"train": "train", "test": "test", "val": "validation"}
 
-    def __init__(self, root=os.path.join(DIR, 'data/openimages'), mode='train', crop_size=256, **kwargs):
+    def __init__(self, root=os.path.join(DIR, 'data/openimages'), mode='train', crop_size=256, 
+        normalize=False, **kwargs):
         super().__init__(root, [transforms.ToTensor()], **kwargs)
 
         if mode == 'train':
@@ -148,19 +149,22 @@ class OpenImages(BaseDataset):
         self.image_dims = (3, self.crop_size, self.crop_size)
         self.scale_min = SCALE_MIN
         self.scale_max = SCALE_MAX
+        self.normalize = normalize
 
     def _transforms(self, scale, H, W):
         """
         Up(down)scale and randomly crop to `crop_size` x `crop_size`
         """
-        return transforms.Compose([
-            # transforms.ToPILImage(),
-            transforms.RandomHorizontalFlip(),
-            transforms.Resize((math.ceil(scale * H), 
-                               math.ceil(scale * W))),
-            transforms.RandomCrop(self.crop_size),
-            transforms.ToTensor(),
-            ])
+        transforms_list = [# transforms.ToPILImage(),
+                           transforms.RandomHorizontalFlip(),
+                           transforms.Resize((math.ceil(scale * H), math.ceil(scale * W))),
+                           transforms.RandomCrop(self.crop_size),
+                           transforms.ToTensor()]
+
+        if self.normalize is True:
+            transforms_list += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+
+        return transforms.Compose(transforms_list)
 
     def __getitem__(self, idx):
         """ TODO: This definitely needs to be optimized.
