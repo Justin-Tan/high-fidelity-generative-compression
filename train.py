@@ -23,7 +23,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # Custom modules
 from hific.model import HificModel
-from hific.utils import helpers, initialization, datasets, math
+from hific.utils import helpers, datasets
 from default_config import hific_args, mse_lpips_args, directories, ModelModes, ModelTypes
 
 # go fast boi!!
@@ -293,8 +293,8 @@ if __name__ == '__main__':
         logger.info('Warmstarting discriminator/generator from autoencoder/hyperprior model.')
         if args.model_type != ModelTypes.COMPRESSION_GAN:
             logger.warning('Should warmstart compression-gan model.')
-        args, model, optimizers = helpers.load_model(args.warmstart_ckpt, args.model_type, logger, device,
-            current_args_d=dictify(args), strict=False)
+        args, model, optimizers = helpers.load_model(args.warmstart_ckpt, logger, device, 
+            model_type=args.model_type, current_args_d=dictify(args), strict=False)
     else:
         model = create_model(args, device, logger, storage, storage_test)
         model = model.to(device)

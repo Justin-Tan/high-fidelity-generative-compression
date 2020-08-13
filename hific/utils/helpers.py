@@ -158,7 +158,7 @@ def save_model(model, optimizers, mean_epoch_loss, epoch, device, args, logger, 
     return model_path
    
 
-def load_model(save_path, model_type, logger, device, current_args_d=None, prediction=True, strict=False):
+def load_model(save_path, logger, device, model_type=None, current_args_d=None, prediction=True, strict=False):
 
     start_time = time.time()
     from hific.model import HificModel
@@ -182,6 +182,9 @@ def load_model(save_path, model_type, logger, device, current_args_d=None, predi
         loaded_args_d.update(current_args_d)
         args = Struct(**loaded_args_d)
 
+    if model_type is None:
+        model_type = args.model_type
+
     model = HificModel(args, logger, model_type=model_type)
     # `strict` False if warmstarting
     model.load_state_dict(checkpoint['model_state_dict'], strict=strict)
@@ -196,34 +199,35 @@ def load_model(save_path, model_type, logger, device, current_args_d=None, predi
     logger.info('Model init {:.3f}s'.format(time.time() - start_time))
 
     model = model.to(device)
-    amortization_parameters = itertools.chain.from_iterable(
-        [am.parameters() for am in model.amortization_models])
-    hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
 
-    amortization_opt = torch.optim.Adam(amortization_parameters,
-        lr=args.learning_rate)
-    hyperlatent_likelihood_opt = torch.optim.Adam(hyperlatent_likelihood_parameters, 
-        lr=args.learning_rate)
-    optimizers = dict(amort=amortization_opt, hyper=hyperlatent_likelihood_opt)
-
-    if model.use_discriminator is True:
-        discriminator_parameters = model.Discriminator.parameters()
-        disc_opt = torch.optim.Adam(discriminator_parameters, lr=args.learning_rate)
-        optimizers['disc'] = disc_opt
-        
-    optimizers['amort'].load_state_dict(checkpoint['compression_optimizer_state_dict'])
-    optimizers['hyper'].load_state_dict(checkpoint['hyperprior_optimizer_state_dict'])
-    if (model.use_discriminator is True) and ('disc' in optimizers.keys()):
-        try:
-            optimizers['disc'].load_state_dict(checkpoint['discriminator_optimizer_state_dict'])
-        except KeyError:
-            pass
-
-    if prediction:
+    if prediction is True:
         model.eval()
+        optimizers = None
     else:
-        model.train()
+        amortization_parameters = itertools.chain.from_iterable(
+            [am.parameters() for am in model.amortization_models])
+        hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
 
+        amortization_opt = torch.optim.Adam(amortization_parameters,
+            lr=args.learning_rate)
+        hyperlatent_likelihood_opt = torch.optim.Adam(hyperlatent_likelihood_parameters, 
+            lr=args.learning_rate)
+        optimizers = dict(amort=amortization_opt, hyper=hyperlatent_likelihood_opt)
+
+        if model.use_discriminator is True:
+            discriminator_parameters = model.Discriminator.parameters()
+            disc_opt = torch.optim.Adam(discriminator_parameters, lr=args.learning_rate)
+            optimizers['disc'] = disc_opt
+            
+        optimizers['amort'].load_state_dict(checkpoint['compression_optimizer_state_dict'])
+        optimizers['hyper'].load_state_dict(checkpoint['hyperprior_optimizer_state_dict'])
+        if (model.use_discriminator is True) and ('disc' in optimizers.keys()):
+            try:
+                optimizers['disc'].load_state_dict(checkpoint['discriminator_optimizer_state_dict'])
+            except KeyError:
+                pass
+
+        model.train()
 
     return args, model, optimizers
 
