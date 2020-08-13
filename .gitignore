@@ -21,6 +21,7 @@ results/
 imgs/*.pdf
 data/*.jpg
 hific_dev/
+*.slurm
 
 # C extensions
 *.so

@@ -218,7 +218,7 @@ if __name__ == '__main__':
     general.add_argument("-log_intv", "--log_interval", type=int, default=100, help="Number of steps between logs.")
     general.add_argument("-save_intv", "--save_interval", type=int, default=50000, help="Number of steps between checkpoints.")
     general.add_argument("-multigpu", "--multigpu", help="Toggle data parallel capability using torch DataParallel", action="store_true")
-    general.add_argument('-bs', '--batch_size', type=int, default=8, help='input batch size for training')
+    general.add_argument('-bs', '--batch_size', type=int, default=16, help='input batch size for training')
     general.add_argument('--save', type=str, default='experiments', help='Parent directory for stored information (checkpoints, logs, etc.)')
 
     # Optimization-related options

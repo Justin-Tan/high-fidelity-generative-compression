@@ -262,7 +262,7 @@ class Generator(nn.Module):
         x = self.upconv_block3(x)
         x = self.upconv_block4(x)
         out = self.conv_block_out(x)
-        out = torch.sigmoid(out)
+        # out = torch.sigmoid(out)
         # out = torch.tanh(out)
 
         return out
