@@ -85,7 +85,7 @@ class HificModel(nn.Module):
         
         self.squared_difference = torch.nn.MSELoss(reduction='none')
         # Expects [-1,1] images or [0,1] with normalize=True flag
-        self.perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available())
+        self.perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available(), gpu_ids=[args.gpu])
         
     def store_loss(self, key, loss):
         assert type(loss) == float, 'Call .item() on loss before storage'
@@ -103,7 +103,8 @@ class HificModel(nn.Module):
         Forward pass through encoder, hyperprior, and decoder.
 
         Inputs
-        x:  Input image. Format (N,C,H,W), range [0,1].
+        x:  Input image. Format (N,C,H,W), range [0,1],
+            or [-1,1] if args.normalize_image is True
             torch.Tensor
         
         Outputs
@@ -127,6 +128,10 @@ class HificModel(nn.Module):
         total_qbpp = hyperinfo.total_qbpp
 
         reconstruction = self.Generator(y)
+        
+        if self.args.normalize_input_image is True:
+            reconstruction = torch.tanh(reconstruction)
+
         # Undo padding
         if self.model_mode == ModelModes.VALIDATION and (self.training is False):
             print('Undoing padding.')
@@ -170,20 +175,27 @@ class HificModel(nn.Module):
         sq_err = self.squared_difference(x_gen*255., x_real*255.) # / 255.
         return torch.mean(sq_err)
 
-    def perceptual_loss_wrapper(self, x_gen, x_real):
-        """ Assumes inputs are in [0, 1]. """
-        LPIPS_loss = self.perceptual_loss.forward(x_gen, x_real, normalize=True)
+    def perceptual_loss_wrapper(self, x_gen, x_real, normalize=True):
+        """ Assumes inputs are in [0, 1] if normalize=True, else [-1, 1] """
+        LPIPS_loss = self.perceptual_loss.forward(x_gen, x_real, normalize=normalize)
         return torch.mean(LPIPS_loss)
 
     def compression_loss(self, intermediates, hyperinfo):
         
         x_real = intermediates.input_image
         x_gen = intermediates.reconstruction
+
+        if self.args.normalize_input_image is True:
+            x_real = (x_real + 1.) / 2.
+            x_gen = (x_gen + 1.) / 2.
+
+        # print('X REAL MAX', x_real.max())
+        # print('X REAL MIN', x_real.min())
         # print('X GEN MAX', x_gen.max())
         # print('X GEN MIN', x_gen.min())
 
         distortion_loss = self.distortion_loss(x_gen, x_real)
-        perceptual_loss = self.perceptual_loss_wrapper(x_gen, x_real)
+        perceptual_loss = self.perceptual_loss_wrapper(x_gen, x_real, normalize=True)
 
         weighted_distortion = self.args.k_M * distortion_loss
         weighted_perceptual = self.args.k_P * perceptual_loss

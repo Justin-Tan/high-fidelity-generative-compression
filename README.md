@@ -24,11 +24,12 @@ The generator is trained to achieve realistic and not exact reconstruction. Ther
 pip install -r requirements.txt
 ```
 * Download a large (> 100,000) dataset of reasonably diverse color images. We found that using 1-2 training divisions of the [OpenImages](https://storage.googleapis.com/openimages/web/index.html) dataset was able to produce satisfactory results. Add the dataset path to the `DatasetPaths` class in `default_config.py`.
-* Clone this repository, `cd` in and view command line options.
+* Clone this repository, `cd` in and view command line options/default arguments.
 ```
 git clone https://github.com/Justin-Tan/high-fidelity-generative-compression.git
 cd high-fidelity-generative-compression
 
+vim default_config.py
 python3 train.py -h
 ```
 
@@ -42,6 +43,7 @@ python3 train.py --model_type compression --regime low --n_steps 1e6
 ```
 python3 train.py --model_type compression_gan --regime low --n_steps 1e6 --warmstart --ckpt path/to/base/checkpoint
 ```
+* Training for 1e5 steps using a batch size of 16 was sufficient to get reasonable results at sub-0.01 `bpp` on average. If you get out-of-memory errors try reducing the number of residual blocks in the generator (default 7, the original paper used 9), decreasing the batch size, or training on smaller crops (default `256 x 256`).
 
 ### Compression
 * To obtain a _theoretical_ measure of the bitrate under some trained model, run `compress.py`. This will report the bits-per-pixel attainable by the compressed representation (`bpp`) and other fun metrics and perform a forward pass through the model to obtain the reconstructed image.

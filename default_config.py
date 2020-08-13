@@ -56,7 +56,7 @@ class args(object):
     beta = 0.15                     # Generator loss
     use_channel_norm = True
     likelihood_type = 'gaussian'    # Latent likelihood model
-    normalize_input_image = False   # Normalize inputs to range [-1,1]
+    normalize_input_image = True    # Normalize inputs to range [-1,1]
     
     # Shapes
     crop_size = 256

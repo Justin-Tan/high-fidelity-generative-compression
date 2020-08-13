@@ -221,10 +221,11 @@ if __name__ == '__main__':
     general.add_argument('-bs', '--batch_size', type=int, default=16, help='input batch size for training')
     general.add_argument('--save', type=str, default='experiments', help='Parent directory for stored information (checkpoints, logs, etc.)')
     general.add_argument("-lt", "--likelihood_type", choices=('gaussian', 'logistic'), default='gaussian', help="Likelihood model for latents.")
+    general.add_argument("-force_gpu", "--force_set_gpu", help="Set GPU to given ID", action="store_true")
 
     # Optimization-related options
     optim_args = parser.add_argument_group("Optimization-related options")
-    optim_args.add_argument('-steps', '--n_steps', type=int, default=2e6, 
+    optim_args.add_argument('-steps', '--n_steps', type=float, default=2e6, 
         help="Number of gradient steps. Optimization stops at the earlier of n_steps/n_epochs.")
     optim_args.add_argument('-epochs', '--n_epochs', type=int, default=10, 
         help="Number of passes over training dataset. Optimization stops at the earlier of n_steps/n_epochs.")
@@ -238,7 +239,7 @@ if __name__ == '__main__':
 
     cmd_args = parser.parse_args()
 
-    if cmd_args.gpu != 0:
+    if (cmd_args.gpu != 0) or (cmd_args.force_set_gpu is True):
         torch.cuda.set_device(cmd_args.gpu)
 
     if cmd_args.model_type == ModelTypes.COMPRESSION:
@@ -257,6 +258,7 @@ if __name__ == '__main__':
     args = helpers.setup_generic_signature(args, special_info=args.model_type)
     args.target_rate = args.target_rate_map[args.regime]
     args.lambda_A = args.lambda_A_map[args.regime]
+    args.n_steps = int(args.n_steps)
 
     logger = helpers.logger_setup(logpath=os.path.join(args.snapshot, 'logs'), filepath=os.path.abspath(__file__))
     logger.info('MODEL TYPE: {}'.format(args.model_type))
