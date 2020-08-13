@@ -22,7 +22,7 @@ class Datasets(object):
     JETS = 'jetimages'
 
 class DatasetPaths(object):
-    OPENIMAGES = 'data/openimages'
+    OPENIMAGES = '/home/jtan/gpu/jtan/data/compression'
     CITYSCAPES = ''
     JETS = ''
 
@@ -37,7 +37,7 @@ class args(object):
     silent = True
     n_epochs = 8
     n_steps = 2e6
-    batch_size = 8
+    batch_size = 64
     log_interval = 100
     save_interval = 100000
     multigpu = True
