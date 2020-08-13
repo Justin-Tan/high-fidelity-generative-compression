@@ -58,7 +58,7 @@ def optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_li
     amortization_opt.zero_grad()
     hyperlatent_likelihood_opt.zero_grad()
 
-def test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, storage, best_test_loss, 
+def test(args, model, epoch, idx, data, test_data, test_bpp, device, epoch_test_loss, storage, best_test_loss, 
          start_time, epoch_start_time, logger, train_writer, test_writer):
 
     model.eval()  
@@ -80,7 +80,7 @@ def test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, stor
         
         best_test_loss = helpers.log(model, storage, epoch, idx, mean_test_loss, compression_loss.item(), 
                                      best_test_loss, start_time, epoch_start_time, 
-                                     batch_size=data.shape[0], header='[TEST]', 
+                                     batch_size=data.shape[0], avg_bpp=test_bpp.mean().item(),header='[TEST]', 
                                      logger=logger, writer=test_writer)
         
     return best_test_loss, epoch_test_loss
@@ -111,7 +111,7 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
         
         model.train()
 
-        for idx, data in enumerate(tqdm(train_loader, desc='Train'), 0):
+        for idx, (data, bpp) in enumerate(tqdm(train_loader, desc='Train'), 0):
 
             data = data.to(device, dtype=torch.float)
             
@@ -154,14 +154,14 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
 
                 best_loss = helpers.log(model, storage, epoch, idx, mean_epoch_loss, compression_loss.item(),
                                 best_loss, start_time, epoch_start_time, batch_size=data.shape[0],
-                                logger=logger, writer=train_writer)
+                                avg_bpp=bpp.mean().item(), logger=logger, writer=train_writer)
                 try:
-                    test_data = test_loader_iter.next()
+                    test_data, test_bpp = test_loader_iter.next()
                 except StopIteration:
                     test_loader_iter = iter(test_loader)
-                    test_data = test_loader_iter.next()
+                    test_data, test_bpp = test_loader_iter.next()
 
-                best_test_loss, epoch_test_loss = test(args, model, epoch, idx, data, test_data, device, epoch_test_loss, storage_test,
+                best_test_loss, epoch_test_loss = test(args, model, epoch, idx, data, test_data, test_bpp, device, epoch_test_loss, storage_test,
                      best_test_loss, start_time, epoch_start_time, logger, train_writer, test_writer)
 
                 with open(os.path.join(args.storage_save, 'storage_{}_tmp.pkl'.format(args.name)), 'wb') as handle:
@@ -215,7 +215,7 @@ if __name__ == '__main__':
         help="Type of model - with or without GAN component")
     general.add_argument("-regime", "--regime", choices=('low','med','high'), default='low', help="Set target bit rate - Low (0.14), Med (0.30), High (0.45)")
     general.add_argument("-gpu", "--gpu", type=int, default=0, help="GPU ID.")
-    general.add_argument("-log_intv", "--log_interval", type=int, default=100, help="Number of steps between logs.")
+    general.add_argument("-log_intv", "--log_interval", type=int, default=500, help="Number of steps between logs.")
     general.add_argument("-save_intv", "--save_interval", type=int, default=50000, help="Number of steps between checkpoints.")
     general.add_argument("-multigpu", "--multigpu", help="Toggle data parallel capability using torch DataParallel", action="store_true")
     general.add_argument('-bs', '--batch_size', type=int, default=16, help='input batch size for training')

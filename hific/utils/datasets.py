@@ -178,7 +178,7 @@ class OpenImages(BaseDataset):
         """
         # img values already between 0 and 255
         img_path = self.imgs[idx]
-
+        filesize = os.path.getsize(img_path)
         try:
             # This is faster but less convenient
             # H X W X C `ndarray`
@@ -189,6 +189,7 @@ class OpenImages(BaseDataset):
             img = PIL.Image.open(img_path)
             img = img.convert('RGB') 
             W, H = img.size  # slightly confusing
+            bpp = filesize * 8. / (H * W)
 
             shortest_side_length = min(H,W)
 
@@ -200,11 +201,11 @@ class OpenImages(BaseDataset):
             dynamic_transform = self._transforms(scale, H, W)
             transformed = dynamic_transform(img)
         except:
-            return None
+            return None, None
 
         # apply random scaling + crop, put each pixel 
         # in [0.,1.] and reshape to (C x H x W)
-        return dynamic_transform(img)
+        return dynamic_transform(img), bpp
 
 class CityScapes(datasets.Cityscapes):
     """CityScapes wrapper. Docs: `datasets.Cityscapes.`"""

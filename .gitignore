@@ -22,6 +22,7 @@ imgs/*.pdf
 data/*.jpg
 hific_dev/
 *.slurm
+*.tex
 
 # C extensions
 *.so

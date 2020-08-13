@@ -291,7 +291,7 @@ def log_summaries(writer, storage, step, use_discriminator=False):
 
 
 def log(model, storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, start_time, epoch_start_time, 
-        batch_size, header='[TRAIN]', logger=None, writer=None, **kwargs):
+        batch_size, avg_bpp, header='[TRAIN]', logger=None, writer=None**kwargs):
     
     improved = ''
     t0 = epoch_start_time
@@ -312,11 +312,12 @@ def log(model, storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, st
         report_f = logger.info   
     else:
         report_f = print
-
+    
     report_f('================>>>')
     report_f(header)
     report_f('================>>>')
     if header == '[TRAIN]':
+        report_f(model.args.snapshot)
         report_f("Epoch {} | Mean epoch comp. loss: {:.3f} | Current comp. loss: {:.3f} | "
                  "Rate: {} examples/s | Time: {:.1f} s | Improved: {}".format(epoch, mean_epoch_loss, current_loss,
                  int(batch_size*idx / ((time.time()-t0))), time.time()-start_time, improved))
@@ -331,8 +332,8 @@ def log(model, storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, st
              storage['distortion'][-1], storage['rate_penalty'][-1]))
     report_f('========>')
     report_f("Rate Breakdown")
-    report_f("n_bpp (total): {:.3f} | q_bpp (total): {:.3f} | n_bpp (latent): {:.3f} | q_bpp (latent): {:.3f} | "
-             "n_bpp (hyp-latent): {:.3f} | q_bpp (hyp-latent): {:.3f}".format(storage['n_rate'][-1], storage['q_rate'][-1], 
+    report_f("avg. original bpp: {:.3f} | n_bpp (total): {:.3f} | q_bpp (total): {:.3f} | n_bpp (latent): {:.3f} | q_bpp (latent): {:.3f} | "
+             "n_bpp (hyp-latent): {:.3f} | q_bpp (hyp-latent): {:.3f}".format(avg_bpp, storage['n_rate'][-1], storage['q_rate'][-1], 
              storage['n_rate_latent'][-1], storage['q_rate_latent'][-1], storage['n_rate_hyperlatent'][-1], storage['q_rate_hyperlatent'][-1]))
     if model.use_discriminator is True:
         report_f('========>')
