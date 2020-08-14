@@ -292,7 +292,7 @@ def log_summaries(writer, storage, step, use_discriminator=False):
 
 
 def log(model, storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, start_time, epoch_start_time, 
-        batch_size, avg_bpp, header='[TRAIN]', logger=None, writer=None**kwargs):
+        batch_size, avg_bpp, header='[TRAIN]', logger=None, writer=None, **kwargs):
     
     improved = ''
     t0 = epoch_start_time
