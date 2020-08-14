@@ -22,8 +22,8 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 # Custom modules
-from hific.model import HificModel
-from hific.utils import helpers, datasets
+from src.model import Model
+from src.helpers import utils, datasets
 from default_config import hific_args, mse_lpips_args, directories, ModelModes, ModelTypes
 
 # go fast boi!!
@@ -33,15 +33,15 @@ torch.backends.cudnn.benchmark = True
 def create_model(args, device, logger, storage, storage_test):
 
     start_time = time.time()
-    model = HificModel(args, logger, storage, storage_test, model_type=args.model_type)
+    model = Model(args, logger, storage, storage_test, model_type=args.model_type)
     logger.info(model)
     logger.info('Trainable parameters:')
 
     for n, p in model.named_parameters():
         logger.info('{} - {}'.format(n, p.shape))
 
-    logger.info("Number of trainable parameters: {}".format(helpers.count_parameters(model)))
-    logger.info("Estimated size (under fp32): {:.3f} MB".format(helpers.count_parameters(model) * 4. / 10**6))
+    logger.info("Number of trainable parameters: {}".format(utils.count_parameters(model)))
+    logger.info("Estimated size (under fp32): {:.3f} MB".format(utils.count_parameters(model) * 4. / 10**6))
     logger.info('Model init {:.3f}s'.format(time.time() - start_time))
 
     return model
@@ -66,19 +66,19 @@ def test(args, model, epoch, idx, data, test_data, test_bpp, device, epoch_test_
         data = data.to(device, dtype=torch.float)
 
         losses, intermediates = model(data, return_intermediates=True, writeout=False)
-        helpers.save_images(train_writer, model.step_counter, intermediates.input_image, intermediates.reconstruction,
+        utils.save_images(train_writer, model.step_counter, intermediates.input_image, intermediates.reconstruction,
             fname=os.path.join(args.figures_save, 'recon_epoch{}_idx{}_TRAIN_{:%Y_%m_%d_%H:%M}.jpg'.format(epoch, idx, datetime.datetime.now())))
 
         test_data = test_data.to(device, dtype=torch.float)
         losses, intermediates = model(test_data, return_intermediates=True, writeout=True)
-        helpers.save_images(test_writer, model.step_counter, intermediates.input_image, intermediates.reconstruction,
+        utils.save_images(test_writer, model.step_counter, intermediates.input_image, intermediates.reconstruction,
             fname=os.path.join(args.figures_save, 'recon_epoch{}_idx{}_TEST_{:%Y_%m_%d_%H:%M}.jpg'.format(epoch, idx, datetime.datetime.now())))
     
         compression_loss = losses['compression'] 
         epoch_test_loss.append(compression_loss.item())
         mean_test_loss = np.mean(epoch_test_loss)
         
-        best_test_loss = helpers.log(model, storage, epoch, idx, mean_test_loss, compression_loss.item(), 
+        best_test_loss = utils.log(model, storage, epoch, idx, mean_test_loss, compression_loss.item(), 
                                      best_test_loss, start_time, epoch_start_time, 
                                      batch_size=data.shape[0], avg_bpp=test_bpp.mean().item(),header='[TEST]', 
                                      logger=logger, writer=test_writer)
@@ -107,7 +107,7 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
         epoch_start_time = time.time()
         
         if epoch > 0:
-            ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
+            ckpt_path = utils.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
         
         model.train()
 
@@ -144,7 +144,7 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                 # Note: saving not guaranteed!
                 if model.step_counter > args.log_interval+1:
                     logger.warning('Exiting, saving ...')
-                    ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
+                    ckpt_path = utils.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
                     return model, ckpt_path
                 else:
                     return model, None
@@ -153,7 +153,7 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                 epoch_loss.append(compression_loss.item())
                 mean_epoch_loss = np.mean(epoch_loss)
 
-                best_loss = helpers.log(model, storage, epoch, idx, mean_epoch_loss, compression_loss.item(),
+                best_loss = utils.log(model, storage, epoch, idx, mean_epoch_loss, compression_loss.item(),
                                 best_loss, start_time, epoch_start_time, batch_size=data.shape[0],
                                 avg_bpp=bpp.mean().item(), logger=logger, writer=train_writer)
                 try:
@@ -171,17 +171,17 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                 model.train()
 
                 # LR scheduling
-                helpers.update_lr(args, amortization_opt, model.step_counter, logger)
-                helpers.update_lr(args, hyperlatent_likelihood_opt, model.step_counter, logger)
+                utils.update_lr(args, amortization_opt, model.step_counter, logger)
+                utils.update_lr(args, hyperlatent_likelihood_opt, model.step_counter, logger)
                 if model.use_discriminator is True:
-                    helpers.update_lr(args, disc_opt, model.step_counter, logger)
+                    utils.update_lr(args, disc_opt, model.step_counter, logger)
 
                 if model.step_counter > args.n_steps:
                     logger.info('Reached step limit [args.n_steps = {}]'.format(args.n_steps))
                     break
 
             if (idx % args.save_interval == 1) and (idx > args.save_interval):
-                ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
+                ckpt_path = utils.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
 
         # End epoch
         mean_epoch_loss = np.mean(epoch_loss)
@@ -196,7 +196,7 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
     with open(os.path.join(args.storage_save, 'storage_{}_{:%Y_%m_%d_%H:%M:%S}.pkl'.format(args.name, datetime.datetime.now())), 'wb') as handle:
         pickle.dump(storage, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-    ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
+    ckpt_path = utils.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
     args.ckpt = ckpt_path
     logger.info("Training complete. Time elapsed: {:.3f} s. Number of steps: {}".format((time.time()-start_time), model.step_counter))
     
@@ -250,19 +250,19 @@ if __name__ == '__main__':
         args = hific_args
 
     start_time = time.time()
-    device = helpers.get_device()
+    device = utils.get_device()
 
     # Override default arguments from config file with provided command line arguments
     dictify = lambda x: dict((n, getattr(x, n)) for n in dir(x) if not (n.startswith('__') or 'logger' in n))
     args_d, cmd_args_d = dictify(args), vars(cmd_args)
     args_d.update(cmd_args_d)
-    args = helpers.Struct(**args_d)
-    args = helpers.setup_generic_signature(args, special_info=args.model_type)
+    args = utils.Struct(**args_d)
+    args = utils.setup_generic_signature(args, special_info=args.model_type)
     args.target_rate = args.target_rate_map[args.regime]
     args.lambda_A = args.lambda_A_map[args.regime]
     args.n_steps = int(args.n_steps)
 
-    logger = helpers.logger_setup(logpath=os.path.join(args.snapshot, 'logs'), filepath=os.path.abspath(__file__))
+    logger = utils.logger_setup(logpath=os.path.join(args.snapshot, 'logs'), filepath=os.path.abspath(__file__))
     logger.info('MODEL TYPE: {}'.format(args.model_type))
     logger.info('MODEL MODE: {}'.format(args.model_mode))
     logger.info('BITRATE REGIME: {}'.format(args.regime))
@@ -299,7 +299,7 @@ if __name__ == '__main__':
         logger.info('Warmstarting discriminator/generator from autoencoder/hyperprior model.')
         if args.model_type != ModelTypes.COMPRESSION_GAN:
             logger.warning('Should warmstart compression-gan model.')
-        args, model, optimizers = helpers.load_model(args.warmstart_ckpt, logger, device, 
+        args, model, optimizers = utils.load_model(args.warmstart_ckpt, logger, device, 
             model_type=args.model_type, current_args_d=dictify(args), strict=False, prediction=False)
     else:
         model = create_model(args, device, logger, storage, storage_test)
