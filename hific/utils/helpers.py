@@ -159,7 +159,7 @@ def save_model(model, optimizers, mean_epoch_loss, epoch, device, args, logger, 
     return model_path
    
 
-def load_model(save_path, logger, device, model_type=None, current_args_d=None, prediction=True, strict=False):
+def load_model(save_path, logger, device, model_type=None, model_mode=None, current_args_d=None, prediction=True, strict=False):
 
     start_time = time.time()
     from hific.model import HificModel
@@ -186,7 +186,10 @@ def load_model(save_path, logger, device, model_type=None, current_args_d=None, 
     if model_type is None:
         model_type = args.model_type
 
-    model = HificModel(args, logger, model_type=model_type)
+    if model_mode is None:
+        model_mode = args.model_mode
+
+    model = HificModel(args, logger, model_type=model_type, model_mode=model_mode)
     # `strict` False if warmstarting
     model.load_state_dict(checkpoint['model_state_dict'], strict=strict)
 

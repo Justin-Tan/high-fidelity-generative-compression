@@ -141,6 +141,7 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                     optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
 
             except KeyboardInterrupt:
+                # Note: saving not guaranteed!
                 if model.step_counter > args.log_interval+1:
                     logger.warning('Exiting, saving ...')
                     ckpt_path = helpers.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)

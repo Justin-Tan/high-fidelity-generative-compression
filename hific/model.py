@@ -265,7 +265,14 @@ class HificModel(nn.Module):
         intermediates, hyperinfo = self.compression_forward(x)
 
         if self.model_mode == ModelModes.EVALUATION:
-            reconstruction = torch.mul(intermediates.reconstruction, 255.)
+
+            reconstruction = intermediates.reconstruction
+            
+            if self.args.normalize_input_image is True:
+                # [-1.,1.] -> [0.,1.]
+                reconstruction = (reconstruction + 1.) / 2.
+
+            reconstruction = torch.mul(reconstruction, 255.)
             reconstruction = torch.clamp(reconstruction, min=0., max=255.)
             return reconstruction, intermediates.q_bpp
 
