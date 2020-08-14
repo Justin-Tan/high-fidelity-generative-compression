@@ -113,28 +113,20 @@ class HificModel(nn.Module):
         """
         image_dims = tuple(x.size()[1:])  # (C,H,W)
 
-        print('X SIZE', x.size())
-
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_encoder_downsamples = self.Encoder.n_downsampling_layers
             factor = 2 ** n_encoder_downsamples
             self.logger.info('Padding input image to {}'.format(factor))
             x = helpers.pad_factor(x, x.size()[2:], factor)
 
-        print('X SIZE AFTER', x.size())
-
         # Encoder forward pass
         y = self.Encoder(x)
-
-        print('Y SIZE', y.size())
 
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_hyperencoder_downsamples = self.Hyperprior.analysis_net.n_downsampling_layers
             factor = 2 ** n_hyperencoder_downsamples
             self.logger.info('Padding latents to {}'.format(factor))
             y = helpers.pad_factor(y, y.size()[2:], factor)
-
-        print('Y SIZE AFTER', y.size())
 
         hyperinfo = self.Hyperprior(y, spatial_shape=x.size()[2:])
 

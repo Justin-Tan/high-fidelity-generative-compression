@@ -281,9 +281,7 @@ class Hyperprior(CodingModel):
 
     def forward(self, latents, spatial_shape, **kwargs):
 
-        print('LATENTS SHAPE', latents.shape)
         hyperlatents = self.analysis_net(latents)
-        print('HYPERLATENTS SHAPE', hyperlatents.shape)
         
         # Mismatch b/w continuous and discrete cases?
         # Differential entropy, hyperlatents
@@ -305,8 +303,6 @@ class Hyperprior(CodingModel):
 
         latent_means = self.synthesis_mu(hyperlatents_decoded)
         latent_scales = self.synthesis_std(hyperlatents_decoded)
-        print('MEANS SHAPE', latent_means.shape)
-        print('SCALES SHAPE', latent_scales.shape)
 
         # Differential entropy, latents
         noisy_latents = self._quantize(latents, mode='noise')

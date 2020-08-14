@@ -55,6 +55,8 @@ def compress_batch(args):
     output_filenames_total = list()
     bpp_total, q_bpp_total, LPIPS_total = torch.Tensor(N), torch.Tensor(N), torch.Tensor(N)
 
+    start_time = time.time()
+
     with torch.no_grad():
 
         for idx, (data, bpp, filenames) in enumerate(tqdm(eval_loader), 0):
@@ -85,6 +87,9 @@ def compress_batch(args):
     df.to_hdf(df_path, key='df')
 
     logger.info('Complete. Reconstructions saved to {}. Output statistics saved to {}'.format(args.output_dir, df_path))
+    delta_t = time.time() - start_time
+    logger.info('Time elapsed: {:.3f} s'.format(delta_t)
+    logger.info('Rate: {:.3f} Images / s:'.format(delta_t / float(N)))
 
 
 def main(**kwargs):
