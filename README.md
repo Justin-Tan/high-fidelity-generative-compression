@@ -52,18 +52,18 @@ python3 train.py --model_type compression --regime low --n_steps 1e6
 ```
 python3 train.py --model_type compression_gan --regime low --n_steps 1e6 --warmstart --ckpt path/to/base/checkpoint
 ```
-* Training for 1e5 steps using a batch size of 16 was sufficient to get reasonable results at sub-0.01 `bpp` on average. If you get out-of-memory errors try reducing the number of residual blocks in the generator (default 7, the original paper used 9), decreasing the batch size, or training on smaller crops (default `256 x 256`).
+* Training after the warmstart for 2e5 steps using a batch size of 16 was sufficient to get reasonable results at sub-0.01 `bpp` on average. If you get out-of-memory errors try reducing the number of residual blocks in the generator (default 7, the original paper used 9), decreasing the batch size, or training on smaller crops (default `256 x 256`). Logs are periodically saved and can be viewed using `tensorboard`.
 
 ### Compression
-* To obtain a _theoretical_ measure of the bitrate under some trained model, run `compress.py`. This will report the bits-per-pixel attainable by the compressed representation (`bpp`) and other fun metrics and perform a forward pass through the model to obtain the reconstructed image.
+* To obtain a _theoretical_ measure of the bitrate under some trained model, run `compress.py`. This will report the bits-per-pixel attainable by the compressed representation (`bpp`) and other fun metrics and perform a forward pass through the model to obtain the reconstructed image. This model will work with images of arbitrary sizes and resolution.
 ```
-python3 compress.py --img path/to/your/image --ckpt path/to/trained/model
+python3 compress.py --img path/to/image/dir --ckpt path/to/trained/model
 ```
 * The reported `bpp` is the theoretical bitrate required to losslessly store the quantized latent representation of an image as determined by the learned probability model provided by the hyperprior using some entropy coding algorithm. Comparing this (not the size of the reconstruction) against the original size of the image will give you an idea of the reduction in memory footprint. This repository does not currently support actual compression to a bitstring ([TensorFlow Compression](https://github.com/tensorflow/compression) does this well). We're working on an ANS entropy coder to support this in the future.
 
 ### Notes
 * The "size" of the compressed image as reported in `bpp` does not account for the size of the model required to decode the compressed format.
-* The total size of the model is around 737 MB. Forward pass time should scale sublinearly provided everything fits in memory.
+* The total size of the model (using the original architecture) is around 737 MB. Forward pass time should scale sublinearly provided everything fits in memory.
 
 ### Contributing
 All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.

@@ -34,28 +34,28 @@ class CodingModel(nn.Module):
         self.min_likelihood = float(min_likelihood)
         self.max_likelihood = float(max_likelihood)
 
-    def _quantize(self, x, mode='noise'):
+    def _quantize(self, x, mode='noise', means=None):
         """
         mode:       If 'noise', returns continuous relaxation of hard
                     quantization through additive uniform noise channel.
                     Otherwise perform actual quantization (through rounding).
         """
+
         if mode == 'noise':
             quantization_noise = torch.nn.init.uniform_(torch.zeros_like(x), -0.5, 0.5)
             x = x + quantization_noise
         elif mode == 'quantize':
-            x = torch.round(x)
+
+            if means is not None:
+                x = x - means
+                x = torch.floor(x + 0.5)
+                x = x + means
+            else:
+                x = torch.round(x)
         else:
             raise NotImplementedError
         
         return x
-
-    def _quantize_latents(self, values, means):
-
-        values = values - means
-        values = torch.floor(values + 0.5)
-        values = values + means
-        return values
 
     def _estimate_entropy(self, likelihood, spatial_shape):
         # x: (N,C,H,W)
@@ -305,14 +305,14 @@ class Hyperprior(CodingModel):
         latent_scales = self.synthesis_std(hyperlatents_decoded)
 
         # Differential entropy, latents
-        noisy_latents = self._quantize(latents, mode='noise')
+        noisy_latents = self._quantize(latents, mode='noise', means=latent_means)
         noisy_latent_likelihood = self.latent_likelihood(noisy_latents, mean=latent_means,
             scale=latent_scales)
         noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(
             noisy_latent_likelihood, spatial_shape)     
 
         # Discrete entropy, latents
-        quantized_latents = self._quantize(latents, mode='quantize')
+        quantized_latents = self._quantize(latents, mode='quantize', means=latent_means)
         quantized_latent_likelihood = self.latent_likelihood(quantized_latents, mean=latent_means,
             scale=latent_scales)
         quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(
