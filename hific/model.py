@@ -186,6 +186,7 @@ class HificModel(nn.Module):
         x_gen = intermediates.reconstruction
 
         if self.args.normalize_input_image is True:
+            # [-1.,1.] -> [0.,1.]
             x_real = (x_real + 1.) / 2.
             x_gen = (x_gen + 1.) / 2.
 

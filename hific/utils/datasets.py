@@ -117,6 +117,74 @@ class BaseDataset(Dataset, abc.ABC):
         """
         pass
 
+class CustomLLoader(BaseDataset):
+    """
+    Parameters
+    ----------
+    root : string
+        Root directory of dataset.
+
+    """
+
+    def __init__(self, root=os.path.join(DIR, 'data'), normalize=False, **kwargs):
+        super().__init__(root, [transforms.ToTensor()], **kwargs)
+
+        self.imgs = glob.glob(os.path.join(data_dir, '*.jpg'))
+        self.imgs += glob.glob(os.path.join(data_dir, '*.png'))
+
+        self.normalize = normalize
+
+    def _transforms(self, scale, H, W):
+        """
+        Up(down)scale and randomly crop to `crop_size` x `crop_size`
+        """
+        transforms_list = [# transforms.ToPILImage(),
+                           transforms.RandomHorizontalFlip(),
+                           transforms.Resize((math.ceil(scale * H), math.ceil(scale * W))),
+                           transforms.RandomCrop(self.crop_size),
+                           transforms.ToTensor()]
+
+        if self.normalize is True:
+            transforms_list += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+
+        return transforms.Compose(transforms_list)
+
+    def __getitem__(self, idx):
+        """ TODO: This definitely needs to be optimized.
+        Get the image of `idx`
+
+        Return
+        ------
+        sample : torch.Tensor
+            Tensor in [0.,1.] of shape `img_size`.
+
+        """
+        # img values already between 0 and 255
+        img_path = self.imgs[idx]
+        filesize = os.path.getsize(img_path)
+        try:
+
+            img = PIL.Image.open(img_path)
+            img = img.convert('RGB') 
+            W, H = img.size  # slightly confusing
+            bpp = filesize * 8. / (H * W)
+
+            shortest_side_length = min(H,W)
+
+            minimum_scale_factor = float(self.crop_size) / float(shortest_side_length)
+            scale_low = max(minimum_scale_factor, self.scale_min)
+            scale_high = max(scale_low, self.scale_max)
+            scale = np.random.uniform(scale_low, scale_high)
+
+            dynamic_transform = self._transforms(scale, H, W)
+            transformed = dynamic_transform(img)
+        except:
+            print('Error reading input images!')
+            return None, None
+
+        # apply random scaling + crop, put each pixel 
+        # in [0.,1.] and reshape to (C x H x W)
+        return dynamic_transform(img), bpp
 
 class OpenImages(BaseDataset):
     """OpenImages dataset from [1].
@@ -201,7 +269,7 @@ class OpenImages(BaseDataset):
             dynamic_transform = self._transforms(scale, H, W)
             transformed = dynamic_transform(img)
         except:
-            return None, None
+            return None
 
         # apply random scaling + crop, put each pixel 
         # in [0.,1.] and reshape to (C x H x W)

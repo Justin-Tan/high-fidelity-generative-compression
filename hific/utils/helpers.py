@@ -54,13 +54,14 @@ def pad_factor(input_image, spatial_dims, factor):
     pad_W = (factor - (W % factor)) % factor
     return F.pad(input_image, pad=(0, pad_H, 0, pad_W), mode='reflection')
 
-def get_scheduled_params(param, param_schedule, step_counter):
+def get_scheduled_params(param, param_schedule, step_counter, ignore_schedule=False):
     # e.g. schedule = dict(vals=[1., 0.1], steps=[N])
     # reduces param value by a factor of 0.1 after N steps
-    vals, steps = param_schedule['vals'], param_schedule['steps']
-    assert(len(vals) == len(steps)+1), 'Mispecified schedule! - {}'.format(param_schedule)
-    idx = np.where(step_counter < np.array(steps + [step_counter+1]))[0][0]
-    param *= vals[idx]
+    if ignore_schedule is False:
+        vals, steps = param_schedule['vals'], param_schedule['steps']
+        assert(len(vals) == len(steps)+1), 'Mispecified schedule! - {}'.format(param_schedule)
+        idx = np.where(step_counter < np.array(steps + [step_counter+1]))[0][0]
+        param *= vals[idx]
 
     return param
 

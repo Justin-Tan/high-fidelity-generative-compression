@@ -50,11 +50,18 @@ class CodingModel(nn.Module):
         
         return x
 
-    def _estimate_entropy(self, x, likelihood, spatial_shape):
+    def _quantize_latents(self, values, means):
+
+        values = values - means
+        values = torch.floor(values + 0.5)
+        values = values + means
+        return values
+
+    def _estimate_entropy(self, likelihood, spatial_shape):
         # x: (N,C,H,W)
         EPS = 1e-9  
         quotient = -np.log(2.)
-        batch_size = x.size()[0]
+        batch_size = likelihood.size()[0]
         n_pixels = np.prod(spatial_shape)
 
         log_likelihood = torch.log(likelihood + EPS)
@@ -262,7 +269,7 @@ class Hyperprior(CodingModel):
         self.hyperlatent_likelihood = HyperpriorDensity(n_channels=hyperlatent_filters)
         self.latent_likelihood = PriorDensity(n_channels=bottleneck_capacity, likelihood_type=likelihood_type)
 
-    def quantize_latents(self, values, means):
+    def quantize_latents_st(self, values, means):
         # Latents rounded instead of additive uniform noise
         # Ignore rounding in backward pass
         values = values - means
@@ -280,13 +287,13 @@ class Hyperprior(CodingModel):
         # Differential entropy, hyperlatents
         noisy_hyperlatents = self._quantize(hyperlatents, mode='noise')
         noisy_hyperlatent_likelihood = self.hyperlatent_likelihood(noisy_hyperlatents)
-        noisy_hyperlatent_bits, noisy_hyperlatent_bpp = self._estimate_entropy(hyperlatents, 
+        noisy_hyperlatent_bits, noisy_hyperlatent_bpp = self._estimate_entropy(
             noisy_hyperlatent_likelihood, spatial_shape)
 
         # Discrete entropy, hyperlatents
         quantized_hyperlatents = self._quantize(hyperlatents, mode='quantize')
         quantized_hyperlatent_likelihood = self.hyperlatent_likelihood(quantized_hyperlatents)
-        quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy(quantized_hyperlatents, 
+        quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy(
             quantized_hyperlatent_likelihood, spatial_shape)
 
         if self.training is True:
@@ -294,25 +301,25 @@ class Hyperprior(CodingModel):
         else:
             hyperlatents_decoded = quantized_hyperlatents
 
-        latent_scales = self.synthesis_std(hyperlatents_decoded)
         latent_means = self.synthesis_mu(hyperlatents_decoded)
+        latent_scales = self.synthesis_std(hyperlatents_decoded)
 
         # Differential entropy, latents
-        noisy_latents = self._quantize(latents, mode='noise')
+        noisy_latents = self._quantize_latents(latents, mode='noise')
         noisy_latent_likelihood = self.latent_likelihood(noisy_latents, mean=latent_means,
             scale=latent_scales)
-        noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(noisy_latents, 
+        noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(
             noisy_latent_likelihood, spatial_shape)     
 
         # Discrete entropy, latents
-        quantized_latents = self._quantize(latents, mode='quantize')
+        quantized_latents = self._quantize_latents(latents, mode='quantize')
         quantized_latent_likelihood = self.latent_likelihood(quantized_latents, mean=latent_means,
             scale=latent_scales)
-        quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(quantized_latents,
+        quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(
             quantized_latent_likelihood, spatial_shape)
 
         if self.training is True:
-            latents_decoded = self.quantize_latents(latents, latent_means)
+            latents_decoded = self.quantize_latents_st(latents, latent_means)
         else:
             latents_decoded = quantized_latents
 

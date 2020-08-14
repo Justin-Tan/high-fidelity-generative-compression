@@ -5,18 +5,18 @@ import numpy as np
 
 from hific.utils.helpers import get_scheduled_params
 
-def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter):
+def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_schedule=False):
     """
     Heavily penalize the rate with weight lambda_A >> lambda_B if it exceeds 
     some target r_t, otherwise penalize with lambda_B
     """
-    lambda_A = get_scheduled_params(config.lambda_A, config.lambda_schedule, step_counter)
-    lambda_B = get_scheduled_params(config.lambda_B, config.lambda_schedule, step_counter)
+    lambda_A = get_scheduled_params(config.lambda_A, config.lambda_schedule, step_counter, ignore_schedule)
+    lambda_B = get_scheduled_params(config.lambda_B, config.lambda_schedule, step_counter, ignore_schedule)
 
     assert lambda_A > lambda_B, "Expected lambda_A > lambda_B, got (A) {} <= (B) {}".format(
         lambda_A, lambda_B)
 
-    target_bpp = get_scheduled_params(config.target_rate, config.target_schedule, step_counter)
+    target_bpp = get_scheduled_params(config.target_rate, config.target_schedule, step_counter, ignore_schedule)
     rate_penalty = float(np.where(total_qbpp.detach().cpu().numpy() > target_bpp, lambda_A, lambda_B))
 
     return rate_penalty * total_nbpp, rate_penalty
