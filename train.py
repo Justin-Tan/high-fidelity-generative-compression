@@ -216,9 +216,10 @@ if __name__ == '__main__':
         help="Type of model - with or without GAN component")
     general.add_argument("-regime", "--regime", choices=('low','med','high'), default='low', help="Set target bit rate - Low (0.14), Med (0.30), High (0.45)")
     general.add_argument("-gpu", "--gpu", type=int, default=0, help="GPU ID.")
-    general.add_argument("-log_intv", "--log_interval", type=int, default=500, help="Number of steps between logs.")
+    general.add_argument("-log_intv", "--log_interval", type=int, default=1000, help="Number of steps between logs.")
     general.add_argument("-save_intv", "--save_interval", type=int, default=50000, help="Number of steps between checkpoints.")
     general.add_argument("-multigpu", "--multigpu", help="Toggle data parallel capability using torch DataParallel", action="store_true")
+    general.add_argument("-norm", "--normalize_input_image", help="Normalize input images to [-1,1]", action="store_true")
     general.add_argument('-bs', '--batch_size', type=int, default=16, help='input batch size for training')
     general.add_argument('--save', type=str, default='experiments', help='Parent directory for stored information (checkpoints, logs, etc.)')
     general.add_argument("-lt", "--likelihood_type", choices=('gaussian', 'logistic'), default='gaussian', help="Likelihood model for latents.")
@@ -226,7 +227,7 @@ if __name__ == '__main__':
 
     # Optimization-related options
     optim_args = parser.add_argument_group("Optimization-related options")
-    optim_args.add_argument('-steps', '--n_steps', type=float, default=2e6, 
+    optim_args.add_argument('-steps', '--n_steps', type=float, default=1e6, 
         help="Number of gradient steps. Optimization stops at the earlier of n_steps/n_epochs.")
     optim_args.add_argument('-epochs', '--n_epochs', type=int, default=10, 
         help="Number of passes over training dataset. Optimization stops at the earlier of n_steps/n_epochs.")

@@ -115,13 +115,15 @@ class HificModel(nn.Module):
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_downsamples = self.Encoder.n_downsampling_layers
             factor = 2 ** n_downsamples
-            logger.info('Padding to {}'.format(factor))
-            x = helpers.pad_factor(x, image_dims, factor)
+            self.logger.info('Padding to {}'.format(factor))
+            print(x.size())
+            x = helpers.pad_factor(x, x.size()[2:], factor)
+            print('SIZE AFTER', x.size())
 
 
         # Encoder forward pass
         y = self.Encoder(x)
-        hyperinfo = self.Hyperprior(y, spatial_shape=image_dims[2:])
+        hyperinfo = self.Hyperprior(y, spatial_shape=x.size()[2:])
 
         latents_quantized = hyperinfo.decoded
         total_nbpp = hyperinfo.total_nbpp
@@ -134,7 +136,6 @@ class HificModel(nn.Module):
 
         # Undo padding
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
-            print('Undoing padding.')
             reconstruction = reconstruction[:, :, :image_dims[1], :image_dims[2]]
         
         intermediates = Intermediates(x, reconstruction, latents_quantized, 
