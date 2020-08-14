@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from hific.utils.helpers import get_scheduled_params
+from helpers import get_scheduled_params
 
 def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_schedule=False):
     """
@@ -42,7 +42,7 @@ def gan_loss(disc_out, mode='generator_loss', gan_type='non_saturating'):
         D_loss = 0.5 * (D_loss_real + D_loss_fake)
 
         G_loss = 0.5 * torch.mean(torch.square(D_gen - 1.0))
-
+        
         return D_loss, G_loss
 
     if gan_type == 'non_saturating':
@@ -54,9 +54,7 @@ def gan_loss(disc_out, mode='generator_loss', gan_type='non_saturating'):
 
     D_loss, G_loss = loss_fn(D_real=disc_out.D_real, D_gen=disc_out.D_gen,
         D_real_logits=disc_out.D_real_logits, D_gen_logits=disc_out.D_gen_logits)
-
+        
     loss = G_loss if mode == 'generator_loss' else D_loss
-
-    # Tensorboard
-
+    
     return loss

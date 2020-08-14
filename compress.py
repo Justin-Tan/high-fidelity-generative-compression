@@ -14,9 +14,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # Custom modules
-from hific.model import HificModel
-from hific.utils import helpers, datasets
-import hific.perceptual_similarity as ps
+from model import HificModel
+from utils import helpers, datasets
+import perceptual_similarity as ps
 from default_config import hific_args, mse_lpips_args, directories, ModelModes, ModelTypes
 
 

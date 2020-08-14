@@ -12,9 +12,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # Custom modules
-import hific.perceptual_similarity as ps
-from hific.submodels import network, hyperprior
-from hific.utils import helpers, datasets, math, losses
+import perceptual_similarity as ps
+from submodels import network, hyperprior
+from utils import helpers, datasets, math, losses
 
 from default_config import ModelModes, ModelTypes, hific_args, directories
 
@@ -82,7 +82,6 @@ class HificModel(nn.Module):
             self.discriminator_steps = 0
             self.Discriminator = None
 
-        
         self.squared_difference = torch.nn.MSELoss(reduction='none')
         # Expects [-1,1] images or [0,1] with normalize=True flag
         self.perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available(), gpu_ids=[args.gpu])

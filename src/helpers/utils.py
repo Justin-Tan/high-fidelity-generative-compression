@@ -59,10 +59,9 @@ def get_scheduled_params(param, param_schedule, step_counter, ignore_schedule=Fa
     # reduces param value by a factor of 0.1 after N steps
     if ignore_schedule is False:
         vals, steps = param_schedule['vals'], param_schedule['steps']
-        assert(len(vals) == len(steps)+1), 'Mispecified schedule! - {}'.format(param_schedule)
+        assert(len(vals) == len(steps)+1), f'Mispecified schedule! - {param_schedule}'
         idx = np.where(step_counter < np.array(steps + [step_counter+1]))[0][0]
         param *= vals[idx]
-
     return param
 
 def update_lr(args, optimizer, itr, logger):
@@ -71,7 +70,7 @@ def update_lr(args, optimizer, itr, logger):
         old_lr = param_group['lr']
         if old_lr != lr:
             logger.info('=============================')
-            logger.info('Changing learning rate {} -> {}'.format(old_lr, lr))
+            logger.info(f'Changing learning rate {olf_lr} -> {lr}')
             param_group['lr'] = lr
 
 def setup_generic_signature(args, special_info):
@@ -261,7 +260,6 @@ def logger_setup(logpath, filepath, package_files=[]):
         logger.info(f)
         with open(f, "r") as package_f:
             logger.info(package_f.read())
-
     return logger
 
 def log_summaries(writer, storage, step, use_discriminator=False):
@@ -347,7 +345,6 @@ def log(model, storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, st
         report_f("Generator-Discriminator:")
         report_f("G Loss: {:3f} | D Loss: {:.3f} | D(gen): {:.3f} | D(real): {:.3f}".format(storage['gen_loss'][-1],
                 storage['disc_loss'][-1], storage['D_gen'][-1], storage['D_real'][-1]))
-
     return best_loss
 
 
