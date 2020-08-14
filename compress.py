@@ -34,7 +34,7 @@ def compress_batch(args):
 
     # Reproducibility
     make_deterministic()
-    perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available())
+    perceptual_loss_fn = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available())
 
     # Load model
     device = helpers.get_device()
@@ -61,7 +61,7 @@ def compress_batch(args):
             data = data.to(device, dtype=torch.float)
             B = data.size(0)
             reconstruction, q_bpp = model(data, writeout=False)
-            perceptual_loss == perceptual_loss.forward(reconstruction, data, normalize=(not args.normalize_input_image))
+            perceptual_loss = perceptual_loss_fn.forward(reconstruction, data, normalize=(not args.normalize_input_image))
 
             input_filenames_total.extend(filenames)
 
@@ -81,10 +81,10 @@ def compress_batch(args):
     df['q_bpp'] = q_bpp_total.cpu().numpy()
     df['LPIPS'] = LPIPS_total.cpu().numpy()
 
-    df_path = os.path.join(output_dir, 'out.h5')
+    df_path = os.path.join(args.output_dir, 'out.h5')
     df.to_hdf(df_path, key='df')
 
-    logging.info('Complete. Reconstructions saved to {}. Output statistics saved to {}'.format(args.output_dir, df_path))
+    logger.info('Complete. Reconstructions saved to {}. Output statistics saved to {}'.format(args.output_dir, df_path))
 
 
 def main(**kwargs):
