@@ -16,8 +16,9 @@ import functools
 import skimage.transform
 from tqdm import tqdm
 
+
 from . import networks_basic as networks
-from hific import perceptual_similarity as util
+from . import perceptual_loss
 
 class DistModel(BaseModel):
     def name(self):

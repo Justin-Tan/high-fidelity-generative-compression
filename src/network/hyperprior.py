@@ -5,8 +5,7 @@ import numpy as np
 from collections import namedtuple
 
 # Custom
-from hific.submodels import network
-from hific.utils import math, distributions, initialization, helpers
+from src.helpers import maths, utils
 
 MIN_SCALE = 0.11
 MIN_LIKELIHOOD = 1e-9
@@ -75,7 +74,6 @@ class CodingModel(nn.Module):
         #print('LH SHape', likelihood.shape)
         #print('NB', n_bits)
         #print('BPP', bpp)
-
         return n_bits, bpp
 
 
@@ -129,10 +127,8 @@ class PriorDensity(nn.Module):
 
         return torch.clamp(likelihood, min=self.min_likelihood) # , max=self.max_likelihood)
 
-
     def forward(self, x, mean, scale):
         return self.likelihood(x, mean, scale)
-
 
 
 class HyperpriorDensity(nn.Module):
@@ -251,8 +247,8 @@ class Hyperprior(CodingModel):
         
         self.bottleneck_capacity = bottleneck_capacity
 
-        analysis_net = network.HyperpriorAnalysis
-        synthesis_net = network.HyperpriorSynthesis
+        analysis_net = HyperpriorAnalysis
+        synthesis_net = HyperpriorSynthesis
 
         if mode == 'small':
             hyperlatent_filters = SMALL_HYPERLATENT_FILTERS
@@ -336,6 +332,65 @@ class Hyperprior(CodingModel):
         )
 
         return info
+
+class HyperpriorAnalysis(nn.Module):
+    """
+    Hyperprior 'analysis model' as proposed in [1]. 
+
+    [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
+        arXiv:1802.01436 (2018).
+    """
+    def __init__(self, C=220, N=320, activation='relu'):
+        super(HyperpriorAnalysis, self).__init__()
+
+        cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, padding_mode='reflect')
+        self.activation = getattr(F, activation)
+        self.n_downsampling_layers = 2
+
+        self.conv1 = nn.Conv2d(C, N, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(N, N, **cnn_kwargs)
+        self.conv3 = nn.Conv2d(N, N, **cnn_kwargs)
+
+    def forward(self, x):
+        
+        # x = torch.abs(x)
+        x = self.activation(self.conv1(x))
+        x = self.activation(self.conv2(x))
+        x = self.conv3(x)
+
+        return x
+
+
+class HyperpriorSynthesis(nn.Module):
+    """
+    Hyperprior 'synthesis model' as proposed in [1]. Outputs 
+    distribution parameters of input latents.
+
+    [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
+        arXiv:1802.01436 (2018).
+    """
+    def __init__(self, C=220, N=320, activation='relu', final_activation=None):
+        super(HyperpriorSynthesis, self).__init__()
+
+        cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, output_padding=1)
+        self.activation = getattr(F, activation)
+        self.final_activation = final_activation
+
+        self.conv1 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
+        self.conv2 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
+        self.conv3 = nn.ConvTranspose2d(N, C, kernel_size=3, stride=1, padding=1)
+
+        if self.final_activation is not None:
+            self.final_activation = getattr(F, final_activation)
+
+    def forward(self, x):
+        x = self.activation(self.conv1(x))
+        x = self.activation(self.conv2(x))
+        x = self.conv3(x)
+
+        if self.final_activation is not None:
+            x = self.final_activation(x)
+        return x
         
 
 if __name__ == '__main__':

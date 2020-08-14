@@ -22,7 +22,7 @@ class Datasets(object):
     JETS = 'jetimages'
 
 class DatasetPaths(object):
-    OPENIMAGES = '/home/jtan/gpu/jtan/data/compression'
+    OPENIMAGES = '/Users/gracehan/Personal/HIFIC/high-fidelity-generative-compression/data'
     CITYSCAPES = ''
     JETS = ''
 

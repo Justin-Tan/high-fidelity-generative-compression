@@ -12,9 +12,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # Custom modules
-import hific.perceptual_similarity as ps
-from hific.submodels import network, hyperprior
-from hific.utils import helpers, datasets, math, losses
+from src.network import hyperprior, encoder, generator, discriminator
+from src.helpers import maths, datasets, utils
+from src.loss import losses
+from src.loss.perceptual_similarity import perceptual_loss as ps 
 
 from default_config import ModelModes, ModelTypes, hific_args, directories
 
@@ -28,14 +29,14 @@ Intermediates = namedtuple("Intermediates",
 Disc_out= namedtuple("disc_out",
     ["D_real", "D_gen", "D_real_logits", "D_gen_logits"])
 
-class HificModel(nn.Module):
+class Model(nn.Module):
 
     def __init__(self, args, logger, storage_train=defaultdict(list), storage_test=defaultdict(list), model_mode=ModelModes.TRAINING, 
             model_type=ModelTypes.COMPRESSION):
-        super(HificModel, self).__init__()
+        super(Model, self).__init__()
 
         """
-        Builds hific model from submodels.
+        Builds hific model from submodels in network.
         """
         self.args = args
         self.model_mode = model_mode
@@ -54,9 +55,9 @@ class HificModel(nn.Module):
         self.image_dims = self.args.image_dims  # Assign from dataloader
         self.batch_size = self.args.batch_size
 
-        self.Encoder = network.Encoder(self.image_dims, self.batch_size, C=self.args.latent_channels,
+        self.Encoder = encoder.Encoder(self.image_dims, self.batch_size, C=self.args.latent_channels,
             channel_norm=self.args.use_channel_norm)
-        self.Generator = network.Generator(self.image_dims, self.batch_size, C=self.args.latent_channels,
+        self.Generator = generator.Generator(self.image_dims, self.batch_size, C=self.args.latent_channels,
             n_residual_blocks=self.args.n_residual_blocks, channel_norm=self.args.use_channel_norm)
 
         self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.args.latent_channels,
@@ -76,13 +77,12 @@ class HificModel(nn.Module):
             self.discriminator_steps = self.args.discriminator_steps
             self.logger.info('GAN mode enabled. Training discriminator for {} steps.'.format(
                 self.discriminator_steps))
-            self.Discriminator = network.Discriminator(image_dims=self.image_dims,
+            self.Discriminator = discriminator.Discriminator(image_dims=self.image_dims,
                 context_dims=self.args.latent_dims, C=self.args.latent_channels)
         else:
             self.discriminator_steps = 0
             self.Discriminator = None
 
-        
         self.squared_difference = torch.nn.MSELoss(reduction='none')
         # Expects [-1,1] images or [0,1] with normalize=True flag
         self.perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available(), gpu_ids=[args.gpu])
@@ -117,7 +117,7 @@ class HificModel(nn.Module):
             n_encoder_downsamples = self.Encoder.n_downsampling_layers
             factor = 2 ** n_encoder_downsamples
             self.logger.info('Padding input image to {}'.format(factor))
-            x = helpers.pad_factor(x, x.size()[2:], factor)
+            x = utils.pad_factor(x, x.size()[2:], factor)
 
         # Encoder forward pass
         y = self.Encoder(x)
@@ -126,7 +126,7 @@ class HificModel(nn.Module):
             n_hyperencoder_downsamples = self.Hyperprior.analysis_net.n_downsampling_layers
             factor = 2 ** n_hyperencoder_downsamples
             self.logger.info('Padding latents to {}'.format(factor))
-            y = helpers.pad_factor(y, y.size()[2:], factor)
+            y = utils.pad_factor(y, y.size()[2:], factor)
 
         hyperinfo = self.Hyperprior(y, spatial_shape=x.size()[2:])
 
@@ -306,37 +306,36 @@ class HificModel(nn.Module):
 
 if __name__ == '__main__':
 
-    logger = helpers.logger_setup(logpath=os.path.join(directories.experiments, 'logs'), filepath=os.path.abspath(__file__))
-    device = helpers.get_device()
-    logger.info('Using device {}'.format(device))
+    logger = utils.logger_setup(logpath=os.path.join(directories.experiments, 'logs'), filepath=os.path.abspath(__file__))
+    device = utils.get_device()
+    logger.info(f'Using device {device}')
     storage_train = defaultdict(list)
     storage_test = defaultdict(list)
-    model = HificModel(hific_args, logger, storage_train, storage_test, model_type=ModelTypes.COMPRESSION_GAN, 
-        model_mode=ModelModes.EVALUATION)
+    model = Model(hific_args, logger, storage_train, storage_test, model_type=ModelTypes.COMPRESSION_GAN)
     model.to(device)
 
     logger.info(model)
 
     logger.info('ALL PARAMETERS')
     for n, p in model.named_parameters():
-        logger.info('{} - {}'.format(n, p.shape))
+        logger.info(f'{n} - {p.shape}')
 
     logger.info('AMORTIZATION PARAMETERS')
     amortization_named_parameters = itertools.chain.from_iterable(
             [am.named_parameters() for am in model.amortization_models])
     for n, p in amortization_named_parameters:
-        logger.info('{} - {}'.format(n, p.shape))
+        logger.info(f'{n} - {p.shape}')
 
     logger.info('HYPERPRIOR PARAMETERS')
     for n, p in model.Hyperprior.hyperlatent_likelihood.named_parameters():
-        logger.info('{} - {}'.format(n, p.shape))
+        logger.info(f'{n} - {p.shape}')
 
     logger.info('DISCRIMINATOR PARAMETERS')
     for n, p in model.Discriminator.named_parameters():
-        logger.info('{} - {}'.format(n, p.shape))
+        logger.info(f'{n} - {p.shape}')
 
-    logger.info("Number of trainable parameters: {}".format(helpers.count_parameters(model)))
-    logger.info("Estimated size: {} MB".format(helpers.count_parameters(model) * 4. / 10**6))
+    logger.info("Number of trainable parameters: {}".format(utils.count_parameters(model)))
+    logger.info("Estimated size: {} MB".format(utils.count_parameters(model) * 4. / 10**6))
 
     logger.info('Starting forward pass ...')
     start_time = time.time()
