@@ -4,8 +4,24 @@ Pytorch implementation of the paper ["High-Fidelity Generative Image Compression
 ## Warning
 This is a preliminary version. There may be sharp edges.
 
+## Example
+```
+Original, 8.05 bpp / 2747 kB
+```
+![guess](assets/comparison/camp_original.png)
+```
+HIFIC, 0.188 bpp / 64.1 kB
+```
+![guess](assets/comparison/camp_hific.png)
+```
+JPG, 0.264 bpp / 90.1 kB
+```
+![guess](assets/comparison/camp_jpg_compress.png)
+
+The image shown is an out-of-sample instance from the CLIC2020 dataset. The HIFIC image is obtained by reconstruction via the learned model. The JPG image is obtained by the command `mogrify -format jpg -quality 42 camp_original.png`. All images are losslessly compressed to PNG format for viewing. Images stored under `assets/comparison`.
+
 ## Details
-This repository defines a model for learnable image compression. There are three main components to this model, as described in the original paper:
+This repository defines a model for learnable image compression capable of compressing images of arbitrary size and resolution. There are three main components to this model, as described in the original paper:
 
 1. An autoencoding architecture defining a nonlinear transform to latent space. This is used in place of the linear transforms used by traditional image codecs.
 2. A hierarchical (two-level in this case) entropy model over the quantized latent representation enabling lossless compression through standard entropy coding.
@@ -18,14 +34,6 @@ The generator is trained to achieve realistic and not exact reconstruction. Ther
 
 > "_Therefore, we emphasize that our method is not suitable for sensitive image contents, such as, e.g., storing medical images, or important documents._" 
 
-![guess](assets/recon.jpg)
-
-<details>
-  <summary>Guess which half is the reconstruction? (Click side arrow to reveal) </summary>
-
-> Bottom row, (average bpp 0.097) v. the top row JPG originals (average bpp 2.981).
-
-</details>
 
 ## Usage
 * Install Pytorch nightly and dependencies from [https://pytorch.org/](https://pytorch.org/). Then install other requirements.
@@ -73,8 +81,7 @@ All content in this repository is licensed under the Apache-2.0 license. Feel fr
 
 ### Acknowledgements
 * The code under `hific/perceptual_similarity/` implementing the perceptual distortion loss is modified from the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
-<!-- * Kookaburra image (`data/kookaburra.jpg`) by [u/Crispy_Chooken](https://old.reddit.com/r/australia/comments/i3ffpk/best_photo_of_a_kookaburra_ive_taken_yet/).
-* The cat in the main image is my neighbour's. -->
+<!-- * The cat in the main image is my neighbour's. --> -->
 
 ### Authors
 * Grace Han
