@@ -305,14 +305,14 @@ class Hyperprior(CodingModel):
         latent_scales = self.synthesis_std(hyperlatents_decoded)
 
         # Differential entropy, latents
-        noisy_latents = self._quantize_latents(latents, mode='noise')
+        noisy_latents = self._quantize(latents, mode='noise')
         noisy_latent_likelihood = self.latent_likelihood(noisy_latents, mean=latent_means,
             scale=latent_scales)
         noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(
             noisy_latent_likelihood, spatial_shape)     
 
         # Discrete entropy, latents
-        quantized_latents = self._quantize_latents(latents, mode='quantize')
+        quantized_latents = self._quantize(latents, mode='quantize')
         quantized_latent_likelihood = self.latent_likelihood(quantized_latents, mean=latent_means,
             scale=latent_scales)
         quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(

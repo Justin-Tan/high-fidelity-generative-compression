@@ -96,7 +96,7 @@ def main(**kwargs):
         default='data/originals')
     parser.add_argument("-o", "--output_dir", help="Path to directory to store output images", type=str,
         default='data/reconstructions')
-    parser.add_argument('-bs', '--batch_size', help='dataloader batch size', type=int, default=8)
+    parser.add_argument('-bs', '--batch_size', help='dataloader batch size', type=int, default=1)
     args = parser.parse_args()
 
     input_images = glob.glob(os.path.join(args.image_dir, '*.jpg'))

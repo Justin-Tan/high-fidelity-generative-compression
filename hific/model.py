@@ -112,7 +112,7 @@ class HificModel(nn.Module):
         """
         image_dims = tuple(x.size()[1:])  # (C,H,W)
 
-        if self.model_mode == ModelModes.VALIDATION and (self.training is False):
+        if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_downsamples = self.Encoder.n_downsampling_layers
             factor = 2 ** n_downsamples
             logger.info('Padding to {}'.format(factor))
@@ -133,7 +133,7 @@ class HificModel(nn.Module):
             reconstruction = torch.tanh(reconstruction)
 
         # Undo padding
-        if self.model_mode == ModelModes.VALIDATION and (self.training is False):
+        if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             print('Undoing padding.')
             reconstruction = reconstruction[:, :, :image_dims[1], :image_dims[2]]
         
