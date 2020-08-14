@@ -52,7 +52,7 @@ def pad_factor(input_image, spatial_dims, factor):
     H, W = spatial_dims[0], spatial_dims[1]
     pad_H = (factor - (H % factor)) % factor
     pad_W = (factor - (W % factor)) % factor
-    return F.pad(input_image, pad=(0, pad_H, 0, pad_W), mode='reflect')
+    return F.pad(input_image, pad=(0, pad_W, 0, pad_H), mode='reflect')
 
 def get_scheduled_params(param, param_schedule, step_counter, ignore_schedule=False):
     # e.g. schedule = dict(vals=[1., 0.1], steps=[N])

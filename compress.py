@@ -4,6 +4,7 @@ import os, glob, time, datetime
 import logging, pickle, argparse
 import functools, itertools
 
+from pprint import pprint
 from tqdm import tqdm, trange
 from collections import defaultdict
 
@@ -64,7 +65,7 @@ def compress_batch(args):
 
             input_filenames_total.extend(filenames)
 
-            for subidx in trange(reconstruction.shape[0]):
+            for subidx in range(reconstruction.shape[0]):
                 fname = os.path.join(args.output_dir, "{}_RECON.png".format(filenames[subidx]))
                 torchvision.utils.save_image(reconstruction[subidx], fname, normalize=True)
                 output_filenames_total.append(fname)
@@ -91,12 +92,13 @@ def main(**kwargs):
     description = "Compresses batch of images using specified learned model."
     parser = argparse.ArgumentParser(description=description,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-ckpt", "--ckpt_path", help="Path to model to be restored", type=str, required=True)
-    parser.add_argument("-i", "--image_dir", help="Path to directory containing images to compress", type=str, 
-        default='data/originals')
-    parser.add_argument("-o", "--output_dir", help="Path to directory to store output images", type=str,
-        default='data/reconstructions')
-    parser.add_argument('-bs', '--batch_size', help='dataloader batch size', type=int, default=1)
+    parser.add_argument("-ckpt", "--ckpt_path", type=str, required=True, help="Path to model to be restored", 
+    parser.add_argument("-i", "--image_dir", type=str, default='data/originals',
+        help="Path to directory containing images to compress")
+    parser.add_argument("-o", "--output_dir", type=str, default='data/reconstructions', 
+        help="Path to directory to store output images")
+    parser.add_argument('-bs', '--batch_size', type=int, default=1,
+        help="Dataloader batch size. Set to 1 for images of different sizes.")
     args = parser.parse_args()
 
     input_images = glob.glob(os.path.join(args.image_dir, '*.jpg'))
@@ -104,7 +106,7 @@ def main(**kwargs):
 
     assert len(input_images) > 0, 'No valid image files found in supplied directory!'
 
-    print('Input images:', input_images)
+    pprint('Input images:', input_images)
     # Launch training
     compress_batch(args)
 

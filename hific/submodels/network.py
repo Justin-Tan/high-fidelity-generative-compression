@@ -418,13 +418,47 @@ class HyperpriorSynthesis(nn.Module):
 
 if __name__ == '__main__':
 
-    B = 5
+    def pad_factor(input_image, spatial_dims, factor):
+        """Pad `input_image` (N,C,H,W) such that H and W are divisible by `factor`."""
+        H, W = spatial_dims[0], spatial_dims[1]
+        pad_H = (factor - (H % factor)) % factor
+        pad_W = (factor - (W % factor)) % factor
+        return F.pad(input_image, pad=(0, pad_W, 0, pad_H), mode='reflect')
+
+
+    B = 2
     C = 7
+    print('Image 1')
     x = torch.randn((B,3,256,256))
     x_dims = tuple(x.size())
     print('Input dims', x_dims)
 
     E = Encoder(image_dims=x_dims[1:], batch_size=B, C=C)
+    y = E(x)
+    y_dims = tuple(y.size())
+    print('Encoder output', y_dims)
+
+    G = Generator(input_dims=y_dims[1:], batch_size=B, C=C)
+    g = G(y)
+    print('Generator output', g.size())
+
+    D = Discriminator(image_dims=x_dims[1:], context_dims=tuple(g.size())[1:], C=C)
+    d, d_logits = D(x,y)
+    print('Discriminator output', d.size())
+
+    print('Image 2')
+    x = torch.randn((B,3,147,77))
+    x_dims = tuple(x.size())
+    print('Input dims', x_dims)
+
+    E = Encoder(image_dims=x_dims[1:], batch_size=B, C=C)
+
+    n_downsamples = E.n_downsampling_layers
+    factor = 2 ** n_downsamples
+    print('Padding to {}'.format(factor))
+    x = pad_factor(x, x.size()[2:], factor)
+    print('Size after padding', x.size())
+
     y = E(x)
     y_dims = tuple(y.size())
     print('Encoder output', y_dims)
