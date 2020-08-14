@@ -305,6 +305,8 @@ class Hyperprior(CodingModel):
 
         latent_means = self.synthesis_mu(hyperlatents_decoded)
         latent_scales = self.synthesis_std(hyperlatents_decoded)
+        print('MEANS SHAPE', latent_means.shape)
+        print('SCALES SHAPE', latent_scales.shape)
 
         # Differential entropy, latents
         noisy_latents = self._quantize(latents, mode='noise')
@@ -342,8 +344,23 @@ class Hyperprior(CodingModel):
 
 if __name__ == '__main__':
 
-    C = 25
-    y = torch.randn((10,C,16,16))
+    def pad_factor(input_image, spatial_dims, factor):
+        """Pad `input_image` (N,C,H,W) such that H and W are divisible by `factor`."""
+        H, W = spatial_dims[0], spatial_dims[1]
+        pad_H = (factor - (H % factor)) % factor
+        pad_W = (factor - (W % factor)) % factor
+        return F.pad(input_image, pad=(0, pad_W, 0, pad_H), mode='reflect')
+
+    C = 8
     hp = Hyperprior(C)
-    f = hp(y)
+    # y = torch.randn((10,C,16,16))
+    y = torch.randn((10,C,126,95))
+
+    n_downsamples = hp.analysis_net.n_downsampling_layers
+    factor = 2 ** n_downsamples
+    print('Padding to {}'.format(factor))
+    y = pad_factor(y, y.size()[2:], factor)
+    print('Size after padding', y.size())
+
+    f = hp(y, spatial_shape=(1,1))
     print('Shape of decoded latents', f.decoded.shape)

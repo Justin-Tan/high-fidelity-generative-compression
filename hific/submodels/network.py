@@ -367,6 +367,7 @@ class HyperpriorAnalysis(nn.Module):
 
         cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, padding_mode='reflect')
         self.activation = getattr(F, activation)
+        self.n_downsampling_layers = 2
 
         self.conv1 = nn.Conv2d(C, N, kernel_size=3, stride=1, padding=1)
         self.conv2 = nn.Conv2d(N, N, **cnn_kwargs)

@@ -36,10 +36,11 @@ class args(object):
     name = 'hific_v0'
     silent = True
     n_epochs = 8
-    n_steps = 2e6
-    batch_size = 64
-    log_interval = 100
-    save_interval = 100000
+    n_steps = 1e6
+    batch_size = 8
+    log_interval = 1000
+    save_interval = 50000
+    gpu = 0
     multigpu = True
     dataset = Datasets.OPENIMAGES
     dataset_path = DatasetPaths.OPENIMAGES
