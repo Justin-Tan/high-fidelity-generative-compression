@@ -46,6 +46,7 @@ def compress_batch(args):
     loaded_args_d, args_d = dictify(loaded_args), dictify(args)
     loaded_args_d.update(args_d)
     args = helpers.Struct(**loaded_args_d)
+    logger.info(loaded_args_d)
 
     eval_loader = datasets.get_dataloaders('evaluation', root=args.image_dir, batch_size=args.batch_size,
                                            logger=logger, shuffle=False, normalize=args.normalize_input_image)
@@ -86,10 +87,12 @@ def compress_batch(args):
     df_path = os.path.join(args.output_dir, 'out.h5')
     df.to_hdf(df_path, key='df')
 
+    pprint(df)
+
     logger.info('Complete. Reconstructions saved to {}. Output statistics saved to {}'.format(args.output_dir, df_path))
     delta_t = time.time() - start_time
-    logger.info('Time elapsed: {:.3f} s'.format(delta_t)
-    logger.info('Rate: {:.3f} Images / s:'.format(delta_t / float(N)))
+    logger.info('Time elapsed: {:.3f} s'.format(delta_t))
+    logger.info('Rate: {:.3f} Images / s:'.format(float(N) / delta_t))
 
 
 def main(**kwargs):

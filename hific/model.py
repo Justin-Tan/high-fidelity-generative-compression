@@ -278,8 +278,9 @@ class HificModel(nn.Module):
                 # [-1.,1.] -> [0.,1.]
                 reconstruction = (reconstruction + 1.) / 2.
 
-            reconstruction = torch.mul(reconstruction, 255.)
-            reconstruction = torch.clamp(reconstruction, min=0., max=255.)
+            # reconstruction = torch.mul(reconstruction, 255.)
+            # reconstruction = torch.clamp(reconstruction, min=0., max=255.)
+            reconstruction = torch.clamp(reconstruction, min=0., max=1.)
             return reconstruction, intermediates.q_bpp
 
         compression_model_loss = self.compression_loss(intermediates, hyperinfo)
