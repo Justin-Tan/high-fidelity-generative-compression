@@ -189,6 +189,9 @@ def load_model(save_path, logger, device, model_type=None, model_mode=None, curr
     if model_mode is None:
         model_mode = args.model_mode
 
+    logger.info('MODEL TYPE: {}'.format(model_type))
+    logger.info('MODEL MODE: {}'.format(model_mode))
+
     model = HificModel(args, logger, model_type=model_type, model_mode=model_mode)
     # `strict` False if warmstarting
     model.load_state_dict(checkpoint['model_state_dict'], strict=strict)

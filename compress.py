@@ -15,7 +15,9 @@ import torch.nn.functional as F
 # Custom modules
 from hific.model import HificModel
 from hific.utils import helpers, datasets
+import hific.perceptual_similarity as ps
 from default_config import hific_args, mse_lpips_args, directories, ModelModes, ModelTypes
+
 
 def make_deterministic(seed=42):
 
@@ -31,13 +33,18 @@ def compress_batch(args):
 
     # Reproducibility
     make_deterministic()
-    self.perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available())
+    perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available())
 
     # Load model
     device = helpers.get_device()
-    logger = helpers.logger_setup(logpath=os.path.join(args.image_path, 'logs'), filepath=os.path.abspath(__file__))
-    args, model, _ = helpers.load_model(args.ckpt_path, logger, device, model_mode=ModelModes.EVALUATION,
-        current_args_d=None, prediction=True, strict=True)
+    logger = helpers.logger_setup(logpath=os.path.join(args.image_dir, 'logs'), filepath=os.path.abspath(__file__))
+    loaded_args, model, _ = helpers.load_model(args.ckpt_path, logger, device, model_mode=ModelModes.EVALUATION,
+        current_args_d=None, prediction=True, strict=False)
+
+    dictify = lambda x: dict((n, getattr(x, n)) for n in dir(x) if not (n.startswith('__') or 'logger' in n))
+    loaded_args_d, args_d = dictify(loaded_args), dictify(args)
+    loaded_args_d.update(args_d)
+    args = helpers.Struct(**loaded_args_d)
 
     loader = datasets.EvalLoader(args.image_dir, normalize=args.normalize_input_image)
     n, N = 0, len(loader.dataset)
@@ -51,7 +58,7 @@ def compress_batch(args):
             data = data.to(device, dtype=torch.float)
             B = data.size(0)
             reconstruction, q_bpp = model(data, writeout=False)
-            perceptual_loss == self.perceptual_loss.forward(reconstruction, data, normalize=(not args.normalize_input_image))
+            perceptual_loss == perceptual_loss.forward(reconstruction, data, normalize=(not args.normalize_input_image))
 
             input_filenames_total.extend(filenames)
 
@@ -95,6 +102,7 @@ def main(**kwargs):
 
     assert len(input_images) > 0, 'No valid image files found in supplied directory!'
 
+    print('Input images:', input_images)
     # Launch training
     compress_batch(args)
 

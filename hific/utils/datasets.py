@@ -89,9 +89,13 @@ class BaseDataset(Dataset, abc.ABC):
     def __init__(self, root, transforms_list=[], mode='train', logger=logging.getLogger(__name__),
          **kwargs):
         self.root = root
-        self.train_data = os.path.join(root, self.files["train"])
-        self.test_data = os.path.join(root, self.files["test"])
-        self.val_data = os.path.join(root, self.files["val"])
+        
+        try:
+            self.train_data = os.path.join(root, self.files["train"])
+            self.test_data = os.path.join(root, self.files["test"])
+            self.val_data = os.path.join(root, self.files["val"])
+        except AttributeError:
+            pass
 
         self.transforms = transforms.Compose(transforms_list)
         self.logger = logger
@@ -129,8 +133,8 @@ class EvalLoader(BaseDataset):
     def __init__(self, root=os.path.join(DIR, 'data'), normalize=False, **kwargs):
         super().__init__(root, [transforms.ToTensor()], **kwargs)
 
-        self.imgs = glob.glob(os.path.join(data_dir, '*.jpg'))
-        self.imgs += glob.glob(os.path.join(data_dir, '*.png'))
+        self.imgs = glob.glob(os.path.join(root, '*.jpg'))
+        self.imgs += glob.glob(os.path.join(root, '*.png'))
 
         self.normalize = normalize
 
