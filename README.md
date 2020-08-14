@@ -4,6 +4,15 @@ Pytorch implementation of the paper ["High-Fidelity Generative Image Compression
 ## Warning
 This is a preliminary version. There may be sharp edges.
 
+## Details
+This repository defines a model for learnable image compression. There are three main components to this model, as described in the original paper:
+
+1. An autoencoding architecture defining a nonlinear transform to latent space. This is used in place of the linear transforms used by traditional image codecs.
+2. A hierarchical (two-level in this case) entropy model over the quantized latent representation enabling lossless compression through standard entropy coding.
+3. A generator-discriminator component that encourages the decoder/generator component to yield realistic reconstructions.
+
+The model is then trained end-to-end by optimization of a modified rate-distortion Lagrangian. 
+
 ## Note
 The generator is trained to achieve realistic and not exact reconstruction. Therefore, in theory **images which are compressed and decoded may be arbitrarily different from the input**. This precludes usage for sensitive applications. An important caveat from the authors is reproduced here: 
 
@@ -14,7 +23,7 @@ The generator is trained to achieve realistic and not exact reconstruction. Ther
 <details>
   <summary>Guess which half is the reconstruction? (Click side arrow to reveal) </summary>
 
-> Bottom row, (average bpp 0.097) v. the top row JPG originals (average bpp 0.552).
+> Bottom row, (average bpp 0.097) v. the top row JPG originals (average bpp 2.981).
 
 </details>
 
