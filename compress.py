@@ -84,11 +84,16 @@ def main(**kwargs):
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-ckpt", "--ckpt_path", help="Path to model to be restored", type=str, required=True)
     parser.add_argument("-i", "--image_dir", help="Path to directory containing images to compress", type=str, 
-        required=True)
+        default='data/originals')
     parser.add_argument("-o", "--output_dir", help="Path to directory to store output images", type=str,
         default='data/reconstructions')
     parser.add_argument('-bs', '--batch_size', help='dataloader batch size', type=int, default=8)
     args = parser.parse_args()
+
+    input_images = glob.glob(os.path.join(args.image_dir, '*.jpg'))
+    input_images += glob.glob(os.path.join(args.image_dir, '*.png'))
+
+    assert len(input_images) > 0, 'No valid image files found in supplied directory!'
 
     # Launch training
     compress_batch(args)
