@@ -19,7 +19,8 @@ COLOUR_WHITE = 1
 NUM_DATASET_WORKERS = 4
 SCALE_MIN = 0.75
 SCALE_MAX = 0.95
-DATASETS_DICT = {"openimages": "OpenImages", "cityscapes": "CityScapes", "jetimages": "JetImages"}
+DATASETS_DICT = {"openimages": "OpenImages", "cityscapes": "CityScapes", 
+                 "jetimages": "JetImages", "evaluation": "Evaluation"}
 DATASETS = list(DATASETS_DICT.keys())
 
 def get_dataset(dataset):
@@ -49,7 +50,7 @@ def get_dataloaders(dataset, mode='train', root=None, shuffle=True, pin_memory=T
 
     Parameters
     ----------
-    dataset : {"openimages", "jetimages"}
+    dataset : {"openimages", "jetimages", "evaluation"}
         Name of the dataset to load
 
     root : str
@@ -121,7 +122,7 @@ class BaseDataset(Dataset, abc.ABC):
         """
         pass
 
-class EvalLoader(BaseDataset):
+class Evaluation(BaseDataset):
     """
     Parameters
     ----------

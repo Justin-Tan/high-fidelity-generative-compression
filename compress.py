@@ -46,15 +46,17 @@ def compress_batch(args):
     loaded_args_d.update(args_d)
     args = helpers.Struct(**loaded_args_d)
 
-    loader = datasets.EvalLoader(args.image_dir, normalize=args.normalize_input_image)
-    n, N = 0, len(loader.dataset)
+    eval_loader = datasets.get_dataloaders('evaluation', root=args.image_dir, batch_size=args.batch_size,
+                                           logger=logger, shuffle=False, normalize=args.normalize_input_image)
+
+    n, N = 0, len(eval_loader.dataset)
     input_filenames_total = list()
     output_filenames_total = list()
     bpp_total, q_bpp_total, LPIPS_total = torch.Tensor(N), torch.Tensor(N), torch.Tensor(N)
 
     with torch.no_grad():
 
-        for idx, (data, bpp, filenames) in enumerate(tqdm(loader), 0):
+        for idx, (data, bpp, filenames) in enumerate(tqdm(eval_loader), 0):
             data = data.to(device, dtype=torch.float)
             B = data.size(0)
             reconstruction, q_bpp = model(data, writeout=False)
