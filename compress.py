@@ -14,11 +14,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # Custom modules
-from model import HificModel
-from utils import helpers, datasets
-import perceptual_similarity as ps
+from src.helpers import utils, datasets
+from src.loss.perceptual_similarity import perceptual_loss as ps
 from default_config import hific_args, mse_lpips_args, directories, ModelModes, ModelTypes
-
 
 def make_deterministic(seed=42):
 
@@ -37,15 +35,15 @@ def compress_batch(args):
     perceptual_loss_fn = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available())
 
     # Load model
-    device = helpers.get_device()
-    logger = helpers.logger_setup(logpath=os.path.join(args.image_dir, 'logs'), filepath=os.path.abspath(__file__))
-    loaded_args, model, _ = helpers.load_model(args.ckpt_path, logger, device, model_mode=ModelModes.EVALUATION,
+    device = utils.get_device()
+    logger = utils.logger_setup(logpath=os.path.join(args.image_dir, 'logs'), filepath=os.path.abspath(__file__))
+    loaded_args, model, _ = utils.load_model(args.ckpt_path, logger, device, model_mode=ModelModes.EVALUATION,
         current_args_d=None, prediction=True, strict=False)
 
     dictify = lambda x: dict((n, getattr(x, n)) for n in dir(x) if not (n.startswith('__') or 'logger' in n))
     loaded_args_d, args_d = dictify(loaded_args), dictify(args)
     loaded_args_d.update(args_d)
-    args = helpers.Struct(**loaded_args_d)
+    args = utils.Struct(**loaded_args_d)
     logger.info(loaded_args_d)
 
     eval_loader = datasets.get_dataloaders('evaluation', root=args.image_dir, batch_size=args.batch_size,

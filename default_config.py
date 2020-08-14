@@ -22,12 +22,15 @@ class Datasets(object):
     JETS = 'jetimages'
 
 class DatasetPaths(object):
-    OPENIMAGES = '/Users/gracehan/Personal/HIFIC/high-fidelity-generative-compression/data'
+    OPENIMAGES = 'data/openimages'
     CITYSCAPES = ''
     JETS = ''
 
 class directories(object):
     experiments = 'experiments'
+
+class checkpoints(object):
+    gan1 = 'experiments/gan_med_bitrate_openimages_compression_gan_2020_08_14_07_12/checkpoints/gan_med_bitrate_openimages_compression_gan_2020_08_14_07_12_epoch1_idx56776_2020_08_14_18:43.pt'
 
 class args(object):
     """
