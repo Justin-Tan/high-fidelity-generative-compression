@@ -92,7 +92,7 @@ def main(**kwargs):
     description = "Compresses batch of images using specified learned model."
     parser = argparse.ArgumentParser(description=description,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-ckpt", "--ckpt_path", type=str, required=True, help="Path to model to be restored", 
+    parser.add_argument("-ckpt", "--ckpt_path", type=str, required=True, help="Path to model to be restored")
     parser.add_argument("-i", "--image_dir", type=str, default='data/originals',
         help="Path to directory containing images to compress")
     parser.add_argument("-o", "--output_dir", type=str, default='data/reconstructions', 
@@ -106,7 +106,8 @@ def main(**kwargs):
 
     assert len(input_images) > 0, 'No valid image files found in supplied directory!'
 
-    pprint('Input images:', input_images)
+    print('Input images')
+    pprint(input_images)
     # Launch training
     compress_batch(args)
 
