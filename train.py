@@ -298,7 +298,7 @@ if __name__ == '__main__':
         if args.model_type != ModelTypes.COMPRESSION_GAN:
             logger.warning('Should warmstart compression-gan model.')
         args, model, optimizers = helpers.load_model(args.warmstart_ckpt, logger, device, 
-            model_type=args.model_type, current_args_d=dictify(args), strict=False)
+            model_type=args.model_type, current_args_d=dictify(args), strict=False, prediction=False)
     else:
         model = create_model(args, device, logger, storage, storage_test)
         model = model.to(device)

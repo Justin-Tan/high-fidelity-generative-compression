@@ -201,7 +201,7 @@ class OpenImages(BaseDataset):
             dynamic_transform = self._transforms(scale, H, W)
             transformed = dynamic_transform(img)
         except:
-            return None, None
+            return None
 
         # apply random scaling + crop, put each pixel 
         # in [0.,1.] and reshape to (C x H x W)
