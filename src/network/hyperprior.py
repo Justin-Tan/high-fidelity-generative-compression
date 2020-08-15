@@ -61,17 +61,19 @@ class CodingModel(nn.Module):
         EPS = 1e-9  
         quotient = -np.log(2.)
         batch_size = likelihood.size()[0]
+
+        assert len(spatial_shape) == 2, 'Mispecified spatial dims'
         n_pixels = np.prod(spatial_shape)
 
+        print(likelihood.mean())
         log_likelihood = torch.log(likelihood + EPS)
         n_bits = torch.sum(log_likelihood) / (batch_size * quotient)
         bpp = n_bits / n_pixels
-        #print(n_pixels)
-        #print(batch_size)
-        #print('LH', likelihood)
+        # print('N_PIXELS', n_pixels)
+        # print('BATCH SIZE', batch_size)
+        # print('LH', likelihood)
         #print('LH MAX', likelihood.max())
         #print('LH MAX', likelihood.min())
-        #print('LH SHape', likelihood.shape)
         #print('NB', n_bits)
         #print('BPP', bpp)
         return n_bits, bpp
@@ -115,15 +117,15 @@ class PriorDensity(nn.Module):
     def likelihood(self, x, mean, scale):
 
         scale = torch.clamp(scale, min=self.scale_lower_bound).float()
-        # print('mean', mean)
-        # print('scale', scale.mean())
-        # print('scale', scale)
         # Assumes 1 - CDF(x) = CDF(-x)
         x = x - mean
         x = torch.abs(x)
         cdf_upper = self.standardized_CDF((0.5 - x) / scale)
         cdf_lower = self.standardized_CDF(-(0.5 + x) / scale)
+        # cdf_upper = self.standardized_CDF( (x - mean + 0.5) / scale )
+        # cdf_lower = self.standardized_CDF( (x - mean - 0.5) / scale )
         likelihood = cdf_upper - cdf_lower
+        print(likelihood)
 
         return torch.clamp(likelihood, min=self.min_likelihood) # , max=self.max_likelihood)
 
