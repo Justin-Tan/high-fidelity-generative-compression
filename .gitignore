@@ -153,3 +153,6 @@ dmypy.json
 
 bin
 *.un~
+
+.DS_Store
+.idea
