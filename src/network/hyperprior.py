@@ -50,7 +50,8 @@ class CodingModel(nn.Module):
                 x = torch.floor(x + 0.5)
                 x = x + means
             else:
-                x = torch.round(x)
+                x = torch.floor(x + 0.5)
+                # x = torch.round(x)
         else:
             raise NotImplementedError
         
@@ -124,10 +125,10 @@ class PriorDensity(nn.Module):
         cdf_lower = self.standardized_CDF(-(0.5 + x) / scale)
         # cdf_upper = self.standardized_CDF( (x - mean + 0.5) / scale )
         # cdf_lower = self.standardized_CDF( (x - mean - 0.5) / scale )
-        likelihood = cdf_upper - cdf_lower
-        print(likelihood)
+        likelihood_ = cdf_upper - cdf_lower
+        print(likelihood_)
 
-        return torch.clamp(likelihood, min=self.min_likelihood) # , max=self.max_likelihood)
+        return torch.clamp(likelihood_, min=self.min_likelihood) # , max=self.max_likelihood)
 
     def forward(self, x, mean, scale):
         return self.likelihood(x, mean, scale)
@@ -219,15 +220,15 @@ class HyperpriorDensity(nn.Module):
         # Numerical stability using some sigmoid identities
         # to avoid subtraction of two numbers close to 1
         sign = -torch.sign(cdf_upper + cdf_lower).detach()
-        likelihood = torch.abs(
+        likelihood_ = torch.abs(
             torch.sigmoid(sign * cdf_upper) - torch.sigmoid(sign * cdf_lower))
 
         # Reshape to (N,C,H,W)
-        likelihood = torch.reshape(likelihood, (C,N,H,W))
-        likelihood = likelihood.permute(1,0,2,3)
+        likelihood_ = torch_.reshape(likelihood, (C,N,H,W))
+        likelihood_ = likelihood_.permute(1,0,2,3)
         # print('LIKELIHOOD shape', likelihood.size())
 
-        return torch.clamp(likelihood, min=self.min_likelihood)  #, max=self.max_likelihood)
+        return torch.clamp(likelihood_, min=self.min_likelihood)  #, max=self.max_likelihood)
 
     def forward(self, x, **kwargs):
         return self.likelihood(x)

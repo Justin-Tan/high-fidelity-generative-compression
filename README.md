@@ -27,7 +27,7 @@ This repository defines a model for learnable image compression capable of compr
 2. A hierarchical (two-level in this case) entropy model over the quantized latent representation enabling lossless compression through standard entropy coding.
 3. A generator-discriminator component that encourages the decoder/generator component to yield realistic reconstructions.
 
-The model is then trained end-to-end by optimization of a modified rate-distortion Lagrangian. 
+The model is then trained end-to-end by optimization of a modified rate-distortion Lagrangian. Loosely, the model can be thought of as 'amortizing' the storage requirements for an generic image through training a learnable compression/decompression scheme. 
 
 ## Note
 The generator is trained to achieve realistic and not exact reconstruction. Therefore, in theory **images which are compressed and decoded may be arbitrarily different from the input**. This precludes usage for sensitive applications. An important caveat from the authors is reproduced here: 
