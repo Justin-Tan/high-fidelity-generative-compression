@@ -252,7 +252,7 @@ class HyperpriorDensity(nn.Module):
 class Hyperprior(CodingModel):
     
     def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, mode='large',
-        likelihood_type='gaussian'):
+        likelihood_type='gaussian', scale_lower_bound=MIN_SCALE):
         """
         Introduces probabilistic model over latents of 
         latents.
@@ -263,6 +263,7 @@ class Hyperprior(CodingModel):
         super(Hyperprior, self).__init__(n_channels=bottleneck_capacity)
         
         self.bottleneck_capacity = bottleneck_capacity
+        self.scale_lower_bound = MIN_SCALE
 
         analysis_net = HyperpriorAnalysis
         synthesis_net = HyperpriorSynthesis
