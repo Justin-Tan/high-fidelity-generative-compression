@@ -281,7 +281,7 @@ class Model(nn.Module):
             # reconstruction = torch.mul(reconstruction, 255.)
             # reconstruction = torch.clamp(reconstruction, min=0., max=255.)
             reconstruction = torch.clamp(reconstruction, min=0., max=1.)
-            return reconstruction, intermediates.q_bpp
+            return reconstruction, intermediates.q_bpp, intermediates.n_bpp
 
         compression_model_loss = self.compression_loss(intermediates, hyperinfo)
 

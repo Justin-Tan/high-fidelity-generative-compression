@@ -52,7 +52,7 @@ def compress_batch(args):
     n, N = 0, len(eval_loader.dataset)
     input_filenames_total = list()
     output_filenames_total = list()
-    bpp_total, q_bpp_total, LPIPS_total = torch.Tensor(N), torch.Tensor(N), torch.Tensor(N)
+    bpp_total, q_bpp_total, n_bpp_total, LPIPS_total = torch.Tensor(N), torch.Tensor(N), torch.Tensor(N), torch.Tensor(N)
 
     start_time = time.time()
 
@@ -61,7 +61,7 @@ def compress_batch(args):
         for idx, (data, bpp, filenames) in enumerate(tqdm(eval_loader), 0):
             data = data.to(device, dtype=torch.float)
             B = data.size(0)
-            reconstruction, q_bpp = model(data, writeout=False)
+            reconstruction, q_bpp, n_bpp = model(data, writeout=False)
             perceptual_loss = perceptual_loss_fn.forward(reconstruction, data, normalize=(not args.normalize_input_image))
 
             input_filenames_total.extend(filenames)
@@ -73,6 +73,7 @@ def compress_batch(args):
 
             bpp_total[n:n + B] = bpp.data
             q_bpp_total[n:n + B] = q_bpp.data
+            n_bpp_total[n:n + B] = n_bpp.data
             LPIPS_total[n:n + B] = perceptual_loss.data
             n += B
 
@@ -80,6 +81,7 @@ def compress_batch(args):
     df.columns = ['input_filename', 'output_filename']
     df['bpp'] = bpp_total.cpu().numpy()
     df['q_bpp'] = q_bpp_total.cpu().numpy()
+    df['n_bpp'] = n_bpp_total.cpu().numpy()
     df['LPIPS'] = LPIPS_total.cpu().numpy()
 
     df_path = os.path.join(args.output_dir, 'out.h5')
