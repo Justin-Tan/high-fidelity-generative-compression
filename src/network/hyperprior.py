@@ -224,7 +224,7 @@ class HyperpriorDensity(nn.Module):
             torch.sigmoid(sign * cdf_upper) - torch.sigmoid(sign * cdf_lower))
 
         # Reshape to (N,C,H,W)
-        likelihood_ = torch_.reshape(likelihood, (C,N,H,W))
+        likelihood_ = torch.reshape(likelihood_, (C,N,H,W))
         likelihood_ = likelihood_.permute(1,0,2,3)
         # print('LIKELIHOOD shape', likelihood.size())
 
@@ -331,8 +331,13 @@ class Hyperprior(CodingModel):
             hyperlatent_qbpp=quantized_hyperlatent_bpp,
             total_qbpp=quantized_latent_bpp + quantized_hyperlatent_bpp,
             bitstring=None,  # TODO
-            side_bitstring=None  # TODO
+            side_bitstring=None, # TODO
         )
+
+        print(quantized_latents)
+        print(quantized_hyperlatents)
+        print(noisy_latents)
+        print(noisy_hyperlatents)
 
         return info
 
@@ -407,8 +412,8 @@ if __name__ == '__main__':
 
     C = 8
     hp = Hyperprior(C)
-    # y = torch.randn((10,C,16,16))
-    y = torch.randn((10,C,126,95))
+    y = torch.randn((3,C,16,16))
+    # y = torch.randn((10,C,126,95))
 
     n_downsamples = hp.analysis_net.n_downsampling_layers
     factor = 2 ** n_downsamples
