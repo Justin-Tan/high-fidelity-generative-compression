@@ -50,6 +50,8 @@ vim default_config.py
 python3 train.py -h
 ```
 
+To check if your setup is working, run `python3 -m src.model` in root.
+
 ### Training
 * For best results, as described in the paper, train an initial base model using the rate-distortion loss only, together with the hyperprior model, e.g. to target low bitrates:
 ```
@@ -76,12 +78,10 @@ python3 compress.py --img path/to/image/dir --ckpt path/to/trained/model
 ### Contributing
 All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.
 
-<!-- ### Known Issues / Todo
-* Training is unstable for high bitrate models (passing the `--regime high` flag in `train.py`). Currently unsure whether this is due to the dataset, or a flaw in the model. -->
 
 ### Acknowledgements
 * The code under `hific/perceptual_similarity/` implementing the perceptual distortion loss is modified from the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
-<!-- * The cat in the main image is my neighbour's. --> -->
+<!-- * The cat in the main image is my neighbour's. -->
 
 ### Authors
 * Grace Han
