@@ -316,14 +316,26 @@ if __name__ == '__main__':
 
     logger.info(model)
 
+    transform_param_names = list()
+    transform_params = list()
     logger.info('ALL PARAMETERS')
     for n, p in model.named_parameters():
+        if ('Encoder' in n) or ('Generator' in n):
+            transform_param_names.append(n)
+            transform_params.append(p)
+        if ('analysis' in n) or ('synthesis' in n):
+            transform_param_names.append(n)
+            transform_params.append(p)      
         logger.info(f'{n} - {p.shape}')
 
     logger.info('AMORTIZATION PARAMETERS')
     amortization_named_parameters = itertools.chain.from_iterable(
             [am.named_parameters() for am in model.amortization_models])
     for n, p in amortization_named_parameters:
+        logger.info(f'{n} - {p.shape}')
+
+    logger.info('AMORTIZATION PARAMETERS')
+    for n, p in zip(transform_param_names, transform_params):
         logger.info(f'{n} - {p.shape}')
 
     logger.info('HYPERPRIOR PARAMETERS')

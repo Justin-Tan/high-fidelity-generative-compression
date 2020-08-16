@@ -132,8 +132,6 @@ class PriorDensity(nn.Module):
         # cdf_lower = self.standardized_CDF( (x - mean - 0.5) / scale )
 
         likelihood_ = cdf_upper - cdf_lower
-
-        # likelihood_ = lower_bound_identity(likelihood_, self.min_likelihood)
         likelihood_ = lower_bound_toward(likelihood_, self.min_likelihood)
 
         return likelihood_
@@ -239,7 +237,6 @@ class HyperpriorDensity(nn.Module):
         likelihood_ = torch.reshape(likelihood_, (C,N,H,W))
         likelihood_ = likelihood_.permute(1,0,2,3)
 
-        # likelihood_ = lower_bound_identity(likelihood_, self.min_likelihood)
         likelihood_ = lower_bound_toward(likelihood_, self.min_likelihood)
 
         return likelihood_ #, max=self.max_likelihood)
@@ -263,7 +260,7 @@ class Hyperprior(CodingModel):
         super(Hyperprior, self).__init__(n_channels=bottleneck_capacity)
         
         self.bottleneck_capacity = bottleneck_capacity
-        self.scale_lower_bound = MIN_SCALE
+        self.scale_lower_bound = scale_lower_bound
 
         analysis_net = HyperpriorAnalysis
         synthesis_net = HyperpriorSynthesis
@@ -322,7 +319,6 @@ class Hyperprior(CodingModel):
 
         latent_means = self.synthesis_mu(hyperlatents_decoded)
         latent_scales = self.synthesis_std(hyperlatents_decoded)
-        # latent_scales = lower_bound_identity(latent_scales, self.scale_lower_bound)
         latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
 
         # Differential entropy, latents

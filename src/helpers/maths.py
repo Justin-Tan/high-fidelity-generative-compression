@@ -21,7 +21,7 @@ class LowerBoundToward(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        gate = torch.logical_or(ctx.mask, grad_output.ge(0.)).type_as(grad_output.data)
+        gate = torch.logical_or(ctx.mask, grad_output.le(0.)).type_as(grad_output.data)
         gate.requires_grad = True
         return grad_output * gate, None
 

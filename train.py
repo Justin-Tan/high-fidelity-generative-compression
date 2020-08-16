@@ -304,8 +304,18 @@ if __name__ == '__main__':
     else:
         model = create_model(args, device, logger, storage, storage_test)
         model = model.to(device)
-        amortization_parameters = itertools.chain.from_iterable(
-            [am.parameters() for am in model.amortization_models])
+        # amortization_parameters = itertools.chain.from_iterable(
+        #     [am.parameters() for am in model.amortization_models])
+
+        amort_names, amortization_parameters = list(), list()
+        for n, p in model.named_parameters():
+            if ('Encoder' in n) or ('Generator' in n):
+                amort_names.append(n)
+                amortization_parameters.append(p)
+            if ('analysis' in n) or ('synthesis' in n):
+                amort_names.append(n)
+                amortization_parameters.append(p) 
+            logger.info(f'{n} - {p.shape}')    
         hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
 
         amortization_opt = torch.optim.Adam(amortization_parameters,
