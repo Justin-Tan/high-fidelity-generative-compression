@@ -312,10 +312,11 @@ if __name__ == '__main__':
             if ('Encoder' in n) or ('Generator' in n):
                 amort_names.append(n)
                 amortization_parameters.append(p)
+                logger.info(f'AM {n} - {p.shape}')    
             if ('analysis' in n) or ('synthesis' in n):
                 amort_names.append(n)
                 amortization_parameters.append(p) 
-            logger.info(f'{n} - {p.shape}')    
+                logger.info(f'AM {n} - {p.shape}')    
         hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
 
         amortization_opt = torch.optim.Adam(amortization_parameters,
