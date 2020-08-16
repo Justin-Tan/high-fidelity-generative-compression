@@ -8,18 +8,16 @@ __pycache__/
 *.h5
 *.hdf
 *.pt
-*.pth
 *.npy
 **/*.h5
 **/*.hdf
 **/*.pt
-# **/*.pth
 **/*.npy
 graphs/
 results/
-# experiments/
 imgs/*.pdf
 data/*.jpg
+data/*.png
 hific_dev/
 *.slurm
 *.tex

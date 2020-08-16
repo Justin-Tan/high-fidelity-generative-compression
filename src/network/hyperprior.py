@@ -20,6 +20,9 @@ HyperInfo = namedtuple(
     "bitstring side_bitstring",
 )
 
+lower_bound_toward = maths.LowerBoundIdentity.apply
+lower_bound_identity = maths.LowerBoundToward.apply
+
 class CodingModel(nn.Module):
     """
     Probability model for estimation of (cross)-entropies in the context
@@ -118,17 +121,25 @@ class PriorDensity(nn.Module):
 
     def likelihood(self, x, mean, scale):
 
-        scale = torch.clamp(scale, min=self.scale_lower_bound).float()
+        # scale = lower_bound_identity(scale, mself.scale_lower_bound)
+        scale = lower_bound_toward(scale, self.scale_lower_bound)
+
         # Assumes 1 - CDF(x) = CDF(-x)
         x = x - mean
         x = torch.abs(x)
         cdf_upper = self.standardized_CDF((0.5 - x) / scale)
         cdf_lower = self.standardized_CDF(-(0.5 + x) / scale)
+
+        # Naive
         # cdf_upper = self.standardized_CDF( (x - mean + 0.5) / scale )
         # cdf_lower = self.standardized_CDF( (x - mean - 0.5) / scale )
+
         likelihood_ = cdf_upper - cdf_lower
 
-        return torch.clamp(likelihood_, min=self.min_likelihood) # , max=self.max_likelihood)
+        # likelihood_ = lower_bound_identity(likelihood_, self.min_likelihood)
+        likelihood_ = lower_bound_toward(likelihood_, self.min_likelihood)
+
+        return likelihood_
 
     def forward(self, x, mean, scale):
         return self.likelihood(x, mean, scale)
@@ -223,14 +234,18 @@ class HyperpriorDensity(nn.Module):
         sign = sign.detach()
         likelihood_ = torch.abs(
             torch.sigmoid(sign * cdf_upper) - torch.sigmoid(sign * cdf_lower))
-        likelihood_ = torch.sigmoid(cdf_upper) - torch.sigmoid(cdf_lower)
+
+        # Naive
+        # likelihood_ = torch.sigmoid(cdf_upper) - torch.sigmoid(cdf_lower)
 
         # Reshape to (N,C,H,W)
         likelihood_ = torch.reshape(likelihood_, (C,N,H,W))
         likelihood_ = likelihood_.permute(1,0,2,3)
-        # print('LIKELIHOOD shape', likelihood.size())
 
-        return torch.clamp(likelihood_, min=self.min_likelihood)  #, max=self.max_likelihood)
+        # likelihood_ = lower_bound_identity(likelihood_, self.min_likelihood)
+        likelihood_ = lower_bound_toward(likelihood_, self.min_likelihood)
+
+        return likelihood_ #, max=self.max_likelihood)
 
     def forward(self, x, **kwargs):
         return self.likelihood(x)
@@ -342,10 +357,10 @@ class Hyperprior(CodingModel):
             side_bitstring=None, # TODO
         )
 
-        print(quantized_latents)
-        print(quantized_hyperlatents)
-        print(noisy_latents)
-        print(noisy_hyperlatents)
+        # print(quantized_latents)
+        # print(quantized_hyperlatents)
+        # print(noisy_latents)
+        # print(noisy_hyperlatents)
 
         return info
 

@@ -1,6 +1,30 @@
 import torch
 import numpy as np
 
+class LowerBoundIdentity(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, tensor, lower_bound):
+        ctx.lower_bound = lower_bound
+        return torch.clamp(tensor, lower_bound)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output.clone(), None
+
+
+class LowerBoundToward(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, tensor, lower_bound):
+        ctx.lower_bound = lower_bound
+        ctx.mask = tensor.ge(ctx.lower_bound)
+        return torch.clamp(tensor, lower_bound)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        gate = torch.logical_or(ctx.mask, grad_output.ge(0.)).type_as(grad_output.data)
+        gate.requires_grad = True
+        return grad_output * gate, None
+
 def gaussian_entropy(D, logvar):
     """
     Entropy of a Gaussian distribution with 'D' dimensions and heteroscedastic log variance 'logvar'
@@ -100,37 +124,3 @@ def matrix_log_density_gaussian(x, mu, logvar):
 
     return log_density_gaussian(x, mu, logvar)
 
-def log_importance_weight_matrix(batch_size, dataset_size):
-    """
-    Calculates a log importance weight matrix
-    Parameters
-    ----------
-    batch_size: int
-        number of training images in the batch
-    dataset_size: int
-        number of training images in the dataset
-
-    Returns:
-    log_W: Matrix of importance weights for estimating
-    log_qz, etc. according to (S6) of [1], repeat for
-    each x* (n*) in batch.
-    Shape [B,B]
-
-    [1]: https://arxiv.org/pdf/1802.04942.pdf
-    """
-    N = dataset_size
-    M = batch_size - 1
-    strat_weight = (N - M) / (N * M)
-    W = torch.Tensor(batch_size, batch_size).fill_(1 / M)
-    W.view(-1)[::M + 1] = 1 / N
-    W.view(-1)[1::M + 1] = strat_weight
-    W[M - 1, 0] = strat_weight
-    return W.log()
-
-def softmax(x, dim=-1):
-    e_x = torch.exp(x - x.max(dim=dim, keepdim=True)[0])
-    out = e_x / e_x.sum(dim=dim, keepdim=True)
-    return out
-
-def logit(x, eps=1e-6):
-    return torch.log(x + eps) - torch.log(1. - x + eps)

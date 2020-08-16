@@ -337,14 +337,13 @@ if __name__ == '__main__':
     logger.info("Number of trainable parameters: {}".format(utils.count_parameters(model)))
     logger.info("Estimated size: {} MB".format(utils.count_parameters(model) * 4. / 10**6))
 
-    logger.info('Starting forward pass ...')
-    start_time = time.time()
+    shape = [10, 3, 256, 256]
+    logger.info('Starting forward pass with input shape {}'.format(shape))
 
-    x = torch.randn([10, 3, 256, 256]).to(device)
+    start_time = time.time()
+    x = torch.randn(shape).to(device)
     losses = model(x)
     compression_loss, disc_loss = losses['compression'], losses['disc']
-    print('Compression loss shape', compression_loss.size())
-    print('Disc loss shape', disc_loss.size())
 
     logger.info('Delta t {:.3f}s'.format(time.time() - start_time))
 
