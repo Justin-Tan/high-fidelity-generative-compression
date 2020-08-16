@@ -41,7 +41,8 @@ class CodingModel(nn.Module):
         """
 
         if mode == 'noise':
-            quantization_noise = torch.nn.init.uniform_(torch.zeros_like(x), -0.5, 0.5)
+            # quantization_noise = torch.nn.init.uniform_(torch.zeros_like(x), -0.5, 0.5)
+            quantization_noise = torch.rand(x.size()).to(x) - 0.5 
             x = x + quantization_noise
         elif mode == 'quantize':
 
@@ -66,8 +67,8 @@ class CodingModel(nn.Module):
         assert len(spatial_shape) == 2, 'Mispecified spatial dims'
         n_pixels = np.prod(spatial_shape)
 
-        print(likelihood.mean())
         log_likelihood = torch.log(likelihood + EPS)
+        # print('LOG LIKELIHOOD', log_likelihood.mean().item())
         n_bits = torch.sum(log_likelihood) / (batch_size * quotient)
         bpp = n_bits / n_pixels
         # print('N_PIXELS', n_pixels)
@@ -126,7 +127,6 @@ class PriorDensity(nn.Module):
         # cdf_upper = self.standardized_CDF( (x - mean + 0.5) / scale )
         # cdf_lower = self.standardized_CDF( (x - mean - 0.5) / scale )
         likelihood_ = cdf_upper - cdf_lower
-        print(likelihood_)
 
         return torch.clamp(likelihood_, min=self.min_likelihood) # , max=self.max_likelihood)
 
@@ -219,12 +219,14 @@ class HyperpriorDensity(nn.Module):
 
         # Numerical stability using some sigmoid identities
         # to avoid subtraction of two numbers close to 1
-        sign = -torch.sign(cdf_upper + cdf_lower).detach()
+        sign = -torch.sign(cdf_upper + cdf_lower)
+        sign = sign.detach()
         likelihood_ = torch.abs(
             torch.sigmoid(sign * cdf_upper) - torch.sigmoid(sign * cdf_lower))
+        likelihood_ = torch.sigmoid(cdf_upper) - torch.sigmoid(cdf_lower)
 
         # Reshape to (N,C,H,W)
-        likelihood_ = torch_.reshape(likelihood, (C,N,H,W))
+        likelihood_ = torch.reshape(likelihood_, (C,N,H,W))
         likelihood_ = likelihood_.permute(1,0,2,3)
         # print('LIKELIHOOD shape', likelihood.size())
 
@@ -268,9 +270,11 @@ class Hyperprior(CodingModel):
         self.hyperlatent_likelihood = HyperpriorDensity(n_channels=hyperlatent_filters)
         self.latent_likelihood = PriorDensity(n_channels=bottleneck_capacity, likelihood_type=likelihood_type)
 
-    def quantize_latents_st(self, values, means):
+
+    def quantize_latents_st(self, inputs, means):
         # Latents rounded instead of additive uniform noise
         # Ignore rounding in backward pass
+        values = inputs
         values = values - means
         delta = (torch.floor(values + 0.5) - values).detach()
         values = values + delta
@@ -295,6 +299,9 @@ class Hyperprior(CodingModel):
         quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy(
             quantized_hyperlatent_likelihood, spatial_shape)
 
+        #print('QUANT HL', quantized_hyperlatents)
+        #print('maxQUANT HL', quantized_hyperlatents.max())
+        #print('minQUANT HL', quantized_hyperlatents.min())
         if self.training is True:
             hyperlatents_decoded = noisy_hyperlatents
         else:
@@ -316,6 +323,7 @@ class Hyperprior(CodingModel):
             scale=latent_scales)
         quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(
             quantized_latent_likelihood, spatial_shape)
+
 
         if self.training is True:
             latents_decoded = self.quantize_latents_st(latents, latent_means)
