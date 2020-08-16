@@ -52,7 +52,7 @@ class args(object):
     model_mode = ModelModes.TRAINING
 
     # Architecture params - Table 3a) of [1]
-    latent_channels = 42 #220
+    latent_channels = 24 #220
     n_residual_blocks = 3  #7           # Authors use 9 blocks, performance saturates at 5
     lambda_B = 2**(-4)              # Loose rate
     k_M = 0.075 * 2**(-5)           # Distortion
@@ -63,8 +63,10 @@ class args(object):
     normalize_input_image = False   # Normalize inputs to range [-1,1]
     
     # Shapes
-    crop_size = 256
-    image_dims = (3,256,256)
+    crop_size = 128
+    image_dims = (3,128,128)
+    # crop_size = 256
+    # image_dims = (3,256,256)
     latent_dims = (latent_channels,16,16)
     
     # Optimizer params

@@ -82,6 +82,7 @@ python3 compress.py --img path/to/image/dir --ckpt path/to/trained/model
 ### Notes
 * The "size" of the compressed image as reported in `bpp` does not account for the size of the model required to decode the compressed format.
 * The total size of the model (using the original architecture) is around 737 MB. Forward pass time should scale sublinearly provided everything fits in memory.
+* You may get an OOM error when compressing images which are too large. We're working on a fix.
 
 ### Contributing
 All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.

@@ -28,6 +28,15 @@ class LowerBoundToward(torch.autograd.Function):
         gate = Variable(torch.logical_or(ctx.mask, grad_output.lt(0.)).type_as(grad_output.data))
         return grad_output * gate, None
 
+def standardized_CDF_gaussian(value):
+    # Gaussian
+    # return 0.5 * (1. + torch.erf(value/ np.sqrt(2)))
+    return 0.5 * torch.erfc(value * (-1./np.sqrt(2)))
+
+def standardized_CDF_logistic(value):
+    # Logistic
+    return torch.sigmoid(value)
+
 def gaussian_entropy(D, logvar):
     """
     Entropy of a Gaussian distribution with 'D' dimensions and heteroscedastic log variance 'logvar'

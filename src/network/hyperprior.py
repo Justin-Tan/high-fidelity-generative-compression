@@ -81,6 +81,7 @@ class CodingModel(nn.Module):
         #print('LH MAX', likelihood.min())
         #print('NB', n_bits)
         #print('BPP', bpp)
+
         return n_bits, bpp
 
 
@@ -102,42 +103,6 @@ class PriorDensity(nn.Module):
         self.min_likelihood = float(min_likelihood)
         self.max_likelihood = float(max_likelihood)
         self.scale_lower_bound = scale_lower_bound
-
-        if likelihood == 'gaussian':
-            self.standardized_CDF = self.standardized_CDF_gaussian
-        elif likelihood == 'logistic':
-            self.standardized_CDF = self.standardized_CDF_logistic
-        else:
-            raise ValueError('Unknown likelihood model: {}'.format(likelihood))
-
-    def standardized_CDF_gaussian(self, value):
-        # Gaussian
-        # return 0.5 * (1. + torch.erf(value/ np.sqrt(2)))
-        return 0.5 * torch.erfc(value * (-1./np.sqrt(2)))
-
-    def standardized_CDF_logistic(self, value):
-        # Logistic
-        return torch.sigmoid(value)
-
-    def likelihood(self, x, mean, scale):
-
-        # Assumes 1 - CDF(x) = CDF(-x)
-        x = x - mean
-        x = torch.abs(x)
-        cdf_upper = self.standardized_CDF((0.5 - x) / scale)
-        cdf_lower = self.standardized_CDF(-(0.5 + x) / scale)
-
-        # Naive
-        # cdf_upper = self.standardized_CDF( (x - mean + 0.5) / scale )
-        # cdf_lower = self.standardized_CDF( (x - mean - 0.5) / scale )
-
-        likelihood_ = cdf_upper - cdf_lower
-        likelihood_ = lower_bound_toward(likelihood_, self.min_likelihood)
-
-        return likelihood_
-
-    def forward(self, x, mean, scale):
-        return self.likelihood(x, mean, scale)
 
 
 class HyperpriorDensity(nn.Module):
@@ -209,6 +174,7 @@ class HyperpriorDensity(nn.Module):
 
         return logits
 
+
     def likelihood(self, x):
         """
         Expected input: (N,C,H,W)
@@ -218,7 +184,8 @@ class HyperpriorDensity(nn.Module):
         # Converts latents to (C,1,*) format
         N, C, H, W = latents.size()
         latents = latents.permute(1,0,2,3)
-        latents = torch.reshape(latents, (C,1,-1))
+        shape = latents.shape
+        latents = torch.reshape(latents, (shape[0],1,-1))
 
         cdf_upper = self.cdf_logits(latents + 0.5)
         cdf_lower = self.cdf_logits(latents - 0.5)
@@ -234,7 +201,7 @@ class HyperpriorDensity(nn.Module):
         # likelihood_ = torch.sigmoid(cdf_upper) - torch.sigmoid(cdf_lower)
 
         # Reshape to (N,C,H,W)
-        likelihood_ = torch.reshape(likelihood_, (C,N,H,W))
+        likelihood_ = torch.reshape(likelihood_, shape)
         likelihood_ = likelihood_.permute(1,0,2,3)
 
         likelihood_ = lower_bound_toward(likelihood_, self.min_likelihood)
@@ -278,7 +245,13 @@ class Hyperprior(CodingModel):
         self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
         self.hyperlatent_likelihood = HyperpriorDensity(n_channels=hyperlatent_filters)
-        self.latent_likelihood = PriorDensity(n_channels=bottleneck_capacity, likelihood_type=likelihood_type)
+
+        if likelihood_type == 'gaussian':
+            self.standardized_CDF = maths.standardized_CDF_gaussian
+        elif likelihood_type == 'logistic':
+            self.standardized_CDF = maths.standardized_CDF_logistic
+        else:
+            raise ValueError('Unknown likelihood model: {}'.format(likelihood_type))
 
 
     def quantize_latents_st(self, inputs, means):
@@ -291,6 +264,22 @@ class Hyperprior(CodingModel):
         values = values + means
         return values
 
+    def latent_likelihood(self, x, mean, scale):
+
+        # Assumes 1 - CDF(x) = CDF(-x)
+        x = x - mean
+        x = torch.abs(x)
+        cdf_upper = self.standardized_CDF((0.5 - x) / scale)
+        cdf_lower = self.standardized_CDF(-(0.5 + x) / scale)
+
+        # Naive
+        # cdf_upper = self.standardized_CDF( (x - mean + 0.5) / scale )
+        # cdf_lower = self.standardized_CDF( (x - mean - 0.5) / scale )
+
+        likelihood_ = cdf_upper - cdf_lower
+        likelihood_ = lower_bound_toward(likelihood_, self.min_likelihood)
+
+        return likelihood_
 
     def forward(self, latents, spatial_shape, **kwargs):
 
@@ -366,6 +355,8 @@ class HyperpriorAnalysis(nn.Module):
 
     [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
         arXiv:1802.01436 (2018).
+
+    C:  Number of input channels
     """
     def __init__(self, C=220, N=320, activation='relu'):
         super(HyperpriorAnalysis, self).__init__()
@@ -395,6 +386,8 @@ class HyperpriorSynthesis(nn.Module):
 
     [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
         arXiv:1802.01436 (2018).
+
+    C:  Number of output channels
     """
     def __init__(self, C=220, N=320, activation='relu', final_activation=None):
         super(HyperpriorSynthesis, self).__init__()
@@ -414,6 +407,45 @@ class HyperpriorSynthesis(nn.Module):
         x = self.activation(self.conv1(x))
         x = self.activation(self.conv2(x))
         x = self.conv3(x)
+
+        if self.final_activation is not None:
+            x = self.final_activation(x)
+        return x
+
+def get_num_channels(C, K=10, params=['mu','scale','mix']):
+    """
+    C:  Channels of latent representation (L3C uses 5).
+    K:  Number of mixture coefficients.
+    """
+    return C * K * len(params)
+
+class HyperpriorDLMM(nn.Module):
+    """
+    Outputs distribution parameters of input latents, conditional on 
+    hyperlatents, assuming a discrete logistic mixture model.
+
+    C:  Number of output channels
+    """
+    def __init__(self, C=12, N=320, activation='relu', final_activation=None):
+        super(HyperpriorSynthesis, self).__init__()
+
+        cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, output_padding=1)
+        self.activation = getattr(F, activation)
+        self.final_activation = final_activation
+
+        self.conv1 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
+        self.conv2 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
+        self.conv3 = nn.ConvTranspose2d(N, C, kernel_size=3, stride=1, padding=1)
+        self.conv_out = nn.Conv2d(C, get_num_channels(C), kernel_size=1, stride=1)
+
+        if self.final_activation is not None:
+            self.final_activation = getattr(F, final_activation)
+
+    def forward(self, x):
+        x = self.activation(self.conv1(x))
+        x = self.activation(self.conv2(x))
+        x = self.conv3(x)
+        x = self.conv_out(x)
 
         if self.final_activation is not None:
             x = self.final_activation(x)
