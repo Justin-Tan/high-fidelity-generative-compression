@@ -272,8 +272,8 @@ class Hyperprior(CodingModel):
 
         # TODO: Combine scale, loc into single network
         self.synthesis_mu = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
-        self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
-        #    final_activation='softplus')
+        self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters,
+            final_activation='softplus')
         
         self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 

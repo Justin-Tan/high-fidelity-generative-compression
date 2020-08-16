@@ -13,16 +13,18 @@ class LowerBoundIdentity(torch.autograd.Function):
 
 
 class LowerBoundToward(torch.autograd.Function):
+    """
+    Assumes output shape is identical to input shape.
+    """
     @staticmethod
     def forward(ctx, tensor, lower_bound):
-        ctx.lower_bound = lower_bound
+        # lower_bound:  Scalar float.
         ctx.mask = tensor.ge(ctx.lower_bound)
         return torch.clamp(tensor, lower_bound)
 
     @staticmethod
     def backward(ctx, grad_output):
-        gate = torch.logical_or(ctx.mask, grad_output.le(0.)).type_as(grad_output.data)
-        gate.requires_grad = True
+        gate = torch.logical_or(ctx.mask, grad_output.lt(0.)).type(grad_output.dtype)
         return grad_output * gate, None
 
 def gaussian_entropy(D, logvar):

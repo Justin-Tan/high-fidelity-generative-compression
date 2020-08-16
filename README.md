@@ -18,7 +18,7 @@ JPG, 0.264 bpp / 90.1 kB
 ```
 ![guess](assets/comparison/camp_jpg_compress.png)
 
-The image shown is an out-of-sample instance from the CLIC2020 dataset. The HIFIC image is obtained by reconstruction via the learned model. The JPG image is obtained by the command `mogrify -format jpg -quality 42 camp_original.png`. All images are losslessly compressed to PNG format for viewing. Images stored under `assets/comparison`.
+The image shown is an out-of-sample instance from the CLIC-2020 dataset. The HIFIC image is obtained by reconstruction via the learned model. The JPG image is obtained by the command `mogrify -format jpg -quality 42 camp_original.png`. All images are losslessly compressed to PNG format for viewing. Images stored under `assets/comparison`. The model was not adapted in any way for evaluation of this image.
 
 ## Details
 This repository defines a model for learnable image compression capable of compressing images of arbitrary size and resolution. There are three main components to this model, as described in the original paper:
@@ -34,14 +34,13 @@ The generator is trained to achieve realistic and not exact reconstruction. It m
 
 > "_Therefore, we emphasize that our method is not suitable for sensitive image contents, such as, e.g., storing medical images, or important documents._" 
 
-
 ## Usage
 * Install Pytorch nightly and dependencies from [https://pytorch.org/](https://pytorch.org/). Then install other requirements.
 ```
 pip install -r requirements.txt
 ```
-* Download a large (> 100,000) dataset of reasonably diverse color images. We found that using 1-2 training divisions of the [OpenImages](https://storage.googleapis.com/openimages/web/index.html) dataset was able to produce satisfactory results. Add the dataset path to the `DatasetPaths` class in `default_config.py`.
-* Clone this repository, `cd` in and view command line options/default arguments.
+* Download a large (> 100,000) dataset of reasonably diverse color images. We found that using 1-2 training divisions of the [OpenImages](https://storage.googleapis.com/openimages/web/index.html) dataset was able to produce satisfactory results. Add the dataset path under the `DatasetPaths` class in `default_config.py`.
+* Clone this repository, `cd` in and view the default arguments/command line options.
 ```
 git clone https://github.com/Justin-Tan/high-fidelity-generative-compression.git
 cd high-fidelity-generative-compression
@@ -62,7 +61,11 @@ python3 train.py --model_type compression --regime low --n_steps 1e6
 ```
 python3 train.py --model_type compression_gan --regime low --n_steps 1e6 --warmstart --ckpt path/to/base/checkpoint
 ```
-* Training after the warmstart for 2e5 steps using a batch size of 16 was sufficient to get reasonable results at sub-0.01 `bpp` on average. If you get out-of-memory errors try reducing the number of residual blocks in the generator (default 7, the original paper used 9), decreasing the batch size, or training on smaller crops (default `256 x 256`). Logs are periodically saved and can be viewed using `tensorboard`.
+* Training after the warmstart for 2e5 steps using a batch size of 16 was sufficient to get reasonable results at sub-0.2 `bpp` on average. If you get out-of-memory errors try reducing the number of residual blocks in the generator (default 7, the original paper used 9), decreasing the batch size, or training on smaller crops (default `256 x 256`). Logs for each experiment are automatically created and periodically saved under `experiments/` with the appropriate name/timestamp. A subset of metrics can be visualized via `tensorboard`. 
+
+```
+tensorboard --logdir experiments/my_experiment/tensorboard
+```
 
 ### Compression
 * To obtain a _theoretical_ measure of the bitrate under some trained model, run `compress.py`. This will report the bits-per-pixel attainable by the compressed representation (`bpp`) and other fun metrics and perform a forward pass through the model to obtain the reconstructed image. This model will work with images of arbitrary sizes and resolution.
@@ -78,7 +81,6 @@ python3 compress.py --img path/to/image/dir --ckpt path/to/trained/model
 ### Contributing
 All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.
 
-
 ### Acknowledgements
 * The code under `hific/perceptual_similarity/` implementing the perceptual distortion loss is modified from the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
 <!-- * The cat in the main image is my neighbour's. -->
@@ -92,6 +94,7 @@ The following additional papers were useful to understand implementation details
 1. Johannes Ballé, David Minnen, Saurabh Singh, Sung Jin Hwang, Nick Johnston. Variational image compression with a scale hyperprior. [arXiv:1802.01436 (2018)](https://arxiv.org/abs/1802.01436)
 2. David Minnen, Johannes Ballé, George Toderici. Joint Autoregressive and Hierarchical Priors for Learned Image Compression. [arXiv 1809.02736 (2018)](https://arxiv.org/abs/1809.02736)
 3. Johannes Ballé, Valero Laparra, Eero P. Simoncelli. End-to-end optimization of nonlinear transform codes for perceptual quality. [arXiv 1607.05006 (2016)](https://arxiv.org/abs/1607.05006)
+4. Fabian Mentzer, Eirikur Agustsson, Michael Tschannen, Radu Timofte, Luc Van Gool. Practical Full Resolution Learned Lossless Image Compression. [arXiv 1811.12817 (2018)](https://arxiv.org/abs/1811.12817)
 
 ## Citation
 This is not the official implementation. Please cite the [original paper](https://arxiv.org/abs/2006.09965) if you use their work.
