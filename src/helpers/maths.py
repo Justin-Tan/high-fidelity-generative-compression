@@ -24,7 +24,8 @@ class LowerBoundToward(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        gate = torch.logical_or(ctx.mask, grad_output.lt(0.)).type(grad_output.dtype)
+        # gate = Variable(torch.logical_or(ctx.mask, grad_output.lt(0.)).type(grad_output.dtype))
+        gate = Variable(torch.logical_or(ctx.mask, grad_output.lt(0.)).type_as(grad_output.data))
         return grad_output * gate, None
 
 def gaussian_entropy(D, logvar):
