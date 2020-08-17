@@ -27,7 +27,6 @@ from src.helpers import utils, datasets
 from default_config import hific_args, mse_lpips_args, directories, ModelModes, ModelTypes
 
 # go fast boi!!
-# Optimizes cuda kernels by benchmarking - no dynamic input sizes!
 torch.backends.cudnn.benchmark = True
 
 def create_model(args, device, logger, storage, storage_test):
@@ -304,19 +303,9 @@ if __name__ == '__main__':
     else:
         model = create_model(args, device, logger, storage, storage_test)
         model = model.to(device)
-        # amortization_parameters = itertools.chain.from_iterable(
-        #     [am.parameters() for am in model.amortization_models])
+        amortization_parameters = itertools.chain.from_iterable(
+            [am.parameters() for am in model.amortization_models])
 
-        amort_names, amortization_parameters = list(), list()
-        for n, p in model.named_parameters():
-            if ('Encoder' in n) or ('Generator' in n):
-                amort_names.append(n)
-                amortization_parameters.append(p)
-                logger.info(f'AM {n} - {p.shape}')    
-            if ('analysis' in n) or ('synthesis' in n):
-                amort_names.append(n)
-                amortization_parameters.append(p) 
-                logger.info(f'AM {n} - {p.shape}')    
         hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
 
         amortization_opt = torch.optim.Adam(amortization_parameters,
@@ -332,6 +321,8 @@ if __name__ == '__main__':
 
     n_gpus = torch.cuda.device_count()
     if n_gpus > 1 and args.multigpu is True:
+        # Not supported at this time
+        raise NotImplementedError('MultiGPU not supported yet.')
         logger.info('Using {} GPUs.'.format(n_gpus))
         model = nn.DataParallel(model)
 

@@ -45,17 +45,15 @@ class CodingModel(nn.Module):
 
         if mode == 'noise':
             quantization_noise = torch.nn.init.uniform_(torch.zeros_like(x), -0.5, 0.5)
-            # quantization_noise = torch.rand(x.size()).to(x) - 0.5 
             x = x + quantization_noise
-        elif mode == 'quantize':
 
+        elif mode == 'quantize':
             if means is not None:
                 x = x - means
                 x = torch.floor(x + 0.5)
                 x = x + means
             else:
                 x = torch.floor(x + 0.5)
-                # x = torch.round(x)
         else:
             raise NotImplementedError
         
@@ -71,16 +69,8 @@ class CodingModel(nn.Module):
         n_pixels = np.prod(spatial_shape)
 
         log_likelihood = torch.log(likelihood + EPS)
-        # print('LOG LIKELIHOOD', log_likelihood.mean().item())
         n_bits = torch.sum(log_likelihood) / (batch_size * quotient)
         bpp = n_bits / n_pixels
-        # print('N_PIXELS', n_pixels)
-        # print('BATCH SIZE', batch_size)
-        # print('LH', likelihood)
-        #print('LH MAX', likelihood.max())
-        #print('LH MAX', likelihood.min())
-        #print('NB', n_bits)
-        #print('BPP', bpp)
 
         return n_bits, bpp
 
@@ -192,13 +182,13 @@ class HyperpriorDensity(nn.Module):
 
         # Numerical stability using some sigmoid identities
         # to avoid subtraction of two numbers close to 1
-        # sign = -torch.sign(cdf_upper + cdf_lower)
-        # sign = sign.detach()
-        # likelihood_ = torch.abs(
-        #     torch.sigmoid(sign * cdf_upper) - torch.sigmoid(sign * cdf_lower))
+        sign = -torch.sign(cdf_upper + cdf_lower)
+        sign = sign.detach()
+        likelihood_ = torch.abs(
+            torch.sigmoid(sign * cdf_upper) - torch.sigmoid(sign * cdf_lower))
 
         # Naive
-        likelihood_ = torch.sigmoid(cdf_upper) - torch.sigmoid(cdf_lower)
+        # likelihood_ = torch.sigmoid(cdf_upper) - torch.sigmoid(cdf_lower)
 
         # Reshape to (N,C,H,W)
         likelihood_ = torch.reshape(likelihood_, shape)
@@ -268,13 +258,13 @@ class Hyperprior(CodingModel):
 
         # Assumes 1 - CDF(x) = CDF(-x)
         x = x - mean
-        # x = torch.abs(x)
-        # cdf_upper = self.standardized_CDF((0.5 - x) / scale)
-        # cdf_lower = self.standardized_CDF(-(0.5 + x) / scale)
+        x = torch.abs(x)
+        cdf_upper = self.standardized_CDF((0.5 - x) / scale)
+        cdf_lower = self.standardized_CDF(-(0.5 + x) / scale)
 
         # Naive
-        cdf_upper = self.standardized_CDF( (x + 0.5) / scale )
-        cdf_lower = self.standardized_CDF( (x - 0.5) / scale )
+        # cdf_upper = self.standardized_CDF( (x + 0.5) / scale )
+        # cdf_lower = self.standardized_CDF( (x - 0.5) / scale )
 
         likelihood_ = cdf_upper - cdf_lower
         likelihood_ = lower_bound_toward(likelihood_, self.min_likelihood)
@@ -298,9 +288,6 @@ class Hyperprior(CodingModel):
         quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy(
             quantized_hyperlatent_likelihood, spatial_shape)
 
-        #print('QUANT HL', quantized_hyperlatents)
-        #print('maxQUANT HL', quantized_hyperlatents.max())
-        #print('minQUANT HL', quantized_hyperlatents.min())
         if self.training is True:
             hyperlatents_decoded = noisy_hyperlatents
         else:
@@ -342,11 +329,6 @@ class Hyperprior(CodingModel):
             bitstring=None,  # TODO
             side_bitstring=None, # TODO
         )
-
-        # print(quantized_latents)
-        # print(quantized_hyperlatents)
-        # print(noisy_latents)
-        # print(noisy_hyperlatents)
 
         return info
 

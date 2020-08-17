@@ -13,7 +13,7 @@ class ModelTypes(object):
 
 class ModelModes(object):
     TRAINING = 'training'
-    VALIDATION = 'validation'  # Monitoring
+    VALIDATION = 'validation'
     EVALUATION = 'evaluation'
 
 class Datasets(object):
@@ -30,13 +30,13 @@ class directories(object):
     experiments = 'experiments'
 
 class checkpoints(object):
-    gan1 = 'experiments/gan_med_bitrate_openimages_compression_gan_2020_08_14_07_12/checkpoints/gan_med_bitrate_openimages_compression_gan_2020_08_14_07_12_epoch1_idx56776_2020_08_14_18:43.pt'
+    gan1 = 'experiments/lossless.pt'
 
 class args(object):
     """
     Shared config
     """
-    name = 'hific_v0'
+    name = 'hific_v0.1'
     silent = True
     n_epochs = 8
     n_steps = 1e6
@@ -52,8 +52,8 @@ class args(object):
     model_mode = ModelModes.TRAINING
 
     # Architecture params - Table 3a) of [1]
-    latent_channels = 220 #220
-    n_residual_blocks = 7  #7           # Authors use 9 blocks, performance saturates at 5
+    latent_channels = 220
+    n_residual_blocks = 7           # Authors use 9 blocks, performance saturates at 5
     lambda_B = 2**(-4)              # Loose rate
     k_M = 0.075 * 2**(-5)           # Distortion
     k_P = 1.                        # Perceptual loss

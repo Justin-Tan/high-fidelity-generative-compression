@@ -22,7 +22,7 @@ from default_config import ModelModes, ModelTypes, hific_args, directories
 Intermediates = namedtuple("Intermediates",
     ["input_image",             # [0, 1] (after scaling from [0, 255])
      "reconstruction",          # [0, 1]
-     "latents_quantized",        # Latents post-quantization.
+     "latents_quantized",       # Latents post-quantization.
      "n_bpp",                   # Differential entropy estimate.
      "q_bpp"])                  # Shannon entropy estimate.
 
@@ -134,6 +134,7 @@ class Model(nn.Module):
         total_nbpp = hyperinfo.total_nbpp
         total_qbpp = hyperinfo.total_qbpp
 
+        # Use quantized latents as input to G
         reconstruction = self.Generator(latents_quantized)
         
         if self.args.normalize_input_image is True:
@@ -160,7 +161,6 @@ class Model(nn.Module):
         D_in = torch.cat([x_real, x_gen], dim=0)
 
         latents = intermediates.latents_quantized.detach()
-        # latents = torch.cat([latents, latents], dim=0)
         latents = torch.repeat_interleave(latents, 2, dim=0)
 
         D_out, D_out_logits = self.Discriminator(D_in, latents)
@@ -170,14 +170,11 @@ class Model(nn.Module):
         D_real, D_gen = torch.chunk(D_out, 2, dim=0)
         D_real_logits, D_gen_logits = torch.chunk(D_out_logits, 2, dim=0)
 
-        # Tensorboard
-        # real_response, gen_response = D_real.mean(), D_fake.mean()
-
         return Disc_out(D_real, D_gen, D_real_logits, D_gen_logits)
 
     def distortion_loss(self, x_gen, x_real):
         # loss in [0,255] space but normalized by 255 to not be too big
-        # - Delegate to weighting
+        # - Delegate scaling to weighting
         sq_err = self.squared_difference(x_gen*255., x_real*255.) # / 255.
         return torch.mean(sq_err)
 
@@ -196,29 +193,17 @@ class Model(nn.Module):
             x_real = (x_real + 1.) / 2.
             x_gen = (x_gen + 1.) / 2.
 
-        # print('X REAL MAX', x_real.max())
-        # print('X REAL MIN', x_real.min())
-        # print('X GEN MAX', x_gen.max())
-        # print('X GEN MIN', x_gen.min())
-
         distortion_loss = self.distortion_loss(x_gen, x_real)
         perceptual_loss = self.perceptual_loss_wrapper(x_gen, x_real, normalize=True)
 
         weighted_distortion = self.args.k_M * distortion_loss
         weighted_perceptual = self.args.k_P * perceptual_loss
 
-        # print('Distortion loss size', weighted_distortion.size())
-        # print('Perceptual loss size', weighted_perceptual.size())
-
         weighted_rate, rate_penalty = losses.weighted_rate_loss(self.args, total_nbpp=intermediates.n_bpp,
             total_qbpp=intermediates.q_bpp, step_counter=self.step_counter)
 
-        # print('Weighted rate loss size', weighted_rate.size())
         weighted_R_D_loss = weighted_rate + weighted_distortion
         weighted_compression_loss = weighted_R_D_loss + weighted_perceptual
-
-        # print('Weighted R-D loss size', weighted_R_D_loss.size())
-        # print('Weighted compression loss size', weighted_compression_loss.size())
 
         # Bookkeeping 
         if (self.step_counter % self.log_interval == 1):

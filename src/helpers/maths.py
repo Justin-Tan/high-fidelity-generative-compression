@@ -12,7 +12,7 @@ class LowerBoundIdentity(torch.autograd.Function):
         return grad_output.clone(), None
 
 
-class LowerBoundToward_0(torch.autograd.Function):
+class LowerBoundToward(torch.autograd.Function):
     """
     Assumes output shape is identical to input shape.
     """
@@ -24,25 +24,8 @@ class LowerBoundToward_0(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        # gate = torch.autograd.Variable(torch.logical_or(ctx.mask, grad_output.lt(0.)).type(grad_output.dtype))
-        gate = torch.autograd.Variable(torch.logical_or(ctx.mask, grad_output.lt(0.)).type_as(grad_output.data))
+        gate = torch.logical_or(ctx.mask, grad_output.lt(0.)).type(grad_output.dtype)
         return grad_output * gate, None
-
-class LowerBoundToward(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, inputs, bound):
-        b = torch.ones_like(inputs) * bound
-        ctx.save_for_backward(inputs, b)
-        return torch.max(inputs, b)
-        
-    @staticmethod
-    def backward(ctx, grad_output):
-        inputs, b = ctx.saved_tensors
-        pass_through_1 = inputs >= b
-        pass_through_2 = grad_output < 0
-
-        pass_through = pass_through_1 | pass_through_2
-        return pass_through.type(grad_output.dtype) * grad_output, None
 
 def standardized_CDF_gaussian(value):
     # Gaussian

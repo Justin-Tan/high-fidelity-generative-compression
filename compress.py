@@ -67,7 +67,8 @@ def compress_batch(args):
             input_filenames_total.extend(filenames)
 
             for subidx in range(reconstruction.shape[0]):
-                fname = os.path.join(args.output_dir, "{}_RECON.png".format(filenames[subidx]))
+                bpp_per_im = float(bpp[subidx].cpu().numpy())
+                fname = os.path.join(args.output_dir, "{}_RECON_{:.3f}bpp.png".format(filenames[subidx], bpp_per_im))
                 torchvision.utils.save_image(reconstruction[subidx], fname, normalize=True)
                 output_filenames_total.append(fname)
 
@@ -97,7 +98,7 @@ def compress_batch(args):
 
 def main(**kwargs):
 
-    description = "Compresses batch of images using specified learned model."
+    description = "Compresses batch of images using learned model specified via -ckpt argument."
     parser = argparse.ArgumentParser(description=description,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-ckpt", "--ckpt_path", type=str, required=True, help="Path to model to be restored")
@@ -106,7 +107,7 @@ def main(**kwargs):
     parser.add_argument("-o", "--output_dir", type=str, default='data/reconstructions', 
         help="Path to directory to store output images")
     parser.add_argument('-bs', '--batch_size', type=int, default=1,
-        help="Dataloader batch size. Set to 1 for images of different sizes.")
+        help="Loader batch size. Set to 1 if images in directory are different sizes.")
     args = parser.parse_args()
 
     input_images = glob.glob(os.path.join(args.image_dir, '*.jpg'))
