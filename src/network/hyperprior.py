@@ -115,7 +115,7 @@ class HyperpriorDensity(nn.Module):
         arXiv:1802.01436 (2018).
     """
 
-    def __init__(self, n_channels, init_scale=10, filters=(3, 3, 3), min_likelihood=MIN_LIKELIHOOD, 
+    def __init__(self, n_channels, init_scale=10., filters=(3, 3, 3), min_likelihood=MIN_LIKELIHOOD, 
         max_likelihood=MAX_LIKELIHOOD, **kwargs):
         """
         init_scale: Scaling factor determining the initial width of the
@@ -192,13 +192,13 @@ class HyperpriorDensity(nn.Module):
 
         # Numerical stability using some sigmoid identities
         # to avoid subtraction of two numbers close to 1
-        sign = -torch.sign(cdf_upper + cdf_lower)
-        sign = sign.detach()
-        likelihood_ = torch.abs(
-            torch.sigmoid(sign * cdf_upper) - torch.sigmoid(sign * cdf_lower))
+        # sign = -torch.sign(cdf_upper + cdf_lower)
+        # sign = sign.detach()
+        # likelihood_ = torch.abs(
+        #     torch.sigmoid(sign * cdf_upper) - torch.sigmoid(sign * cdf_lower))
 
         # Naive
-        # likelihood_ = torch.sigmoid(cdf_upper) - torch.sigmoid(cdf_lower)
+        likelihood_ = torch.sigmoid(cdf_upper) - torch.sigmoid(cdf_lower)
 
         # Reshape to (N,C,H,W)
         likelihood_ = torch.reshape(likelihood_, shape)
@@ -268,13 +268,13 @@ class Hyperprior(CodingModel):
 
         # Assumes 1 - CDF(x) = CDF(-x)
         x = x - mean
-        x = torch.abs(x)
-        cdf_upper = self.standardized_CDF((0.5 - x) / scale)
-        cdf_lower = self.standardized_CDF(-(0.5 + x) / scale)
+        # x = torch.abs(x)
+        # cdf_upper = self.standardized_CDF((0.5 - x) / scale)
+        # cdf_lower = self.standardized_CDF(-(0.5 + x) / scale)
 
         # Naive
-        # cdf_upper = self.standardized_CDF( (x - mean + 0.5) / scale )
-        # cdf_lower = self.standardized_CDF( (x - mean - 0.5) / scale )
+        cdf_upper = self.standardized_CDF( (x + 0.5) / scale )
+        cdf_lower = self.standardized_CDF( (x - 0.5) / scale )
 
         likelihood_ = cdf_upper - cdf_lower
         likelihood_ = lower_bound_toward(likelihood_, self.min_likelihood)
