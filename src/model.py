@@ -134,7 +134,7 @@ class Model(nn.Module):
         total_nbpp = hyperinfo.total_nbpp
         total_qbpp = hyperinfo.total_qbpp
 
-        reconstruction = self.Generator(y)
+        reconstruction = self.Generator(latents_quantized)
         
         if self.args.normalize_input_image is True:
             reconstruction = torch.tanh(reconstruction)
