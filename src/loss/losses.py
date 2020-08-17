@@ -17,9 +17,15 @@ def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_sche
         lambda_A, lambda_B)
 
     target_bpp = get_scheduled_params(config.target_rate, config.target_schedule, step_counter, ignore_schedule)
-    rate_penalty = float(np.where(total_qbpp.detach().cpu().numpy() > target_bpp, lambda_A, lambda_B))
 
-    return rate_penalty * total_nbpp, rate_penalty
+    total_qbpp = total_qbpp.item()
+    if total_qbpp > target_bpp:
+        rate_penalty = lambda_A
+    else:
+        rate_penalty = lambda_B
+    weighted_rate = rate_penalty * total_nbpp
+
+    return weighted_rate, rate_penalty
 
 def gan_loss(disc_out, mode='generator_loss', gan_type='non_saturating'):
 

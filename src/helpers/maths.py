@@ -12,21 +12,37 @@ class LowerBoundIdentity(torch.autograd.Function):
         return grad_output.clone(), None
 
 
-class LowerBoundToward(torch.autograd.Function):
+class LowerBoundToward_0(torch.autograd.Function):
     """
     Assumes output shape is identical to input shape.
     """
     @staticmethod
     def forward(ctx, tensor, lower_bound):
         # lower_bound:  Scalar float.
-        ctx.mask = tensor.ge(ctx.lower_bound)
+        ctx.mask = tensor.ge(lower_bound)
         return torch.clamp(tensor, lower_bound)
 
     @staticmethod
     def backward(ctx, grad_output):
-        # gate = Variable(torch.logical_or(ctx.mask, grad_output.lt(0.)).type(grad_output.dtype))
-        gate = Variable(torch.logical_or(ctx.mask, grad_output.lt(0.)).type_as(grad_output.data))
+        # gate = torch.autograd.Variable(torch.logical_or(ctx.mask, grad_output.lt(0.)).type(grad_output.dtype))
+        gate = torch.autograd.Variable(torch.logical_or(ctx.mask, grad_output.lt(0.)).type_as(grad_output.data))
         return grad_output * gate, None
+
+class LowerBoundToward(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, inputs, bound):
+        b = torch.ones_like(inputs) * bound
+        ctx.save_for_backward(inputs, b)
+        return torch.max(inputs, b)
+        
+    @staticmethod
+    def backward(ctx, grad_output):
+        inputs, b = ctx.saved_tensors
+        pass_through_1 = inputs >= b
+        pass_through_2 = grad_output < 0
+
+        pass_through = pass_through_1 | pass_through_2
+        return pass_through.type(grad_output.dtype) * grad_output, None
 
 def standardized_CDF_gaussian(value):
     # Gaussian

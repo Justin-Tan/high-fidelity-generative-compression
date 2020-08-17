@@ -20,8 +20,8 @@ HyperInfo = namedtuple(
     "bitstring side_bitstring",
 )
 
-lower_bound_toward = maths.LowerBoundIdentity.apply
-lower_bound_identity = maths.LowerBoundToward.apply
+lower_bound_identity = maths.LowerBoundIdentity.apply
+lower_bound_toward = maths.LowerBoundToward.apply
 
 class CodingModel(nn.Module):
     """
@@ -44,8 +44,8 @@ class CodingModel(nn.Module):
         """
 
         if mode == 'noise':
-            # quantization_noise = torch.nn.init.uniform_(torch.zeros_like(x), -0.5, 0.5)
-            quantization_noise = torch.rand(x.size()).to(x) - 0.5 
+            quantization_noise = torch.nn.init.uniform_(torch.zeros_like(x), -0.5, 0.5)
+            # quantization_noise = torch.rand(x.size()).to(x) - 0.5 
             x = x + quantization_noise
         elif mode == 'quantize':
 
@@ -239,8 +239,8 @@ class Hyperprior(CodingModel):
 
         # TODO: Combine scale, loc into single network
         self.synthesis_mu = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
-        self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters,
-            final_activation='softplus')
+        self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
+            #final_activation='softplus')
         
         self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
@@ -308,6 +308,7 @@ class Hyperprior(CodingModel):
 
         latent_means = self.synthesis_mu(hyperlatents_decoded)
         latent_scales = self.synthesis_std(hyperlatents_decoded)
+        latent_scales = F.softplus(latent_scales)
         latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
 
         # Differential entropy, latents
