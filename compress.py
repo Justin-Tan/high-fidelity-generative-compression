@@ -67,8 +67,8 @@ def compress_batch(args):
             input_filenames_total.extend(filenames)
 
             for subidx in range(reconstruction.shape[0]):
-                bpp_per_im = float(bpp[subidx].cpu().numpy())
-                fname = os.path.join(args.output_dir, "{}_RECON_{:.3f}bpp.png".format(filenames[subidx], bpp_per_im))
+                q_bpp_per_im = float(q_bpp[subidx].cpu().numpy())
+                fname = os.path.join(args.output_dir, "{}_RECON_{:.3f}bpp.png".format(filenames[subidx], q_bpp_per_im))
                 torchvision.utils.save_image(reconstruction[subidx], fname, normalize=True)
                 output_filenames_total.append(fname)
 

@@ -5,6 +5,7 @@ import numpy as np
 import time, os
 import itertools
 
+from functools import partial
 from collections import defaultdict, namedtuple
 
 import torch
@@ -47,6 +48,9 @@ class Model(nn.Module):
         self.storage_test = storage_test
         self.step_counter = 0
 
+        if self.args.use_latent_mixture_model is True:
+            self.args.latent_channels = self.args.latent_channels_DLMM
+
         if not hasattr(ModelTypes, self.model_type.upper()):
             raise ValueError("Invalid model_type: [{}]".format(self.model_type))
         if not hasattr(ModelModes, self.model_mode.upper()):
@@ -58,10 +62,15 @@ class Model(nn.Module):
         self.Encoder = encoder.Encoder(self.image_dims, self.batch_size, C=self.args.latent_channels,
             channel_norm=self.args.use_channel_norm)
         self.Generator = generator.Generator(self.image_dims, self.batch_size, C=self.args.latent_channels,
-            n_residual_blocks=self.args.n_residual_blocks, channel_norm=self.args.use_channel_norm)
+            n_residual_blocks=self.args.n_residual_blocks, channel_norm=self.args.use_channel_norm, sample_noise=
+            self.args.sample_noise, noise_dim=self.args.noise_dim)
 
-        self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.args.latent_channels,
-            likelihood_type=args.likelihood_type)
+        if self.args.use_latent_mixture_model is True:
+            self.Hyperprior = hyperprior.HyperpriorDLMM(bottleneck_capacity=self.args.latent_channels,
+                likelihood_type=self.args.likelihood_type, mixture_components=self.args.mixture_components)
+        else:
+            self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.args.latent_channels,
+                likelihood_type=self.args.likelihood_type)
 
         self.amortization_models = [self.Encoder, self.Generator]
         self.amortization_models.extend(self.Hyperprior.amortization_models)
@@ -86,6 +95,7 @@ class Model(nn.Module):
         self.squared_difference = torch.nn.MSELoss(reduction='none')
         # Expects [-1,1] images or [0,1] with normalize=True flag
         self.perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available(), gpu_ids=[args.gpu])
+        self.gan_loss = partial(losses.gan_loss, args.gan_loss_type)
         
     def store_loss(self, key, loss):
         assert type(loss) == float, 'Call .item() on loss before storage'
@@ -231,8 +241,8 @@ class Model(nn.Module):
         train_generator: Flag to send gradients to generator
         """
         disc_out = self.discriminator_forward(intermediates, train_generator)
-        D_loss = losses.gan_loss(disc_out, mode='discriminator_loss')
-        G_loss = losses.gan_loss(disc_out, mode='generator_loss')
+        D_loss = self.gan_loss(disc_out, mode='discriminator_loss')
+        G_loss = self.gan_loss(disc_out, mode='generator_loss')
 
         # Bookkeeping 
         if (self.step_counter % self.log_interval == 1):

@@ -83,6 +83,11 @@ class args(object):
     target_rate = target_rate_map[regime]
     lambda_A = lambda_A_map[regime]
 
+    # DLMM
+    use_latent_mixture_model = True
+    mixture_components = 4
+    latent_channels_DLMM = 64
+
 """
 Specialized configs
 """
@@ -100,5 +105,7 @@ class hific_args(args):
     loss terms.
     """
     model_type = ModelTypes.COMPRESSION_GAN
-    gan_loss = 'non_saturating'  # ('non_saturating', 'least_squares')
+    gan_loss_type = 'non_saturating'  # ('non_saturating', 'least_squares')
     discriminator_steps = 1
+    sample_noise = False
+    noise_dim = 32

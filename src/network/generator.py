@@ -45,7 +45,8 @@ class ResidualBlock(nn.Module):
 
 class Generator(nn.Module):
     def __init__(self, input_dims, batch_size, C=16, activation='relu',
-                 n_residual_blocks=8, channel_norm=True):
+                 n_residual_blocks=8, channel_norm=True, sample_noise=False,
+                 noise_dim=32):
 
         """ 
         Generator with convolutional architecture proposed in [1].
@@ -67,6 +68,8 @@ class Generator(nn.Module):
         kernel_dim = 3
         filters = (960, 480, 240, 120, 60)
         self.n_residual_blocks = n_residual_blocks
+        self.sample_noise = sample_noise
+        self.noise_dim = noise_dim
 
         # Layer / normalization options
         cnn_kwargs = dict(stride=2, padding=1, output_padding=1)
@@ -89,6 +92,9 @@ class Generator(nn.Module):
         widths = heights
         H1, H2, H3, H4 = heights
         W1, W2, W3, W4 = widths 
+
+        if sample_noise is True:
+            C += noise_dim
 
         # (16,16) -> (16,16), with implicit padding
         self.conv_block_init = nn.Sequential(
@@ -136,6 +142,12 @@ class Generator(nn.Module):
 
     def forward(self, x):
         
+        if self.sample_noise is True:
+            noise_shape = tuple(x.size())
+            noise_shape[1] = self.noise_dim
+            z = torch.randn(noise_shape).to(x)
+            x = torch.cat([x,z], dim=1)
+
         head = self.conv_block_init(x)
 
         for m in range(self.n_residual_blocks):

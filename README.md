@@ -13,7 +13,7 @@ This repository defines a model for learnable image compression capable of compr
 
 The model is then trained end-to-end by optimization of a modified rate-distortion Lagrangian. Loosely, the model can be thought of as 'amortizing' the storage requirements for an generic input image through training a learnable compression/decompression scheme. The method is further described in the original paper [[0](https://arxiv.org/abs/2006.09965)]. The model is capable of yielding perceptually similar reconstructions to the input that tend to be more visually pleasing than standard image codecs which operate at comparable or higher bitrates. 
 
-## Example
+## Examples
 ```
 Original, 8.05 bpp / 2747 kB
 ```
@@ -27,7 +27,9 @@ JPG, 0.264 bpp / 90.1 kB
 ```
 ![guess](assets/comparison/camp_jpg_compress.png)
 
-The image shown is an out-of-sample instance from the CLIC-2020 dataset. The HIFIC image is obtained by reconstruction via the learned model. The JPG image is obtained by the command `mogrify -format jpg -quality 42 camp_original.png`. All images are losslessly compressed to PNG format for viewing. Images and other examples are stored under `assets/comparison`. Note that the learned model was not adapted in any way for evaluation of this image.
+The image shown is an out-of-sample instance from the CLIC-2020 dataset. The HIFIC image is obtained by reconstruction via the learned model. The JPG image is obtained by the `imagemagick` command `mogrify -format jpg -quality 42 camp_original.png`. Despite using around 1.5x the bitrate, the JPG image exhibits visible compression artifacts which are absent in the HIFIC-generated image.
+
+All images are losslessly compressed to PNG format for viewing. Images and other examples are stored under `assets/comparison`. Note that the learned model was not adapted in any way for evaluation on this image.
 
 ## Note
 The generator is trained to achieve realistic and not exact reconstruction. It may synthesize certain portions of a given image to remove artifacts associated with lossy compression. Therefore, in theory **images which are compressed and decoded may be arbitrarily different from the input**. This precludes usage for sensitive applications. An important caveat from the authors is reproduced here: 
@@ -39,7 +41,7 @@ The generator is trained to achieve realistic and not exact reconstruction. It m
 ```
 pip install -r requirements.txt
 ```
-* Download a large (> 100,000) dataset of reasonably diverse color images. We found that using 1-2 training divisions of the [OpenImages](https://storage.googleapis.com/openimages/web/index.html) dataset was able to produce satisfactory results. Add the dataset path under the `DatasetPaths` class in `default_config.py`.
+* Download a large (> 100,000) dataset of reasonably diverse color images. We found that using 1-2 training divisions of the [OpenImages](https://storage.googleapis.com/openimages/web/index.html) dataset was able to produce satisfactory results on arbitrary images. Choosing a particular source domain (e.g. Cityscapes) may increase compression performance within that domain. Add the dataset path under the `DatasetPaths` class in `default_config.py`.
 * Clone this repository, `cd` in and view the default arguments/command line options.
 ```
 git clone https://github.com/Justin-Tan/high-fidelity-generative-compression.git
@@ -61,11 +63,14 @@ python3 train.py --model_type compression --regime low --n_steps 1e6
 ```
 python3 train.py --model_type compression_gan --regime low --n_steps 1e6 --warmstart --ckpt path/to/base/checkpoint
 ```
-* Training after the warmstart for 2e5 steps using a batch size of 16 was sufficient to get reasonable results at sub-0.2 `bpp` per image, on average using the default config.
-* If you get out-of-memory errors, try:
-    * Reducing the number of residual blocks in the generator (default 7, the original paper used 9).
+* Training after the warmstart for 2e5 steps using a batch size of 16 was sufficient to get reasonable results at sub-0.2 `bpp` per image, on average, using the default config in the `low` regime. You can change regimes to `med` or `high` to tradeoff perceptual quality for increased bitrate.
+
+* If you get out-of-memory errors, try, in decreasing order of priority:
     * Decreasing the batch size (default 16).
-    * Training on smaller crops (default `256 x 256`).
+    * Decreasing the number of channels of the latent representation (`latent_channels`, default 220). You may be able to reduce this quite aggressively as the network is highly overparameterized. Many values of the latent representation are near-deterministic. 
+    * Reducing the number of residual blocks in the generator (`n_residual_blocks`, default 7, the original paper used 9).
+    * Training on smaller crops (`crop_size`, default `256 x 256`).
+
 * Logs for each experiment are automatically created and periodically saved under `experiments/` with the appropriate name/timestamp. A subset of metrics can be visualized via `tensorboard`:
 
 ```
@@ -73,7 +78,7 @@ tensorboard --logdir experiments/my_experiment/tensorboard
 ```
 
 ### Compression
-* To obtain a _theoretical_ measure of the bitrate under some trained model, run `compress.py`. This will report the bits-per-pixel attainable by the compressed representation (`bpp`), some other fun metrics, and perform a forward pass through the model to obtain the reconstructed image (as a PNG). This model will work with images of arbitrary sizes and resolution (provided you don't run out of memory). This will work with JPG and PNG (without alpha channels).
+* To obtain a _theoretical_ measure of the bitrate under some trained model, run `compress.py`. This will report the bits-per-pixel attainable by the compressed representation (`bpp`), some other fun metrics, and perform a forward pass through the model to obtain the reconstructed image (as a PNG). This model will work with images of arbitrary sizes and resolution (provided you don't run out of memory). The following command will work with JPG and PNG (without alpha channels):
 ```
 python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model
 ```
@@ -83,7 +88,7 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model
 
 ### Notes
 * The "size" of the compressed image as reported in `bpp` does not account for the size of the model required to decode the compressed format.
-* The total size of the model (using the original architecture) is around 737 MB. Forward pass time should scale sublinearly provided everything fits in memory. A complete forward pass using a batch of 10 images takes around 45s on a 2.8 GHz Intel Core i7.
+* The total size of the model (using the original architecture) is around 737 MB. Forward pass time should scale sublinearly provided everything fits in memory. A complete forward pass using a batch of 10 `256 x 256` images takes around 45s on a 2.8 GHz Intel Core i7.
 * You may get an OOM error when compressing images which are too large (`>~ 4000 x 4000`). It's possible to get around this by applying the network to evenly sized crops of the input image whose forward pass will fit in memory. We're working on a fix to automatically support this. 
 
 ### Contributing
