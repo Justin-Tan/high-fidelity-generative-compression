@@ -233,6 +233,11 @@ if __name__ == '__main__':
     optim_args.add_argument("-lr", "--learning_rate", type=float, default=1e-4, help="Optimizer learning rate.")
     optim_args.add_argument("-wd", "--weight_decay", type=float, default=1e-6, help="Coefficient of L2 regularization.")
 
+    # Architecture-related options
+    arch_args = parser.add_argument_group("Architecture-related options")
+    arch_args.add_argument('-nrb', '--n_residual_blocks', type=int, default=7,
+        help="Number of residual blocks to use in Generator. Original paper used 9.")
+
     # Warmstart adversarial training from autoencoder/hyperprior
     warmstart_args = parser.add_argument_group("Warmstart options")
     warmstart_args.add_argument("-warmstart", "--warmstart", help="Warmstart adversarial training from autoencoder + hyperprior ckpt.", action="store_true")
@@ -308,15 +313,15 @@ if __name__ == '__main__':
 
         hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
 
-        amortization_opt = torch.optim.Adam(amortization_parameters,
+        amortization_opt = torch.optim.AdamW(amortization_parameters,
             lr=args.learning_rate)
-        hyperlatent_likelihood_opt = torch.optim.Adam(hyperlatent_likelihood_parameters, 
+        hyperlatent_likelihood_opt = torch.optim.AdamW(hyperlatent_likelihood_parameters, 
             lr=args.learning_rate)
         optimizers = dict(amort=amortization_opt, hyper=hyperlatent_likelihood_opt)
 
         if model.use_discriminator is True:
             discriminator_parameters = model.Discriminator.parameters()
-            disc_opt = torch.optim.Adam(discriminator_parameters, lr=args.learning_rate)
+            disc_opt = torch.optim.AdamW(discriminator_parameters, lr=args.learning_rate)
             optimizers['disc'] = disc_opt
 
     n_gpus = torch.cuda.device_count()
