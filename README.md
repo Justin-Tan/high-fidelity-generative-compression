@@ -5,7 +5,7 @@ Pytorch implementation of the paper ["High-Fidelity Generative Image Compression
 This is a preliminary version. There may be sharp edges.
 
 ## Details
-This repository defines a model for learnable image compression capable of compressing images of arbitrary size and resolution. There are three main components to this model, as described in the original paper:
+This repository defines a model for learnable image compression capable of compressing images of arbitrary size and resolution based on the paper ["High-Fidelity Generative Image Compression" by Mentzer et. al.](https://hific.github.io/). There are three main components to this model, as described in the original paper:
 
 1. An autoencoding architecture defining a nonlinear transform to latent space. This is used in place of the linear transforms used by traditional image codecs.
 2. A hierarchical (two-level in this case) entropy model over the quantized latent representation enabling lossless compression through standard entropy coding.

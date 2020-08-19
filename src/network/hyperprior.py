@@ -333,10 +333,12 @@ class Hyperprior(CodingModel):
             quantized_latent_likelihood, spatial_shape)
 
 
-        if self.training is True:
-            latents_decoded = self.quantize_latents_st(latents, latent_means)
-        else:
-            latents_decoded = quantized_latents
+        # if self.training is True:
+        #     latents_decoded = self.quantize_latents_st(latents, latent_means)
+        # else:
+        #     latents_decoded = quantized_latents
+
+        latents_decoded = self.quantize_latents_st(latents, latent_means)
 
         info = HyperInfo(
             decoded=latents_decoded,
