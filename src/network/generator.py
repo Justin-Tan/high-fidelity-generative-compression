@@ -146,12 +146,11 @@ class Generator(nn.Module):
     def forward(self, x):
         
         if self.sample_noise is True:
-            noise_shape = list(x.size())
-            noise_shape[1] = self.noise_dim
-            z = torch.randn(np.prod(noise_shape)).to(x)
-            z_map = self.latent_noise_map(z)
-            z_map = z_map.reshape(x.size())
-            x = x + z_map
+            B = x.size()[0]
+            z = torch.randn((B, self.noise_dim)).to(x)
+            z = self.latent_noise_map(z)
+            z = z.view(tuple(x.size()))
+            x = x + z
 
         head = self.conv_block_init(x)
 
@@ -174,4 +173,11 @@ class Generator(nn.Module):
 
 
 if __name__ == "__main__":
-    pass
+
+    C = 8
+    y = torch.randn([3,C,16,16])
+    y_dims = y.size()
+    G = Generator(y_dims[1:], y_dims[0], C=C, n_residual_blocks=3, sample_noise=True)
+
+    x_hat = G(y)
+    print(x_hat.size())
