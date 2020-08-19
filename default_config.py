@@ -48,12 +48,16 @@ class args(object):
     dataset = Datasets.OPENIMAGES
     dataset_path = DatasetPaths.OPENIMAGES
     shuffle = True
+
+    # GAN params
     discriminator_steps = 0
     model_mode = ModelModes.TRAINING
+    sample_noise = False
+    noise_dim = 32
 
     # Architecture params - Table 3a) of [1]
     latent_channels = 220
-    n_residual_blocks = 7           # Authors use 9 blocks, performance saturates at 5
+    n_residual_blocks = 9           # Authors use 9 blocks, performance saturates at 5
     lambda_B = 2**(-4)              # Loose rate
     k_M = 0.075 * 2**(-5)           # Distortion
     k_P = 1.                        # Perceptual loss
@@ -84,7 +88,7 @@ class args(object):
     lambda_A = lambda_A_map[regime]
 
     # DLMM
-    use_latent_mixture_model = True
+    use_latent_mixture_model = False
     mixture_components = 4
     latent_channels_DLMM = 64
 
@@ -108,4 +112,3 @@ class hific_args(args):
     gan_loss_type = 'non_saturating'  # ('non_saturating', 'least_squares')
     discriminator_steps = 1
     sample_noise = False
-    noise_dim = 32

@@ -108,6 +108,8 @@ def save_metadata(metadata, directory='results', filename=META_FILENAME, **kwarg
     kwargs:
         Additional arguments to `json.dump`
     """
+
+    makedirs(directory)
     path_to_metadata = os.path.join(directory, filename)
 
     with open(path_to_metadata, 'w') as f:
@@ -187,6 +189,13 @@ def load_model(save_path, logger, device, model_type=None, model_mode=None, curr
 
     if model_mode is None:
         model_mode = args.model_mode
+
+    # Backward compatibililty
+    if hasattr(args, 'use_latent_mixture_model') is False:
+        args.use_latent_mixture_model = False
+    if hasattr(args, 'sample_noise') is False:
+        args.sample_noise = False
+        args.noise_dim = 0
 
     logger.info('MODEL TYPE: {}'.format(model_type))
     logger.info('MODEL MODE: {}'.format(model_mode))

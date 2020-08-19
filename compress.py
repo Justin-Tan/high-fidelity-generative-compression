@@ -17,6 +17,7 @@ import torch.nn.functional as F
 from src.helpers import utils, datasets
 from src.loss.perceptual_similarity import perceptual_loss as ps
 from default_config import hific_args, mse_lpips_args, directories, ModelModes, ModelTypes
+from default_config import args as default_args
 
 def make_deterministic(seed=42):
 
@@ -61,13 +62,22 @@ def compress_batch(args):
         for idx, (data, bpp, filenames) in enumerate(tqdm(eval_loader), 0):
             data = data.to(device, dtype=torch.float)
             B = data.size(0)
+
             reconstruction, q_bpp, n_bpp = model(data, writeout=False)
-            perceptual_loss = perceptual_loss_fn.forward(reconstruction, data, normalize=(not args.normalize_input_image))
+
+            if args.normalize_input_image is True:
+                # [-1., 1.] -> [0., 1.]
+                data = (data + 1.) / 2.
+
+            perceptual_loss = perceptual_loss_fn.forward(reconstruction, data, normalize=True)
 
             input_filenames_total.extend(filenames)
 
             for subidx in range(reconstruction.shape[0]):
-                q_bpp_per_im = float(q_bpp[subidx].cpu().numpy())
+                if B > 1:
+                    q_bpp_per_im = float(q_bpp.cpu().numpy()[subidx])
+                else:
+                    q_bpp_per_im = float(q_bpp.item())
                 fname = os.path.join(args.output_dir, "{}_RECON_{:.3f}bpp.png".format(filenames[subidx], q_bpp_per_im))
                 torchvision.utils.save_image(reconstruction[subidx], fname, normalize=True)
                 output_filenames_total.append(fname)

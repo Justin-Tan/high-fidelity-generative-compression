@@ -223,6 +223,7 @@ if __name__ == '__main__':
     general.add_argument('--save', type=str, default='experiments', help='Parent directory for stored information (checkpoints, logs, etc.)')
     general.add_argument("-lt", "--likelihood_type", choices=('gaussian', 'logistic'), default='gaussian', help="Likelihood model for latents.")
     general.add_argument("-force_gpu", "--force_set_gpu", help="Set GPU to given ID", action="store_true")
+    general.add_argument("-LMM", "--use_latent_mixture_model", help="Use latent mixture model as latent entropy model.", action="store_true")
 
     # Optimization-related options
     optim_args = parser.add_argument_group("Optimization-related options")
@@ -266,7 +267,43 @@ if __name__ == '__main__':
     args.lambda_A = args.lambda_A_map[args.regime]
     args.n_steps = int(args.n_steps)
 
+    storage = defaultdict(list)
+    storage_test = defaultdict(list)
     logger = utils.logger_setup(logpath=os.path.join(args.snapshot, 'logs'), filepath=os.path.abspath(__file__))
+
+    if args.warmstart is True:
+        assert args.warmstart_ckpt is not None, 'Must provide checkpoint to previously trained AE/HP model.'
+        logger.info('Warmstarting discriminator/generator from autoencoder/hyperprior model.')
+        if args.model_type != ModelTypes.COMPRESSION_GAN:
+            logger.warning('Should warmstart compression-gan model.')
+        args, model, optimizers = utils.load_model(args.warmstart_ckpt, logger, device, 
+            model_type=args.model_type, current_args_d=dictify(args), strict=False, prediction=False)
+    else:
+        model = create_model(args, device, logger, storage, storage_test)
+        model = model.to(device)
+        amortization_parameters = itertools.chain.from_iterable(
+            [am.parameters() for am in model.amortization_models])
+
+        hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
+
+        amortization_opt = torch.optim.Adam(amortization_parameters,
+            lr=args.learning_rate)
+        hyperlatent_likelihood_opt = torch.optim.Adam(hyperlatent_likelihood_parameters, 
+            lr=args.learning_rate)
+        optimizers = dict(amort=amortization_opt, hyper=hyperlatent_likelihood_opt)
+
+        if model.use_discriminator is True:
+            discriminator_parameters = model.Discriminator.parameters()
+            disc_opt = torch.optim.Adam(discriminator_parameters, lr=args.learning_rate)
+            optimizers['disc'] = disc_opt
+
+    n_gpus = torch.cuda.device_count()
+    if n_gpus > 1 and args.multigpu is True:
+        # Not supported at this time
+        raise NotImplementedError('MultiGPU not supported yet.')
+        logger.info('Using {} GPUs.'.format(n_gpus))
+        model = nn.DataParallel(model)
+
     logger.info('MODEL TYPE: {}'.format(args.model_type))
     logger.info('MODEL MODE: {}'.format(args.model_mode))
     logger.info('BITRATE REGIME: {}'.format(args.regime))
@@ -293,44 +330,9 @@ if __name__ == '__main__':
 
     args.n_data = len(train_loader.dataset)
     args.image_dims = train_loader.dataset.image_dims
+    logger.info('Training elements: {}'.format(args.n_data))
     logger.info('Input Dimensions: {}'.format(args.image_dims))
-
-    storage = defaultdict(list)
-    storage_test = defaultdict(list)
-
-    if args.warmstart is True:
-        assert args.warmstart_ckpt is not None, 'Must provide checkpoint to previously trained AE/HP model.'
-        logger.info('Warmstarting discriminator/generator from autoencoder/hyperprior model.')
-        if args.model_type != ModelTypes.COMPRESSION_GAN:
-            logger.warning('Should warmstart compression-gan model.')
-        args, model, optimizers = utils.load_model(args.warmstart_ckpt, logger, device, 
-            model_type=args.model_type, current_args_d=dictify(args), strict=False, prediction=False)
-    else:
-        model = create_model(args, device, logger, storage, storage_test)
-        model = model.to(device)
-        amortization_parameters = itertools.chain.from_iterable(
-            [am.parameters() for am in model.amortization_models])
-
-        hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
-
-        amortization_opt = torch.optim.AdamW(amortization_parameters,
-            lr=args.learning_rate)
-        hyperlatent_likelihood_opt = torch.optim.AdamW(hyperlatent_likelihood_parameters, 
-            lr=args.learning_rate)
-        optimizers = dict(amort=amortization_opt, hyper=hyperlatent_likelihood_opt)
-
-        if model.use_discriminator is True:
-            discriminator_parameters = model.Discriminator.parameters()
-            disc_opt = torch.optim.AdamW(discriminator_parameters, lr=args.learning_rate)
-            optimizers['disc'] = disc_opt
-
-    n_gpus = torch.cuda.device_count()
-    if n_gpus > 1 and args.multigpu is True:
-        # Not supported at this time
-        raise NotImplementedError('MultiGPU not supported yet.')
-        logger.info('Using {} GPUs.'.format(n_gpus))
-        model = nn.DataParallel(model)
-
+    logger.info('Optimizers: {}'.format(optimizers))
     logger.info('Using device {}'.format(device))
 
     metadata = dict((n, getattr(args, n)) for n in dir(args) if not (n.startswith('__') or 'logger' in n))

@@ -88,6 +88,7 @@ class Model(nn.Module):
                 self.discriminator_steps))
             self.Discriminator = discriminator.Discriminator(image_dims=self.image_dims,
                 context_dims=self.args.latent_dims, C=self.args.latent_channels)
+            self.gan_loss = partial(losses.gan_loss, args.gan_loss_type)
         else:
             self.discriminator_steps = 0
             self.Discriminator = None
@@ -95,7 +96,6 @@ class Model(nn.Module):
         self.squared_difference = torch.nn.MSELoss(reduction='none')
         # Expects [-1,1] images or [0,1] with normalize=True flag
         self.perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available(), gpu_ids=[args.gpu])
-        self.gan_loss = partial(losses.gan_loss, args.gan_loss_type)
         
     def store_loss(self, key, loss):
         assert type(loss) == float, 'Call .item() on loss before storage'
