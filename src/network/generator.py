@@ -94,7 +94,10 @@ class Generator(nn.Module):
         W1, W2, W3, W4 = widths 
 
         if sample_noise is True:
-            C += noise_dim
+            self.latent_noise_map = nn.Sequential(
+                nn.Linear(self.noise_dim, C * H0 * W0),
+                self.activation(),
+            )
 
         # (16,16) -> (16,16), with implicit padding
         self.conv_block_init = nn.Sequential(
@@ -143,10 +146,12 @@ class Generator(nn.Module):
     def forward(self, x):
         
         if self.sample_noise is True:
-            noise_shape = tuple(x.size())
+            noise_shape = list(x.size())
             noise_shape[1] = self.noise_dim
-            z = torch.randn(noise_shape).to(x)
-            x = torch.cat([x,z], dim=1)
+            z = torch.randn(np.prod(noise_shape)).to(x)
+            z_map = self.latent_noise_map(z)
+            z_map = z_map.reshape(x.size())
+            x = x + z_map
 
         head = self.conv_block_init(x)
 

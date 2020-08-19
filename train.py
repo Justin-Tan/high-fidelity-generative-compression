@@ -1,5 +1,6 @@
 """
-Learnable generative compression model [1] implemented in Pytorch.
+Learnable generative compression model modified from [1], 
+implemented in Pytorch.
 
 Example usage:
 python3 train.py -h
@@ -237,7 +238,7 @@ if __name__ == '__main__':
     # Architecture-related options
     arch_args = parser.add_argument_group("Architecture-related options")
     arch_args.add_argument('-nrb', '--n_residual_blocks', type=int, default=7,
-        help="Number of residual blocks to use in Generator. Original paper used 9.")
+        help="Number of residual blocks to use in Generator.")
 
     # Warmstart adversarial training from autoencoder/hyperprior
     warmstart_args = parser.add_argument_group("Warmstart options")
