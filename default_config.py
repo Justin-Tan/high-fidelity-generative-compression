@@ -30,7 +30,10 @@ class directories(object):
     experiments = 'experiments'
 
 class checkpoints(object):
-    gan1 = 'experiments/lossless.pt'
+    low_rate1 = 'experiments/norm_low_rate_openimages_compression_2020_08_19_16_13/checkpoints/norm_low_rate_openimages_compression_2020_08_19_16_13_epoch2_idx168720_2020_08_21_04:00.pt'
+    low_rate_nrb9 = 'experiments/low_rate9_norm_openimages_compression_2020_08_19_16_59/checkpoints/low_rate9_norm_openimages_compression_2020_08_19_16_59_epoch4_idx237436_2020_08_22_00:21.pt'
+    # python3 train.py -n low_rate_gan_v1_norm -mt compression_gan -bs 8 -norm --regime low -steps 1e6 --warmstart -ckpt
+    # experiments/norm_low_rate_openimages_compression_2020_08_19_16_13/checkpoints/norm_low_rate_openimages_compression_2020_08_19_16_13_epoch2_idx168720_2020_08_21_04:00.pt
 
 class args(object):
     """
@@ -79,6 +82,7 @@ class args(object):
     lambda_schedule = dict(vals=[2., 1.], steps=[50000])
     lr_schedule = dict(vals=[1., 0.1], steps=[500000])
     target_schedule = dict(vals=[0.20/0.14, 1.], steps=[50000])  # Rate allowance
+    ignore_schedule = False
 
     # match target rate to lambda_A coefficient
     regime = 'low'  # -> 0.14

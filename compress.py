@@ -53,7 +53,7 @@ def compress_batch(args):
     n, N = 0, len(eval_loader.dataset)
     input_filenames_total = list()
     output_filenames_total = list()
-    bpp_total, q_bpp_total, n_bpp_total, LPIPS_total = torch.Tensor(N), torch.Tensor(N), torch.Tensor(N), torch.Tensor(N)
+    bpp_total, q_bpp_total, LPIPS_total = torch.Tensor(N), torch.Tensor(N), torch.Tensor(N)
 
     start_time = time.time()
 
@@ -84,18 +84,16 @@ def compress_batch(args):
 
             bpp_total[n:n + B] = bpp.data
             q_bpp_total[n:n + B] = q_bpp.data
-            n_bpp_total[n:n + B] = n_bpp.data
             LPIPS_total[n:n + B] = perceptual_loss.data
             n += B
 
     df = pd.DataFrame([input_filenames_total, output_filenames_total]).T
     df.columns = ['input_filename', 'output_filename']
-    df['bpp'] = bpp_total.cpu().numpy()
+    df['bpp_original'] = bpp_total.cpu().numpy()
     df['q_bpp'] = q_bpp_total.cpu().numpy()
-    df['n_bpp'] = n_bpp_total.cpu().numpy()
     df['LPIPS'] = LPIPS_total.cpu().numpy()
 
-    df_path = os.path.join(args.output_dir, 'out.h5')
+    df_path = os.path.join(args.output_dir, 'compression_metrics.h5')
     df.to_hdf(df_path, key='df')
 
     pprint(df)

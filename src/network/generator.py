@@ -66,7 +66,7 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
         
         kernel_dim = 3
-        filters = (960, 480, 240, 120, 60)
+        filters = [960, 480, 240, 120, 60]
         self.n_residual_blocks = n_residual_blocks
         self.sample_noise = sample_noise
         self.noise_dim = noise_dim
@@ -93,11 +93,6 @@ class Generator(nn.Module):
         H1, H2, H3, H4 = heights
         W1, W2, W3, W4 = widths 
 
-        if sample_noise is True:
-            self.latent_noise_map = nn.Sequential(
-                nn.Linear(self.noise_dim, C * H0 * W0),
-                self.activation(),
-            )
 
         # (16,16) -> (16,16), with implicit padding
         self.conv_block_init = nn.Sequential(
@@ -106,6 +101,10 @@ class Generator(nn.Module):
             nn.Conv2d(C, filters[0], kernel_size=(3,3), stride=1),
             self.interlayer_norm(filters[0], **norm_kwargs),
         )
+
+        if sample_noise is True:
+            # Concat noise with latent representation
+            filters[0] += self.noise_dim
 
         for m in range(n_residual_blocks):
             resblock_m = ResidualBlock(input_dims=(batch_size, filters[0], H0, W0), 
@@ -145,14 +144,12 @@ class Generator(nn.Module):
 
     def forward(self, x):
         
-        if self.sample_noise is True:
-            B = x.size()[0]
-            z = torch.randn((B, self.noise_dim)).to(x)
-            z = self.latent_noise_map(z)
-            z = z.view(tuple(x.size()))
-            x = x + z
-
         head = self.conv_block_init(x)
+
+        if self.sample_noise is True:
+            B, C, H, W = tuple(head.size())
+            z = torch.randn((B, self.noise_dim, H, W)).to(head)
+            head = torch.cat((head,z), dim=1)
 
         for m in range(self.n_residual_blocks):
             resblock_m = getattr(self, f'resblock_{str(m)}')

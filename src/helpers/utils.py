@@ -190,6 +190,8 @@ def load_model(save_path, logger, device, model_type=None, model_mode=None, curr
     if model_mode is None:
         model_mode = args.model_mode
 
+    args.ignore_schedule = True
+
     # Backward compatibililty
     if hasattr(args, 'use_latent_mixture_model') is False:
         args.use_latent_mixture_model = False
@@ -234,6 +236,9 @@ def load_model(save_path, logger, device, model_type=None, model_mode=None, curr
             disc_opt = torch.optim.Adam(discriminator_parameters, lr=args.learning_rate)
             optimizers['disc'] = disc_opt
             
+        if args.sample_noise is True:
+            optimizers['amort'].add_param_group({'params': list(model.Generator.latent_noise_map.parameters())})
+        
         optimizers['amort'].load_state_dict(checkpoint['compression_optimizer_state_dict'])
         optimizers['hyper'].load_state_dict(checkpoint['hyperprior_optimizer_state_dict'])
         if (model.use_discriminator is True) and ('disc' in optimizers.keys()):

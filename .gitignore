@@ -21,6 +21,7 @@ data/*.png
 hific_dev/
 *.slurm
 *.tex
+checkpoints/
 
 # C extensions
 *.so

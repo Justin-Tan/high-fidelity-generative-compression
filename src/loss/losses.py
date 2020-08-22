@@ -25,7 +25,7 @@ def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_sche
         rate_penalty = lambda_B
     weighted_rate = rate_penalty * total_nbpp
 
-    return weighted_rate, rate_penalty
+    return weighted_rate, float(rate_penalty)
 
 def _non_saturating_loss(D_real_logits, D_gen_logits, D_real=None, D_gen=None):
 
@@ -43,7 +43,7 @@ def _non_saturating_loss(D_real_logits, D_gen_logits, D_real=None, D_gen=None):
 def _least_squares_loss(D_real, D_gen, D_real_logits=None, D_gen_logits=None):
     D_loss_real = torch.mean(torch.square(D_real - 1.0))
     D_loss_gen = torch.mean(torch.square(D_gen))
-    D_loss = 0.5 * (D_loss_real + D_loss_fake)
+    D_loss = 0.5 * (D_loss_real + D_loss_gen)
 
     G_loss = 0.5 * torch.mean(torch.square(D_gen - 1.0))
     
