@@ -84,11 +84,15 @@ tensorboard --logdir experiments/my_experiment/tensorboard
 ```
 
 ### Compression + Pretrained Model
-* To obtain a _theoretical_ measure of the storage bitrate under some trained model, run `compress.py`. This performs a forward pass through the model to obtain the reconstructed image. This model will work with images of arbitrary size/resolution (subject to memory).
+* To obtain a _theoretical_ measure of the storage bitrate of generic images under some trained model, run `compress.py`. This performs a forward pass through the model to obtain the reconstructed image. This model will work with images of arbitrary size/resolution (subject to memory).
 ```
 python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model
 ```
-* A pretrained model using the OpenImages dataset [can be found here](https://drive.google.com/file/d/1QYylAsbYl2T-7l2jurtLPGNUW0pro7zW/view). The examples at the end of this readme were produced using this model. This model was trained for around 2e5 warmup steps and 2e5 steps with the full generative loss, with a target bitrate of `bpp=0.3` and using a discretized mixture of logistics to model the latent likelihood. To use this, download the model and point the `-ckpt` argument in the command above to the corresponding path. 
+* A pretrained model using the OpenImages dataset [can be found here](https://drive.google.com/file/d/1QYylAsbYl2T-7l2jurtLPGNUW0pro7zW/view). The examples at the end of this readme were produced using this model. This model was trained for around 2e5 warmup steps and 2e5 steps with the full generative loss, with a target bitrate of `bpp=0.3` and using a discretized mixture of logistics to model the latent likelihood. To use this, download the model (around 2 GB) and point the `-ckpt` argument in the command above to the corresponding path. If you want to finetune this model on some domain-specific dataset, use the following options (you will probably need to play around with the learning rate yourself):
+
+```
+python3 train.py --model_type compression_gan --regime med --likelihood_type logistic --warmstart -ckpt /path/to/trained/model
+```
 
 * The reported `bpp` is the theoretical bitrate required to losslessly store the quantized latent representation of an image. Comparing this (not the size of the reconstruction) against the original size of the image will give you an idea of the reduction in memory footprint. This repository does not currently support actual compression to a bitstring ([TensorFlow Compression](https://github.com/tensorflow/compression) does this well). We're working on an ANS entropy coder to support this in the future.
 
@@ -100,18 +104,18 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model
 All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.
 
 ### Examples 
-The images below are taken from the CLIC2020 dataset. It's interesting to try to guess which image is the original (images are saved as PNG for viewing). You can expand the spoiler tags below each image to reveal the answer.
+The samples below are taken from the CLIC2020 dataset, external to the training set. It's interesting to try to guess which image is the original (images are saved as PNG for viewing). You can expand the spoiler tags below each image to reveal the answer.
 
 A | B
 :-------------------------:|:-------------------------:
-![guess](assets/originals/CLIC2020_5.png) | ![guess](assets/hific/CLIC2020_5_RECON_0.160bpp.png)
+![guess](assets/hific/CLIC2020_5_RECON_0.160bpp.png) | ![guess](assets/originals/CLIC2020_5.png)
 
 <details>
 
   <summary>Image 1</summary>
   
   ```python
-  Original: Right (11.6 bpp) | HIFIC: Left (0.160 bpp). Ratio: 72.5.
+  Original: B (11.6 bpp) | HIFIC: A (0.160 bpp). Ratio: 72.5.
   ```
 
 </details>
@@ -125,7 +129,7 @@ A             |  B
   <summary>Image 2</summary>
 
   ```python
-  Original: Left (14.6 bpp) | HIFIC: Right (0.330 bpp). Ratio: 44.2
+  Original: A (14.6 bpp) | HIFIC: B (0.330 bpp). Ratio: 44.2
   ```
 
 </details>
@@ -141,20 +145,20 @@ A | B
   <summary>Image 3</summary>
   
   ```python
-  Original: Left (12.3 bpp) | HIFIC: Right (0.209 bpp). Ratio: 58.9
+  Original: A (12.3 bpp) | HIFIC: B (0.209 bpp). Ratio: 58.9
   ```
   
 </details>
 
 A             |  B
 :-------------------------:|:-------------------------:
-![guess](assets/originals/CLIC2020_19.png) | ![guess](assets/hific/CLIC2020_19_RECON_0.565bpp.png)
+![guess](assets/hific/CLIC2020_19_RECON_0.565bpp.png) | ![guess](assets/originals/CLIC2020_19.png)
 
 <details>
   <summary>Image 4</summary>
   
   ```python
-  Original: Right (19.9 bpp) | HIFIC: Left (0.565 bpp). Ratio: 35.2
+  Original: B (19.9 bpp) | HIFIC: A (0.565 bpp). Ratio: 35.2
   ```
   
 </details>
@@ -167,6 +171,7 @@ The last two shows interesting failure modes: small figures in the distance are 
 
 ### References
 The following additional papers were useful to understand implementation details.
+
 0. Fabian Mentzer, George Toderici, Michael Tschannen, Eirikur Agustsson. High-Fidelity Generative Image Compression. [arXiv:2006.09965 (2020)](https://arxiv.org/abs/2006.09965).
 1. Johannes Ballé, David Minnen, Saurabh Singh, Sung Jin Hwang, Nick Johnston. Variational image compression with a scale hyperprior. [arXiv:1802.01436 (2018)](https://arxiv.org/abs/1802.01436).
 2. David Minnen, Johannes Ballé, George Toderici. Joint Autoregressive and Hierarchical Priors for Learned Image Compression. [arXiv 1809.02736 (2018)](https://arxiv.org/abs/1809.02736).
