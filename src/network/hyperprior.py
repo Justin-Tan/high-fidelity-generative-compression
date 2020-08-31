@@ -5,6 +5,7 @@ import numpy as np
 from collections import namedtuple
 
 # Custom
+from src.compression import hyperprior_coder, prior_coder
 from src.helpers import maths, utils
 
 MIN_SCALE = 0.11
@@ -122,134 +123,6 @@ class CodingModel(nn.Module):
         return likelihood_
 
 
-class PriorDensity(nn.Module):
-    """
-    Probability model for latents y. Based on Sec. 3. of [1].
-    Returns convolution of Gaussian latent density with parameterized 
-    mean and variance with uniform distribution U(-1/2, 1/2).
-
-    [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
-        arXiv:1802.01436 (2018).
-    """
-
-    def __init__(self, n_channels, min_likelihood=MIN_LIKELIHOOD, max_likelihood=MAX_LIKELIHOOD,
-        scale_lower_bound=MIN_SCALE, likelihood='gaussian', **kwargs):
-        super(PriorDensity, self).__init__()
-
-        self.n_channels = n_channels
-        self.min_likelihood = float(min_likelihood)
-        self.max_likelihood = float(max_likelihood)
-        self.scale_lower_bound = scale_lower_bound
-
-
-class HyperpriorDensity(nn.Module):
-    """
-    Probability model for hyper-latents z. Based on Sec. 6.1. of [1].
-    Returns convolution of non-parametric hyperlatent density with uniform distribution 
-    U(-1/2, 1/2).
-
-    [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
-        arXiv:1802.01436 (2018).
-    """
-
-    def __init__(self, n_channels, init_scale=10., filters=(3, 3, 3), min_likelihood=MIN_LIKELIHOOD, 
-        max_likelihood=MAX_LIKELIHOOD, **kwargs):
-        """
-        init_scale: Scaling factor determining the initial width of the
-                    probability densities.
-        filters:    Number of filters at each layer < K
-                    of the density model. Default K=4 layers.
-        """
-        super(HyperpriorDensity, self).__init__()
-        
-        self.init_scale = float(init_scale)
-        self.filters = tuple(int(f) for f in filters)
-        self.min_likelihood = float(min_likelihood)
-        self.max_likelihood = float(max_likelihood)
-
-        filters = (1,) + self.filters + (1,)
-        scale = self.init_scale ** (1 / (len(self.filters) + 1))
-
-        # Define univariate density model 
-        for k in range(len(self.filters)+1):
-            
-            # Weights
-            H_init = np.log(np.expm1(1 / scale / filters[k + 1]))
-            H_k = nn.Parameter(torch.ones((n_channels, filters[k+1], filters[k])))  # apply softmax for non-negativity
-            torch.nn.init.constant_(H_k, H_init)
-            self.register_parameter('H_{}'.format(k), H_k)
-
-            # Scale factors
-            a_k = nn.Parameter(torch.zeros((n_channels, filters[k+1], 1)))
-            self.register_parameter('a_{}'.format(k), a_k)
-
-            # Biases
-            b_k = nn.Parameter(torch.zeros((n_channels, filters[k+1], 1)))
-            torch.nn.init.uniform_(b_k, -0.5, 0.5)
-            self.register_parameter('b_{}'.format(k), b_k)
-
-    def cdf_logits(self, x, update_parameters=True):
-        """
-        Evaluate logits of the cumulative densities. 
-        Independent density model for each channel.
-
-        x:  The values at which to evaluate the cumulative densities.
-            torch.Tensor - shape `(C, 1, *)`.
-        """
-        logits = x
-
-        for k in range(len(self.filters)+1):
-            H_k = getattr(self, 'H_{}'.format(str(k)))  # Weight
-            a_k = getattr(self, 'a_{}'.format(str(k)))  # Scale
-            b_k = getattr(self, 'b_{}'.format(str(k)))  # Bias
-
-            if update_parameters is False:
-                H_k, a_k, b_k = H_k.detach(), a_k.detach(), b_k.detach()
-            logits = torch.bmm(F.softplus(H_k), logits)  # [C,filters[k+1],*]
-            logits = logits + b_k
-            logits = logits + torch.tanh(a_k) * torch.tanh(logits)
-
-        return logits
-
-
-    def likelihood(self, x):
-        """
-        Expected input: (N,C,H,W)
-        """
-        latents = x
-
-        # Converts latents to (C,1,*) format
-        N, C, H, W = latents.size()
-        latents = latents.permute(1,0,2,3)
-        shape = latents.shape
-        latents = torch.reshape(latents, (shape[0],1,-1))
-
-        cdf_upper = self.cdf_logits(latents + 0.5)
-        cdf_lower = self.cdf_logits(latents - 0.5)
-
-        # Numerical stability using some sigmoid identities
-        # to avoid subtraction of two numbers close to 1
-        sign = -torch.sign(cdf_upper + cdf_lower)
-        sign = sign.detach()
-        likelihood_ = torch.abs(
-            torch.sigmoid(sign * cdf_upper) - torch.sigmoid(sign * cdf_lower))
-
-        # Naive
-        # likelihood_ = torch.sigmoid(cdf_upper) - torch.sigmoid(cdf_lower)
-
-        # Reshape to (N,C,H,W)
-        likelihood_ = torch.reshape(likelihood_, shape)
-        likelihood_ = likelihood_.permute(1,0,2,3)
-
-        likelihood_ = lower_bound_toward(likelihood_, self.min_likelihood)
-
-        return likelihood_ #, max=self.max_likelihood)
-
-    def forward(self, x, **kwargs):
-        return self.likelihood(x)
-
-
-
 class Hyperprior(CodingModel):
     
     def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, mode='large',
@@ -274,14 +147,12 @@ class Hyperprior(CodingModel):
 
         self.analysis_net = analysis_net(C=bottleneck_capacity, N=hyperlatent_filters)
 
-        # TODO: Combine scale, loc into single network
         self.synthesis_mu = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
         self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
-            #final_activation='softplus')
         
         self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
-        self.hyperlatent_likelihood = HyperpriorDensity(n_channels=hyperlatent_filters)
+        self.hyperlatent_likelihood = hyperprior_coder.HyperpriorDensity(n_channels=hyperlatent_filters)
 
         if likelihood_type == 'gaussian':
             self.standardized_CDF = maths.standardized_CDF_gaussian
@@ -331,12 +202,6 @@ class Hyperprior(CodingModel):
             scale=latent_scales)
         quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(
             quantized_latent_likelihood, spatial_shape)
-
-
-        # if self.training is True:
-        #     latents_decoded = self.quantize_latents_st(latents, latent_means)
-        # else:
-        #     latents_decoded = quantized_latents
 
         latents_decoded = self.quantize_latents_st(latents, latent_means)
 
@@ -454,7 +319,7 @@ class HyperpriorDLMM(CodingModel):
     
         self.amortization_models = [self.analysis_net, self.synthesis_DLMM_params]
 
-        self.hyperlatent_likelihood = HyperpriorDensity(n_channels=hyperlatent_filters)
+        self.hyperlatent_likelihood = hyperprior_coder.HyperpriorDensity(n_channels=hyperlatent_filters)
 
         if likelihood_type == 'gaussian':
             self.standardized_CDF = maths.standardized_CDF_gaussian

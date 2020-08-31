@@ -1,5 +1,77 @@
 import torch
 import numpy as np
+import scipy.stats
+
+def pmf_to_quantized_cdf(pmf, precision, careful=True):
+    """
+    Based on https://github.com/rygorous/ryg_rans/blob/master/main64.cpp
+
+    TODO: port to C++
+
+    Convert PMF to quantized CDF. For entropy encoders and decoders to have the same 
+    quantized CDF on different platforms, the quantized CDF should be produced once 
+    and saved, then the saved quantized CDF should be used everywhere.
+
+    After quantization, if PMF does not sum to 2^precision, then some values of PMF 
+    are increased or decreased to adjust the sum to equal to 2^precision.
+
+    Note that the input PMF is pre-quantization. The input PMF is not normalized by 
+    this op prior to quantization. Therefore the user is responsible for normalizing 
+    PMF if necessary.
+    """
+
+    assert precision >= 8, 'Increase precision, $p \in [8,32]$'
+    assert pmf.shape[-1] >= 2, 'pmf shape should be at least 2 in last axis'
+    assert torch.all(pmf >= 0.).item(), 'PMF must have all non-negative values'
+    assert torch.logical_not(torch.all(torch.isnan(pmf))).item(), 'PMF contains NaNs!'
+
+    target_total = 1 << precision
+    pmf_shape = pmf.shape
+    cdf = torch.zeros(pmf_shape[0] + 1)
+
+    cdf[0] = 0
+    cdf[1:] = torch.cumsum(pmf, dim=0)
+    empirical_total = cdf[-1]
+
+    # Normalize CDF to desired precision
+    cdf = torch.round(cdf * target_total / empirical_total).to(torch.int64)
+
+    # If we nuked any non-0 frequency symbol to 0, we need to steal
+    # the range to make the frequency nonzero from elsewhere.
+
+    for i in range(cdf.size(0) - 1):
+
+        if (cdf[i] == cdf[i + 1]):
+            # Steal frequency from low-frequency symbols
+            best_freq = target_total + 1
+            best_steal = -1
+
+            for j in range(cdf.size(0) - 1):
+                freq = cdf[j + 1] - cdf[j]
+
+                if (freq > 1 and freq < best_freq):
+                    best_freq = freq
+                    best_steal = j
+
+            assert best_steal != -1
+
+            if (best_steal < i):
+                for j in range(best_steal + 1, i + 1):
+                    cdf[j]--
+            else:
+                assert best_steal > i
+                for j in range(i + 1, best_steal + 1):
+                    cdf[j]++
+
+    assert cdf[0] == 0, 'Error in CDF normalization'
+    assert cdf[-1] == 1 << precision, 'Error in CDF normalization'
+
+    if careful is True:
+        for i in range(cdf.size(0)-1):
+            assert cdf[i+1] >= cdf[i], 'CDF function is not monotonic!'
+
+    return cdf
+
 
 class LowerBoundIdentity(torch.autograd.Function):
     @staticmethod
@@ -35,6 +107,18 @@ def standardized_CDF_gaussian(value):
 def standardized_CDF_logistic(value):
     # Logistic
     return torch.sigmoid(value)
+
+def standardized_quantile_gaussian(quantile):
+    return scipy.stats.norm.ppf(quantile)
+
+def standardized_quantile_logistic(quantile):
+    return scipy.stats.logistic.ppf(quantile)
+
+def quantile_gaussian(quantile, mean, scale):
+    return scipy.stats.norm.ppf(quantile, loc=mean, scale=scale)
+
+def quantile_logistic(quantile, mean, scale):
+    return scipy.stats.logistic.ppf(quantile, loc=mean, scale=scale)
 
 def gaussian_entropy(D, logvar):
     """

@@ -54,7 +54,8 @@ def compress_batch(args):
     input_filenames_total = list()
     output_filenames_total = list()
     bpp_total, q_bpp_total, LPIPS_total = torch.Tensor(N), torch.Tensor(N), torch.Tensor(N)
-
+    utils.makedirs(args.output_dir)
+    
     start_time = time.time()
 
     with torch.no_grad():
@@ -125,7 +126,7 @@ def main(**kwargs):
 
     print('Input images')
     pprint(input_images)
-    # Launch training
+
     compress_batch(args)
 
 if __name__ == '__main__':

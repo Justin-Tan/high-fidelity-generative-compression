@@ -174,7 +174,7 @@ def load_model(save_path, logger, device, model_type=None, model_mode=None, curr
             try:
                 loaded_v = loaded_args_d[k]
             except KeyError:
-                logger.warning('Argument {} (value {}) not present in recorded arguments. Overriding with current.'.format(k,v))
+                logger.warning('Argument {} (value {}) not present in recorded arguments. Using current argument.'.format(k,v))
                 continue
 
             if loaded_v !=v:
@@ -345,7 +345,7 @@ def log(model, storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, st
                  mean_epoch_loss, current_loss, improved))
     report_f('========>')
     report_f("Rate-Distortion:")
-    report_f("Weighted R-D: {:3f} | Weighted Rate: {:.3f} | Weighted Distortion: {:.3f} | Weighted Perceptual: {:.3f} | "
+    report_f("Weighted R-D: {:.3f} | Weighted Rate: {:.3f} | Weighted Distortion: {:.3f} | Weighted Perceptual: {:.3f} | "
              "Distortion: {:.3f} | Rate Penalty: {:.3f}".format(storage['weighted_R_D'][-1],
              storage['weighted_rate'][-1], storage['weighted_distortion'][-1], storage['weighted_perceptual'][-1],
              storage['distortion'][-1], storage['rate_penalty'][-1]))
@@ -357,7 +357,7 @@ def log(model, storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, st
     if model.use_discriminator is True:
         report_f('========>')
         report_f("Generator-Discriminator:")
-        report_f("G Loss: {:3f} | D Loss: {:.3f} | D(gen): {:.3f} | D(real): {:.3f}".format(storage['gen_loss'][-1],
+        report_f("G Loss: {:.3f} | D Loss: {:.3f} | D(gen): {:.3f} | D(real): {:.3f}".format(storage['gen_loss'][-1],
                 storage['disc_loss'][-1], storage['D_gen'][-1], storage['D_real'][-1]))
     return best_loss
 
