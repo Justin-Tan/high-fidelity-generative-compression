@@ -83,18 +83,25 @@ python3 train.py --model_type compression_gan --regime low --n_steps 1e6 --warms
 tensorboard --logdir experiments/my_experiment/tensorboard
 ```
 
-### Compression + Pretrained Model
+### Compression
 * To obtain a _theoretical_ measure of the storage bitrate of generic images under some trained model, run `compress.py`. This performs a forward pass through the model to obtain the reconstructed image. This model will work with images of arbitrary size/resolution (subject to memory).
 ```
 python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model
 ```
-* A pretrained model using the OpenImages dataset [can be found here](https://drive.google.com/file/d/1QYylAsbYl2T-7l2jurtLPGNUW0pro7zW/view). The examples at the end of this readme were produced using this model. This model was trained for around 2e5 warmup steps and 2e5 steps with the full generative loss, with a target bitrate of `bpp=0.3` and using a discretized mixture of logistics to model the latent likelihood. To use this, download the model (around 2 GB) and point the `-ckpt` argument in the command above to the corresponding path. If you want to finetune this model on some domain-specific dataset, use the following options (you will probably need to play around with the learning rate yourself):
-
-```
-python3 train.py --model_type compression_gan --regime med --likelihood_type logistic --warmstart -ckpt /path/to/trained/model
-```
 
 * The reported `bpp` is the theoretical bitrate required to losslessly store the quantized latent representation of an image. Comparing this (not the size of the reconstruction) against the original size of the image will give you an idea of the reduction in memory footprint. This repository does not currently support actual compression to a bitstring ([TensorFlow Compression](https://github.com/tensorflow/compression) does this well). We're working on an ANS entropy coder to support this in the future.
+
+### Pretrained Models
+
+* Pretrained models using the OpenImages dataset can be found below. The examples at the end of this readme were produced using the `HIFIC-med` model. Each model was trained for around `2e5` warmup steps and `2e5` steps with the full generative loss, with a target bitrate of `bpp={'low': 0.14, 'med': 0.3, 'high': 0.45}`. To use a pretrained model, download the model (around 2 GB) and point the `-ckpt` argument in the command above to the corresponding path. If you want to finetune this model, e.g. on some domain-specific dataset, use the following options (you will probably need to adapt the learning rate schedule yourself):
+
+```bash
+python3 train.py --model_type compression_gan --regime med --likelihood_type logistic --warmstart -ckpt path/to/trained/model
+```
+
+* [`HIFIC-low`](https://drive.google.com/open?id=1hfFTkZbs_VOBmXQ-M4bYEPejrD76lAY9)
+* [`HIFIC-med`](https://drive.google.com/open?id=1QNoX0AGKTBkthMJGPfQI0dT0_tnysYUb)
+* [`HIFIC-high`](https://drive.google.com/open?id=1BFYpvhVIA_Ek2QsHBbKnaBE8wn1GhFyA)
 
 ### Notes
 * The total size of the model (using the original architecture) is around 737 MB. Forward pass time should scale sublinearly provided everything fits in memory. A complete forward pass using a batch of 10 `256 x 256` images takes around 45s on a 2.8 GHz Intel Core i7.
