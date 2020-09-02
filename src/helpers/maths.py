@@ -57,11 +57,11 @@ def pmf_to_quantized_cdf(pmf, precision, careful=True):
 
             if (best_steal < i):
                 for j in range(best_steal + 1, i + 1):
-                    cdf[j]--
+                    cdf[j] -= 1
             else:
                 assert best_steal > i
                 for j in range(i + 1, best_steal + 1):
-                    cdf[j]++
+                    cdf[j] += 1
 
     assert cdf[0] == 0, 'Error in CDF normalization'
     assert cdf[-1] == 1 << precision, 'Error in CDF normalization'

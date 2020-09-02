@@ -4,13 +4,18 @@ import torch.nn.functional as F
 import numpy as np
 
 # Custom
-from src.compression import entropy_models
+from src.helpers import maths
+from src.compression import entropy_models, entropy_coding
+from src.compression import compression_utils
+
 
 MIN_SCALE = entropy_models.MIN_SCALE
 MIN_LIKELIHOOD = entropy_models.MIN_LIKELIHOOD
+MAX_LIKELIHOOD = entropy_models.MAX_LIKELIHOOD
 TAIL_MASS = entropy_models.TAIL_MASS
 PRECISION_P = entropy_models.PRECISION_P
 
+lower_bound_toward = maths.LowerBoundToward.apply
 
 class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
 
@@ -76,16 +81,19 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         # cdf_offset = tf.broadcast_to(-minima, self.prior_shape_tensor)
         cdf_offset = -minima
         cdf_offset = torch.reshape(cdf_offset, [-1])
+
+        cdf_length = cdf_length.to(torch.int32)
+        cdf_offset = cdf_offset.to(torch.int32)
         
         # CDF shape [n_channels, max_length + 2] - account for fenceposts + overflow
         CDF = torch.zeros((len(pmf_length), max_length + 2), dtype=torch.int32)
         for n, (pmf_, pmf_length_) in enumerate(zip(pmf, pmf_length)):
             pmf_ = pmf_[:pmf_length_]  # [max_length]
-            overflow = torch.clamp(1. - torch.sum(pmf_, keepdim=True), min=0.)
+            overflow = torch.clamp(1. - torch.sum(pmf_, dim=0, keepdim=True), min=0.)
             pmf_ = torch.cat((pmf_, overflow), dim=0)
 
             cdf_ = maths.pmf_to_quantized_cdf(pmf_, self.precision)
-            cdf_ = F.pad(cdf, (0, max_length - pmf_length_), mode='constant', value=0)
+            cdf_ = F.pad(cdf_, (0, max_length - pmf_length_), mode='constant', value=0)
             CDF[n] = cdf_
 
         # Serialize, compression method responsible for identifying which 
@@ -93,6 +101,8 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         self.CDF = nn.Parameter(CDF, requires_grad=False)
         self.CDF_offset = nn.Parameter(cdf_offset, requires_grad=False)
         self.CDF_length = nn.Parameter(cdf_length, requires_grad=False)
+
+        compression_utils.check_argument_shapes(self.CDF, self.CDF_length, self.CDF_offset)
 
         self.register_parameter('CDF', self.CDF)
         self.register_parameter('CDF_offset', self.CDF_offset)
@@ -153,6 +163,11 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         broadcast_shape = input_shape[2:]
 
         indices = self.compute_indices(broadcast_shape)
+
+        if len(indices.size()) < 4:
+            indices = indices.unsqueeze(0)
+            indices = torch.repeat_interleave(indices, repeats=batch_shape, dim=0)
+
         symbols = torch.round(bottleneck).to(torch.int32)
 
         assert symbols.size() == indices.size(), 'Indices should have same size as inputs.'
@@ -171,15 +186,18 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         `index` should be in the half-open interval `[0, cdf.shape[0])`.
         """
 
-        for i in range(symbols.size(0)):
 
-            coded_string = entropy_coding.ans_index_encode(
+        # All inputs should be integer-typed
+        for i in range(symbols.size(0)):
+            # Vectorize?
+            coded_string = entropy_coding.ans_index_encoder(
                 symbols=symbols[i],
-                indices=indices,
+                indices=indices[i],
                 cdf=self.CDF,
                 cdf_length=self.CDF_length,
                 cdf_offset=self.CDF_offset,
                 precision=self.precision,
+                coding_shape=coding_sample,
             )
 
             strings[i] = coded_string
@@ -208,18 +226,25 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         symbols_shape =  (batch_shape, n_channels, *broadcast_shape)
 
         indices = self.compute_indices(broadcast_shape)
+        indices_size = indices.size()
         strings = torch.reshape(strings, (-1,))
+
+        if len(indices.size()) < 4:
+            indices = indices.unsqueeze(0)
+            indices = torch.repeat_interleave(indices, repeats=batch_shape, dim=0)
 
         assert len(indices.size() == 4), 'Expect (N,C,H,W)-format input.'
         assert strings.size(0) == indices.size(0), 'Batch shape mismatch!'
+        assert tuple(indices.size()) == symbols_shape, 
+            "Index ({}) - symbol ({}) shape mismatch!".format(indices_size, symbol_shape)
 
         symbols = torch.zeros(symbols_shape, dtype=torch.float32)
 
         for i in range(strings.size(0)):
 
-            decoded = entropy_coder.ans_index_decode(
+            decoded = entropy_coding.ans_index_decoder(
                 bitstring=strings[i],
-                indices=indices,
+                indices=indices[i],
                 cdf=self.CDF,
                 cdf_length=self.CDF_length,
                 cdf_offset=self.CDF_offset,

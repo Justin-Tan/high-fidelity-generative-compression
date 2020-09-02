@@ -5,12 +5,14 @@ import numpy as np
 
 # Custom
 from src.helpers import maths
-from src.compression import entropy_models
+from src.compression import entropy_models, entropy_coding
+from src.compression import compression_utils
 
 lower_bound_toward = maths.LowerBoundToward.apply
 
 MIN_SCALE = entropy_models.MIN_SCALE
 MIN_LIKELIHOOD = entropy_models.MIN_LIKELIHOOD
+MAX_LIKELIHOOD = entropy_models.MAX_LIKELIHOOD
 TAIL_MASS = entropy_models.TAIL_MASS
 PRECISION_P = entropy_models.PRECISION_P
 
@@ -20,7 +22,7 @@ SCALES_LEVELS = 64
 
 def prior_scale_table(scales_min=SCALES_MIN, scales_max=SCALES_MAX, levels=SCALES_LEVELS):
     scale_table = np.exp(np.linspace(np.log(scales_min), np.log(scales_max), levels))
-    return scale_table
+    return torch.Tensor(scale_table)
 
 
 class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
@@ -58,6 +60,14 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         self.scale_table = lower_bound_toward(self.scale_table, self.min_scale)
         self.indices = torch.arange(self.index_ranges)   
 
+        if likelihood_type == 'gaussian':
+            self.standardized_CDF = maths.standardized_CDF_gaussian
+            self.standardized_quantile = maths.standardized_quantile_gaussian
+
+        elif likelihood_type == 'logistic':
+            self.standardized_CDF = maths.standardized_CDF_logistic
+            self.standardized_quantile = maths.standardized_quantile_logistic
+
         scale_table_tensor = torch.Tensor(tuple(float(s) for s in self.scale_table))
         self.register_buffer('scale_table', self._prepare_scale_table(scale_table_tensor))
         self.register_buffer('min_scale', torch.Tensor([float(self.min_scale)]))
@@ -68,10 +78,9 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
     def build_tables(self, **kwargs):
 
         multiplier = -self._standardized_quantile(self.tail_mass / 2)
-        pmf_center = np.ceil(np.array(self.scale_table) * multiplier).astype(int)
-        pmf_length = 2 * pmf_center + 1
-        # [n_scales]
-        max_length = np.max(pmf_length)
+        pmf_center = torch.ceil(self.scale_table * multiplier).to(torch.int32)
+        pmf_length = 2 * pmf_center + 1  # [n_scales]
+        max_length = torch.max(pmf_length).item()
 
         samples = torch.abs(torch.arange(max_length).int() - pmf_center[:, None]).float()
         samples_scale = self.scale_table.unsqueeze(1).float()
@@ -82,26 +91,30 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
 
         # [n_scales]
         tail_mass = 2 * lower[:, :1]
+        cdf_offset = -pmf_center  # How far away we have to go to pass the tail mass
         cdf_length = pmf_length + 2
-        cdf_offset = -pmf_center
+        cdf_length = cdf_length.to(torch.int32)
+        cdf_offset = cdf_offset.to(torch.int32)
 
         # CDF shape [n_scales,  max_length + 2] - account for fenceposts + overflow
         CDF = torch.zeros((len(pmf_length), max_length + 2), dtype=torch.int32)
         for n, (pmf_, pmf_length_, tail_) in enumerate(zip(pmf, pmf_length, tail_mass)):
             pmf_ = pmf_[:pmf_length_]  # [max_length]
-            overflow = torch.clamp(1. - torch.sum(pmf_, keepdim=True), min=0.)
+            overflow = torch.clamp(1. - torch.sum(pmf_, dim=0, keepdim=True), min=0.)  
             # pmf_ = torch.cat((pmf_, overflow), dim=0)
             pmf_ = torch.cat((pmf_, tail_), dim=0)
 
             cdf_ = maths.pmf_to_quantized_cdf(pmf_, self.precision)
-            cdf_ = F.pad(cdf, (0, max_length - pmf_length_), mode='constant', value=0)
+            cdf_ = F.pad(cdf_, (0, max_length - pmf_length_), mode='constant', value=0)
             CDF[n] = cdf_
 
         # Serialize, compression method responsible for identifying which 
         # CDF to use during compression
-        self.CDF = nn.Parameter(CDF, requires_grad=False)
+        self.CDF = nn.Parameter(CDF, requires_grad=False)  # Last entry in CDF is overflow code.
         self.CDF_offset = nn.Parameter(cdf_offset, requires_grad=False)
         self.CDF_length = nn.Parameter(cdf_length, requires_grad=False)
+
+        compression_utils.check_argument_shapes(self.CDF, self.CDF_length, self.CDF_offset)
 
         self.register_parameter('CDF', self.CDF)
         self.register_parameter('CDF_offset', self.CDF_offset)
@@ -134,15 +147,15 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
 
     def compute_indices(self, scales):
         # Compute the indexes into the table for each of the passed-in scales.
-        scales = lower_bound_toward(scales)
+        scales = lower_bound_toward(scales, SCALES_MIN)
         indices = torch.ones_like(scales, dtype=torch.int32) * (len(self.scale_table) - 1)
 
-        for s in range(scale_table[:-1]):
+        for s in self.scale_table[:-1]:
             indices = indices - (scales <= s).to(torch.int32) 
 
         return indices      
 
-    def compress(self, bottleneck, means, scales):
+    def compress(self, bottleneck, means, scales, vectorize=False):
         """
         Compresses floating-point tensors to bitsrings.
 
@@ -152,14 +165,16 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         calling `decompress()`.
 
         Arguments:
-        bottleneck: Data to be compressed. Format (N,C,H,W).
+        bottleneck:     Data to be compressed. Format (N,C,H,W).
+        means:          Format (N,C,H,W).
+        scales:         Format (N,C,H,W).
         Returns:
         strings:    Tensor of the same shape as `bottleneck` containing a string for 
                     each batch entry.
         """
         input_shape = tuple(bottleneck.size())
         batch_shape = input_shape[0]
-        coding_shape = input_shape[1:]
+        coding_shape = input_shape[1:]  # (C,H,W)
 
         indices = self.compute_indices(scales)
         symbols = torch.round(bottleneck - means).to(torch.int32)
@@ -167,22 +182,40 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         assert symbols.size() == indices.size(), 'Indices should have same size as inputs.'
         assert len(symbols.size() == 4), 'Expect (N,C,H,W)-format input.'
 
-        strings = torch.zeros(batch_shape)
 
-        for i in range(symbols.size(0)):
+        # All inputs should be integer-typed
 
-            coded_string = entropy_coding.ans_index_encode(
-                symbols=symbols[i],
-                indices=indices,
-                cdf=self.CDF,
-                cdf_length=self.CDF_length,
-                cdf_offset=self.CDF_offset,
+        if vectorize is True:  # Inputs must be identically shaped
+    
+            encoded = entropy_coding.vec_ans_index_encoder(
+                symbols=symbols,  # [N, C, H, W]
+                indices=indices,  # [N, C, H, W]
+                cdf=self.CDF,  # [n_scales, max_length + 2]
+                cdf_length=self.CDF_length,  # [n_scales]
+                cdf_offset=self.CDF_offset,  # [n_scales]
                 precision=self.precision,
+                coding_shape=coding_shape,
             )
 
-            strings[i] = coded_string
+        else:
 
-        return strings
+            encoded = []
+            for i in range(symbols.size(0)):
+
+                coded_string = entropy_coding.ans_index_encoder(
+                    symbols=symbols[i],  # [C, H, W]
+                    indices=indices[i],  # [C, H, W]
+                    cdf=self.CDF,  # [n_scales, max_length + 2]
+                    cdf_length=self.CDF_length,  # [n_scales]
+                    cdf_offset=self.CDF_offset,  # [n_scales]
+                    precision=self.precision,
+                    coding_shape=coding_shape,
+                )
+
+                encoded.append(coded_string)
+            encoded = np.vstack(encoded)
+
+        return encoded
 
     
     def decompress(self, strings, means, scales, broadcast_shape):
@@ -218,9 +251,9 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
 
         for i in range(strings.size(0)):
 
-            decoded = entropy_coder.ans_index_decode(
+            decoded = entropy_coding.ans_index_decoder(
                 bitstring=strings[i],
-                indices=indices,
+                indices=indices[i],
                 cdf=self.CDF,
                 cdf_length=self.CDF_length,
                 cdf_offset=self.CDF_offset,

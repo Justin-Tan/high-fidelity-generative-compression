@@ -33,11 +33,12 @@ HIFIC, 0.188 bpp / 64.1 kB
 ```bash
 JPG, 0.264 bpp / 90.1 kB
 ```
+
 ![guess](assets/camp_jpg_compress.png)
 
 The image shown is an out-of-sample instance from the CLIC-2020 dataset. The HIFIC image is obtained by reconstruction via the learned model (checkpoint below). The JPG image is obtained by the `imagemagick` command `mogrify -format jpg -quality 42 camp_original.png`. Despite using around 1.5x the bitrate, the JPG image exhibits visible compression artifacts which are absent from the HIFIC-generated image.
 
-Note that the learned model was not adapted in any way for evaluation on this image. More sample outputs from this model can be found at the end of the readme. All images are losslessly compressed to PNG format for viewing. 
+Note that the learned model was not adapted in any way for evaluation on this image. More sample outputs from this model can be found at the end of the readme. All images are losslessly compressed to PNG format for viewing.
 
 ## Note
 
@@ -118,15 +119,30 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --reconstru
 
 ### Pretrained Models
 
-* Pretrained models using the OpenImages dataset can be found below. The examples at the end of this readme were produced using the `HIFIC-med` model. Each model was trained for around `2e5` warmup steps and `2e5` steps with the full generative loss, with a target bitrate of `bpp={'low': 0.14, 'med': 0.3, 'high': 0.45}`. To use a pretrained model, download the model (around 2 GB) and point the `-ckpt` argument in the command above to the corresponding path. If you want to finetune this model, e.g. on some domain-specific dataset, use the following options (you will probably need to adapt the learning rate schedule yourself):
+* Pretrained models using the OpenImages dataset can be found below. The examples at the end of this readme were produced using the `HIFIC-med` model. Each model was trained for around `2e5` warmup steps and `2e5` steps with the full generative loss, with a target bitrate of `bpp={'low': 0.14, 'med': 0.3, 'high': 0.45}`. Note the original paper trained for `1e6` steps in each mode, so you can probably get better performance by training from scratch yourself. 
+
+* To use a pretrained model, download the model (around 2 GB) and point the `-ckpt` argument in the command above to the corresponding path. If you want to finetune this model, e.g. on some domain-specific dataset, use the following options for each respective model (you will probably need to adapt the learning rate and rate-penalty schedule yourself):
+
+* [`HIFIC-low`](https://drive.google.com/open?id=1hfFTkZbs_VOBmXQ-M4bYEPejrD76lAY9)
 
 ```bash
-python3 train.py --model_type compression_gan --regime med --likelihood_type logistic --warmstart -ckpt path/to/trained/model
+# Low regime
+python3 train.py --model_type compression_gan --regime low --warmstart -ckpt path/to/trained/model -nrb 9 -norm
 ```
 
-* [`HIFIC-low`]() - A
 * [`HIFIC-med`](https://drive.google.com/open?id=1QNoX0AGKTBkthMJGPfQI0dT0_tnysYUb)
-* [`HIFIC-high`]() - C
+
+```bash
+# Medium regime
+python3 train.py --model_type compression_gan --regime med --warmstart -ckpt path/to/trained/model --likelihood_type logistic
+```
+
+* [`HIFIC-high`](https://drive.google.com/open?id=1BFYpvhVIA_Ek2QsHBbKnaBE8wn1GhFyA)
+
+```bash
+# High regime
+python3 train.py --model_type compression_gan --regime high --warmstart -ckpt path/to/trained/model -nrb 9 -norm
+```
 
 ### Extensibility
 
@@ -175,11 +191,9 @@ A             |  B
 
 </details>
 
-
 A | B
 :-------------------------:|:-------------------------:
 ![guess](assets/originals/CLIC2020_18.png) | ![guess](assets/hific/CLIC2020_18_RECON_0.209bpp.png)
-
 
 <details>
 
@@ -205,7 +219,7 @@ A             |  B
   
 </details>
 
-The last two show interesting failure modes: small figures in the distance are almost entirely removed (top of the central rock in the penultimate image), and the model bitrate increases significantly when the image is dominated by high-frequency components. 
+The last two show interesting failure modes: small figures in the distance are almost entirely removed (top of the central rock in the penultimate image), and the model bitrate increases significantly when the image is dominated by high-frequency components.
 
 ### Authors
 

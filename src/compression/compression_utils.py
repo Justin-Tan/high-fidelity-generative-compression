@@ -1,7 +1,7 @@
 import torch
+import math
 
-# TODO unit test on simple CDFs
-def estimate_tails(cdf, target, shape, dtype=torch.float32, extra_counts=10):
+def estimate_tails(cdf, target, shape, dtype=torch.float32, extra_counts=24):
     """
     Estimates approximate tail quantiles.
     This runs a simple Adam iteration to determine tail quantiles. The
@@ -52,18 +52,32 @@ def estimate_tails(cdf, target, shape, dtype=torch.float32, extra_counts=10):
     return tails
 
 
+def check_argument_shapes(cdf, cdf_length, cdf_offset):
+    if (len(cdf.size()) != 2 or cdf.size(1) < 3):
+        raise ValueError("'cdf' should be 2-D and cdf.dim_size(1) >= 3: ", cdf.size())
+
+    if (len(cdf_length.size()) != 1 or cdf_length.size(0) != cdf.size(0)):
+        raise ValueError("'cdf_length' should be 1-D and its length "
+            "should match the number of rows in 'cdf': ", cdf_length.size())
+
+    if (len(cdf_offset.size()) != 1 or cdf_offset.size(0) != cdf.size(0)):
+        raise ValueError("'cdf_offset' should be 1-D and its length "
+            "should match the number of rows in 'cdf': ", cdf_offset.size())
+
 if __name__ == '__main__':
 
-    quantile = 0.42
+    import random
 
-    norm_cdf = lambda x: 0.5 * (1. + torch.erf(x / np.sqrt(2)))
+    quantile = 0.42 + random.randint(0,50)/100
+
+    norm_cdf = lambda x: 0.5 * (1. + torch.erf(x / math.sqrt(2)))
     tails = estimate_tails(norm_cdf, quantile, shape=10)
-
+    print('Normal:')
     print(f"OPT: {norm_cdf(torch.ones(1)*tails[0]).item()}, TRUE {quantile}")
 
-    quantile = 0.87
+    quantile = 0.69 + random.randint(0,31)/100
 
     norm_cdf = torch.sigmoid
     tails = estimate_tails(norm_cdf, quantile, shape=10)
-
+    print('logistic:')
     print(f"OPT: {norm_cdf(torch.ones(1)*tails[0]).item()}, TRUE {quantile}")

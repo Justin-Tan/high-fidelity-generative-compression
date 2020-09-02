@@ -5,7 +5,7 @@ import numpy as np
 from collections import namedtuple
 
 # Custom
-from src.compression import hyperprior_coder, prior_coder
+from src.compression import hyperprior_model, prior_model
 from src.helpers import maths, utils
 
 MIN_SCALE = 0.11
@@ -152,7 +152,7 @@ class Hyperprior(CodingModel):
         
         self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
-        self.hyperlatent_likelihood = hyperprior_coder.HyperpriorDensity(n_channels=hyperlatent_filters)
+        self.hyperlatent_likelihood = hyperprior_model.HyperpriorDensity(n_channels=hyperlatent_filters)
 
         if likelihood_type == 'gaussian':
             self.standardized_CDF = maths.standardized_CDF_gaussian
@@ -319,7 +319,7 @@ class HyperpriorDLMM(CodingModel):
     
         self.amortization_models = [self.analysis_net, self.synthesis_DLMM_params]
 
-        self.hyperlatent_likelihood = hyperprior_coder.HyperpriorDensity(n_channels=hyperlatent_filters)
+        self.hyperlatent_likelihood = hyperprior_model.HyperpriorDensity(n_channels=hyperlatent_filters)
 
         if likelihood_type == 'gaussian':
             self.standardized_CDF = maths.standardized_CDF_gaussian

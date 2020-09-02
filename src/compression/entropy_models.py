@@ -7,10 +7,10 @@ import numpy as np
 
 # Custom
 from src.helpers import maths
-from src.compression import compression_utils
 
 MIN_SCALE = 0.11
 MIN_LIKELIHOOD = 1e-9
+MAX_LIKELIHOOD = 1e4
 TAIL_MASS = 2**-8
 PRECISION_P = 16 #24  # Precision of rANS coder
 
