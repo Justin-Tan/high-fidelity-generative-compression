@@ -93,10 +93,20 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model
 
 ### Pretrained Models
 
-* Pretrained models using the OpenImages dataset can be found below. The examples at the end of this readme were produced using the `HIFIC-med` model. Each model was trained for around `2e5` warmup steps and `2e5` steps with the full generative loss, with a target bitrate of `bpp={'low': 0.14, 'med': 0.3, 'high': 0.45}`. To use a pretrained model, download the model (around 2 GB) and point the `-ckpt` argument in the command above to the corresponding path. If you want to finetune this model, e.g. on some domain-specific dataset, use the following options (you will probably need to adapt the learning rate schedule yourself):
+* Pretrained models using the OpenImages dataset can be found below. The examples at the end of this readme were produced using the `HIFIC-med` model. Each model was trained for around `2e5` warmup steps and `2e5` steps with the full generative loss, with a target bitrate of `bpp={'low': 0.14, 'med': 0.3, 'high': 0.45}`. Note the original paper trained for `1e6` steps in each mode, so you can probably get better performance by training from scratch yourself. 
+
+* To use a pretrained model, download the model (around 2 GB) and point the `-ckpt` argument in the command above to the corresponding path. If you want to finetune this model, e.g. on some domain-specific dataset, use the following options for each respective model (you will probably need to adapt the learning rate and rate-penalty schedule yourself):
 
 ```bash
+# Low regime
+python3 train.py --model_type compression_gan --regime low --warmstart -ckpt path/to/trained/model -nrb 9 -norm
+
+# Medium regime
 python3 train.py --model_type compression_gan --regime med --likelihood_type logistic --warmstart -ckpt path/to/trained/model
+
+# High regime
+python3 train.py --model_type compression_gan --regime high --warmstart -ckpt path/to/trained/model -nrb 9 -norm
+
 ```
 
 * [`HIFIC-low`](https://drive.google.com/open?id=1hfFTkZbs_VOBmXQ-M4bYEPejrD76lAY9)
