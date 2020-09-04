@@ -12,7 +12,7 @@ MIN_SCALE = 0.11
 MIN_LIKELIHOOD = 1e-9
 MAX_LIKELIHOOD = 1e4
 TAIL_MASS = 2**-8
-PRECISION_P = 16 #24  # Precision of rANS coder
+PRECISION_P = 16  # Precision of rANS coder
 
 # TODO: Unit tests
 
@@ -39,6 +39,8 @@ class ContinuousEntropyModel(nn.Module, metaclass=abc.ABCMeta):
         of this distribution - [B, n_channels], where B usually = 1.
         (Dimensions which are not assumed i.i.d.)
         """
+
+        super(ContinuousEntropyModel, self).__init__()
 
         self.distribution = distribution
         self.likelihood_bound = float(likelihood_bound)
@@ -79,4 +81,4 @@ class ContinuousEntropyModel(nn.Module, metaclass=abc.ABCMeta):
 
 if __name__ == '__main__':
 
-    print('hi')
+    print('Hi!')

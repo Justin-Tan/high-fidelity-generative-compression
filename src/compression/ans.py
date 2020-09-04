@@ -60,8 +60,10 @@ def push(x, starts, freqs, precisions):
         precision:  Determines normalization factor of probability distribution.
     """
     head, tail = x
+
     assert head.shape == starts.shape == freqs.shape, (
-        'Inconsistent encoder shapes!')
+        f"Inconsistent encoder shapes! head: {head.shape} | "
+        f"starts: {starts.shape} | freqs: {freqs.shape}")
     
     # 32-bit Renormalization - restrict symbols to pre-images
     x_max = ((RANS_L >> precisions) << 32) * freqs
@@ -74,23 +76,25 @@ def push(x, starts, freqs, precisions):
         head[idxs] >>= 32
 
     head_div_freqs, head_mod_freqs = np.divmod(head, freqs)
-
     return (head_div_freqs << np.uint(precisions)) + head_mod_freqs + starts, tail
 
 def pop(x, precisions):
     head_, tail_ = x
+    head_ = np.uint64(head_)
     # Modulo as bitwise and
-    interval_starts = head_ & ((1 << precisions) -1)
+    interval_starts = head_ & np.uint((1 << precisions) - 1)
     def pop(starts, freqs):
-        head = freqs * (head_ >> precisions) + interval_starts - starts
+        head = freqs * (head_ >> np.uint(precisions)) + interval_starts - starts
         idxs = head < RANS_L
         n = np.sum(idxs)
-
         if n > 0:
             tail, new_head = stack_slice(tail_, n)
             # Move popped integers into lower-order
             # bits of head
-            head[idxs] = (head[idxs] << 32) + new_head
+            try:
+                head[idxs] = (head[idxs] << np.uint(32)) | new_head
+            except TypeError:
+                head = (head << np.uint(32)) | new_head
         else:
             tail = tail_
         return head, tail
@@ -111,6 +115,11 @@ def unflatten(arr, shape):
     size = np.prod(shape)
     head = np.uint64(arr[:size]) << 32 | np.uint64(arr[size:2 * size])
     return np.reshape(head, shape), (arr[2 * size:], ())
+
+def unflatten_scalar(arr):
+    """Unflatten a 1d numpy array into a vrans state."""
+    head = np.uint64(arr[0]) << np.uint64(32) | np.uint64(arr[1])
+    return head, (arr[2:], ())
 
 def message_equal(message1, message2):
     return np.all(flatten(message1) == flatten(message2))
