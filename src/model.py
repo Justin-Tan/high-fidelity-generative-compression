@@ -347,7 +347,7 @@ class Model(nn.Module):
             # reconstruction = torch.mul(reconstruction, 255.)
             # reconstruction = torch.clamp(reconstruction, min=0., max=255.)
             reconstruction = torch.clamp(reconstruction, min=0., max=1.)
-            return reconstruction, intermediates.q_bpp, intermediates.n_bpp
+            return reconstruction, intermediates.q_bpp
 
         compression_model_loss = self.compression_loss(intermediates, hyperinfo)
 
@@ -444,4 +444,4 @@ if __name__ == '__main__':
         compression_loss, disc_loss = losses['compression'], losses['disc']
 
     logger.info('Delta t {:.3f}s'.format(time.time() - start_time))
-    
+
