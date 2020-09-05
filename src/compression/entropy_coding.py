@@ -80,9 +80,6 @@ def _vec_indexed_cdf_to_dec_statfun(cdf_i, cdf_i_length):
     # dec_statfun: cf |-> symbol
     *coding_shape, max_cdf_length = cdf_i.shape
     coding_shape = tuple(coding_shape)
-
-    np.save('cdf.npy', cdf_i)
-    np.save('cdf_l.npy', cdf_i_length)  
     cdf_i_flat = np.reshape(cdf_i, (-1, max_cdf_length))
 
     cdf_i_flat_ragged = [c[:l] for (c,l) in zip(cdf_i_flat, 
@@ -165,7 +162,7 @@ def ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision,
     overflow_push, overflow_pop = base_codec(enc_statfun_overflow,
         dec_statfun_overflow, overflow_width)
 
-    # LIFO - last item compresssed is first item decompressed
+    # LIFO - last item compressed is first item decompressed
     for i in reversed(range(len(indices))):  # loop over flattened axis
 
         cdf_index = indices[i]
@@ -430,10 +427,9 @@ def vec_ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precisi
 
     return np.stack(symbols, axis=0)
 
-def ans_encode_decode_test():
+def ans_encode_decode_test(symbols, decompressed_symbols):
+    return np.testing.assert_almost_equal(symbols, decompressed_symbols)
 
-    np.testing.assert_almost_equal(symbols, decompressed_symbols)
-    np.testing.assert_almost_equal(message, decompressed_message)
 
 
 if __name__ == '__main__':
@@ -492,8 +488,7 @@ if __name__ == '__main__':
         for n, (pmf_, pmf_length_, tail_) in enumerate(zip(pmf, pmf_length, tail_mass)):
             pmf_ = pmf_[:pmf_length_]  # [max_length]
             overflow = torch.clamp(1. - torch.sum(pmf_, dim=0, keepdim=True), min=0.)  
-            # pmf_ = torch.cat((pmf_, overflow), dim=0)
-            pmf_ = torch.cat((pmf_, tail_), dim=0)
+            pmf_ = torch.cat((pmf_, tail_), dim=0)  # pmf_ = torch.cat((pmf_, overflow), dim=0)
 
             cdf_ = maths.pmf_to_quantized_cdf(pmf_, precision)
             cdf_ = F.pad(cdf_, (0, max_length - pmf_length_), mode='constant', value=0)

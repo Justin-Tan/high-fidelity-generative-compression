@@ -137,10 +137,11 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         n_pixels = np.prod(spatial_shape)
 
         log_likelihood = torch.log(likelihood + EPS)
-        n_bits = torch.sum(log_likelihood) / (batch_size * quotient)
+        n_bits = torch.sum(log_likelihood) / quotient
+        bpi = n_bits / batch_size
         bpp = n_bits / n_pixels
 
-        return n_bits, bpp
+        return n_bits, bpp, bpi
 
     def compute_indices(self, scales):
         # Compute the indexes into the table for each of the passed-in scales.
@@ -165,9 +166,10 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         bottleneck:     Data to be compressed. Format (N,C,H,W).
         means:          Format (N,C,H,W).
         scales:         Format (N,C,H,W).
+
         Returns:
-        strings:    Tensor of the same shape as `bottleneck` containing a string for 
-                    each batch entry.
+        encoded:        Tensor of the same shape as `bottleneck` containing the 
+                        compressed message.
         """
         input_shape = tuple(bottleneck.size())
         batch_shape = input_shape[0]
@@ -189,49 +191,9 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         cdf_length = self.CDF_length.cpu().numpy()
         cdf_offset = self.CDF_offset.cpu().numpy()
 
-        if vectorize is True:  # Inputs must be identically shaped
-    
-            encoded = entropy_coding.vec_ans_index_encoder(
-                symbols=symbols,  # [N, C, H, W]
-                indices=indices,  # [N, C, H, W]
-                cdf=cdf,  # [n_scales, max_length + 2]
-                cdf_length=cdf_length,  # [n_scales]
-                cdf_offset=cdf_offset,  # [n_scales]
-                precision=self.precision,
-                coding_shape=coding_shape,
-            )
-
-        else:
-            
-            if block_encode is True:
-
-                encoded = entropy_coding.ans_index_encoder(
-                    symbols=symbols,  # [N, C, H, W]
-                    indices=indices,  # [N, C, H, W]
-                    cdf=cdf,  # [n_scales, max_length + 2]
-                    cdf_length=cdf_length,  # [n_scales]
-                    cdf_offset=cdf_offset,  # [n_scales]
-                    precision=self.precision,
-                    coding_shape=coding_shape,
-                )
-                
-            else: 
-
-                encoded = []
-
-                for i in range(symbols.shape[0]):
-
-                    coded_string = entropy_coding.ans_index_encoder(
-                        symbols=symbols[i],  # [C, H, W]
-                        indices=indices[i],  # [C, H, W]
-                        cdf=cdf,  # [n_scales, max_length + 2]
-                        cdf_length=cdf_length,  # [n_scales]
-                        cdf_offset=cdf_offset,  # [n_scales]
-                        precision=self.precision,
-                        coding_shape=coding_shape,
-                    )
-
-                    encoded.append(coded_string)
+        encoded = compression_utils.ans_compress(symbols, indices, cdf, cdf_length, cdf_offset,
+            coding_shape, precision=self.precision, vectorize=vectorize, 
+            block_encode=block_encode)
 
         return encoded, rounded
 
@@ -247,6 +209,7 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         Arguments:
         encoded:            Tensor containing compressed bit strings produced by
                             the `compress()` method. Arguments must be identical.
+        broadcast_shape:    Iterable of ints. Spatial extent of quantized feature map. 
 
         Returns:
         decoded:            Tensor of same shape as input to `compress()`.
@@ -272,54 +235,8 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         cdf_length = self.CDF_length.cpu().numpy()
         cdf_offset = self.CDF_offset.cpu().numpy()
 
-        if vectorize is True:  # Inputs must be identically shaped
-    
-            decoded = entropy_coding.vec_ans_index_decoder(
-                encoded,
-                indices=indices,
-                cdf=cdf,
-                cdf_length=cdf_length,
-                cdf_offset=cdf_offset,
-                precision=self.precision,
-                coding_shape=coding_shape,
-            )
-
-        else:
-            
-            if block_decode is True:
-
-                decoded = entropy_coding.ans_index_decoder(
-                    encoded,
-                    indices=indices,  # [N, C, H, W]
-                    cdf=cdf,  # [n_scales, max_length + 2]
-                    cdf_length=cdf_length,  # [n_scales]
-                    cdf_offset=cdf_offset,  # [n_scales]
-                    precision=self.precision,
-                    coding_shape=coding_shape,
-                )
-
-            else: 
-
-                decoded = []
-                assert len(encoded) == batch_shape, (
-                    f'Encoded batch dim {len(encoded)} != batch size {batch_shape}')
-
-                for i in range(batch_shape):
-
-                    coded_string = entropy_coding.ans_index_decoder(
-                        encoded[i],  # [C, H, W]
-                        indices=indices[i],  # [C, H, W]
-                        cdf=cdf,  # [n_scales, max_length + 2]
-                        cdf_length=cdf_length,  # [n_scales]
-                        cdf_offset=cdf_offset,  # [n_scales]
-                        precision=self.precision,
-                        coding_shape=coding_shape,
-                    )
-
-                    decoded.append(coded_string)
-
-                decoded = np.stack(decoded, axis=0)
-
+        decoded = compression_utils.ans_decompress(encoded, indices, cdf, cdf_length, cdf_offset,
+            coding_shape, precision=self.precision, vectorize=vectorize, block_decode=block_decode)
 
         symbols = torch.Tensor(decoded)
         symbols = torch.reshape(symbols, symbols_shape)
@@ -401,15 +318,15 @@ if __name__ == '__main__':
 
     n_channels = 32
     use_blocks = True
-    vectorize = False
+    vectorize = True
     prior_density = PriorDensity(n_channels)
     prior_entropy_model = PriorEntropyModel(distribution=prior_density)
 
     loc, scale = 2.401, 3.43
-    n_data = 10
-    toy_shape = (n_data, n_channels, 20 ,20)
+    n_data = 50
+    toy_shape = (n_data, n_channels, 4 ,4)
     bottleneck, means = torch.randn(toy_shape), torch.randn(toy_shape)
-    scales = torch.randn(toy_shape)*np.sqrt(scale) + loc
+    scales = torch.randn(toy_shape) * np.sqrt(scale) + loc
     scales = torch.clamp(scales, min=MIN_SCALE)
 
     start_t = time.time()
@@ -417,13 +334,24 @@ if __name__ == '__main__':
     encoded, rounded = prior_entropy_model.compress(bottleneck, means, scales,
         block_encode=use_blocks, vectorize=vectorize)
     
+    if (use_blocks is True) or (vectorize is True): 
+        enc_shape = encoded.shape[0]
+    else:
+        enc_shape = sum([len(enc) for enc in encoded])
+        
+    print('Encoded shape', enc_shape)
+
     decoded, decoded_raw = prior_entropy_model.decompress(encoded, means, scales, 
         broadcast_shape=toy_shape[2:], block_decode=use_blocks,
         vectorize=vectorize)
 
-    if (use_blocks is True) or (vectorize is True): 
-        print('Encoded shape', encoded.shape)
-        print('Decoded shape', decoded.shape)
-
+    print('Decoded shape', decoded.shape)
     delta_t = time.time() - start_t
-    print(f'Delta_t {delta_t:.2f} s | ', torch.mean((decoded_raw == rounded).float()).item())
+    print(f'Delta t {delta_t:.2f} s | ', torch.mean((decoded_raw == rounded).float()).item())
+
+    bits, bpp, bpi = prior_entropy_model._estimate_compression_bits(bottleneck, means, 
+        scales, spatial_shape=toy_shape[2:])
+
+    cbits = enc_shape * 32
+    print(f'Symbols compressed to {cbits:.1f} bits.')
+    print(f'Estimated entropy {bits:.3f} bits.')

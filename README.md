@@ -1,6 +1,6 @@
 # high-fidelity-generative-compression
 
-Pytorch implementation of the paper ["High-Fidelity Generative Image Compression" by Mentzer et. al.](https://hific.github.io/). This repo also provides a partial port of the [Tensorflow Compression library](https://github.com/tensorflow/compression), adapted to work with the ANS entropy coding algorithm.
+Pytorch implementation of the paper ["High-Fidelity Generative Image Compression" by Mentzer et. al.](https://hific.github.io/). This repo also provides general utilities for lossless compression that interface with Pytorch.
 
 ## Warning
 
@@ -16,7 +16,9 @@ This repository defines a model for learnable image compression capable of compr
 
 The model is then trained end-to-end by optimization of a modified rate-distortion Lagrangian. Loosely, the model can be thought of as 'amortizing' the storage requirements for an generic input image through training a learnable compression/decompression scheme. The method is further described in the original paper [[0](https://arxiv.org/abs/2006.09965)]. The model is capable of yielding perceptually similar reconstructions to the input that tend to be more visually pleasing than standard image codecs which operate at comparable or higher bitrates.
 
-## Examples
+This repository includes a partial port of the [Tensorflow Compression library](https://github.com/tensorflow/compression) for general tools for neural image compression.
+
+## Example
 
 ```bash
 Original, 8.05 bpp / 2747 kB
@@ -61,16 +63,11 @@ git clone https://github.com/Justin-Tan/high-fidelity-generative-compression.git
 cd high-fidelity-generative-compression
 ```
 
-To check if your setup is working, run `python3 -m src.model` in root.
+To check if your setup is working, run `python3 -m src.model` in root. Detailed usage instructions can be found in the [user's guide](assets/USAGE_GUIDE.md).
 
 ### Training
 
-* Download a large (> 100,000) dataset of diverse color images. We found that using 1-2 training divisions of the [OpenImages](https://storage.googleapis.com/openimages/web/index.html) dataset was able to produce satisfactory results on arbitrary images. [Fabian Mentzer's L3C Repo](https://github.com/fab-jul/L3C-PyTorch/) provides utility functions for downloading and preprocessing OpenImages (the trained models did not use this exact split). Add the dataset path under the `DatasetPaths` class in `default_config.py`. Check default config/command line arguments:
-
-```bash
-vim default_config.py
-python3 train.py -h
-```
+* Download a large (> 100,000) dataset of diverse color images. We found that using 1-2 training divisions of the [OpenImages](https://storage.googleapis.com/openimages/web/index.html) dataset was able to produce satisfactory results on arbitrary images. Add the dataset path under the `DatasetPaths` class in `default_config.py`.
 
 * For best results, as described in the paper, train an initial base model using the rate-distortion loss only, together with the hyperprior model, e.g. to target low bitrates:
 
@@ -79,49 +76,24 @@ python3 train.py -h
 python3 train.py --model_type compression --regime low --n_steps 1e6
 ```
 
-* Then use the checkpoint of the trained base model to 'warmstart' the GAN architecture. Training the generator and discriminator from scratch was found to result in unstable training, but YMMV.
+* Then use the checkpoint of the trained base model to 'warmstart' the GAN architecture. Please see the [user's guide](assets/USAGE_GUIDE.md) for more detailed instructions.
 
 ```bash
 # Train using full generator-discriminator loss
 python3 train.py --model_type compression_gan --regime low --n_steps 1e6 --warmstart --ckpt path/to/base/checkpoint
 ```
 
-* Training after the warmstart for 2e5 steps using a batch size of 16 was sufficient to get reasonable results at sub-0.2 `bpp` per validation image, on average, using the default config in the `low` regime. You can change regimes to `med` or `high` to tradeoff perceptual quality for increased bitrate.
-
-* If you get out-of-memory errors, try, in decreasing order of priority:
-  * Decreasing the batch size (default 16).
-  * Decreasing the number of channels of the latent representation (`latent_channels`, default 220). You may be able to reduce this quite aggressively as the network is highly over-parameterized - many values of the latent representation are near-deterministic.
-  * Reducing the number of residual blocks in the generator (`n_residual_blocks`, default 7, the original paper used 9).
-  * Training on smaller crops (`crop_size`, default `256 x 256`).
-
-* Logs for each experiment are automatically created and periodically saved under `experiments/` with the appropriate name/timestamp. Metrics can be visualized via `tensorboard`:
-
-```bash
-tensorboard --logdir experiments/my_experiment/tensorboard --port 2401
-```
-
-Some sample logs for a couple of models can be found below:
-
-* [Low bitrate regime (warmstart)](https://tensorboard.dev/experiment/xJV4hjbxRFy3TzrdYl7MXA/).
-* [Low bitrate regime (full GAN loss)](https://tensorboard.dev/experiment/ETa0JIeOS0ONNZuNkIdrQw/).
-* [High bitrate regime (full GAN loss)](https://tensorboard.dev/experiment/hAf1NYrqSVieKoDOcNpoGw/).
-
 ### Compression
 
-* `compress.py` will compress generic images using some specified model. This performs a forward pass through the model to obtain the compressed representation, using a vectorized ANS entropy coder. As the model architecture is fully convolutional, this will work with images of arbitrary size/resolution (subject to memory constraints). Optionally, reconstructions from the compressed format can be generated by passing the `--reconstruct` flag. Decoding takes around 2-3 seconds for ~megapixel images on GPU, but this can definitely be optimized.
+* `compress.py` will compress generic images using some specified model. This performs a forward pass through the model to obtain the compressed representation, using a vectorized ANS entropy coder. As the model architecture is fully convolutional, this will work with images of arbitrary size/resolution (subject to memory constraints).
 
 ```bash
-# Check arguments
-python3 compress.py -h
-
 python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --reconstruct
 ```
 
 ### Pretrained Models
 
-* Pretrained models using the OpenImages dataset can be found below. The examples at the end of this readme were produced using the `HIFIC-med` model. Each model was trained for around `2e5` warmup steps and `2e5` steps with the full generative loss. Note the original paper trained for `1e6` steps in each mode, so you can probably get better performance by training from scratch yourself.
-
-* To use a pretrained model, download the selected model (~2 GB) and point the `-ckpt` argument in the command above to the corresponding path. If you want to finetune this model, e.g. on some domain-specific dataset, use the following options for each respective model (you will probably need to adapt the learning rate and rate-penalty schedule yourself):
+* Pretrained model weights using the OpenImages dataset can be found below (~2 GB). The examples at the end of this readme were produced using the `HIFIC-med` model. For usage instructions see the [user's guide](assets/USAGE_GUIDE.md).
 
 | Target bitrate (bpp) | Weights | Training Instructions |
 | ----------- | -------------------------------- | ---------------------- |
@@ -129,24 +101,11 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --reconstru
 | 0.30 | [`HIFIC-med`](https://drive.google.com/open?id=1QNoX0AGKTBkthMJGPfQI0dT0_tnysYUb) | <pre lang=bash>`python3 train.py --model_type compression_gan --regime med --warmstart -ckpt path/to/trained/model --likelihood_type logistic`</pre> |
 | 0.45 | [`HIFIC-high`](https://drive.google.com/open?id=1BFYpvhVIA_Ek2QsHBbKnaBE8wn1GhFyA) | <pre lang=bash>`python3 train.py --model_type compression_gan --regime high --warmstart -ckpt path/to/trained/model -nrb 9 -norm`</pre> |
 
-### Extensibility
+## Examples
 
-* Network architectures can be modified by changing the respective files under `src/network`.
-* The entropy model for both latents and hyperlatents can be changed by modifying `src/network/hyperprior`. For reference, there is an implementation of a discrete-logistic latent mixture model instead of the default latent mean-scale Gaussian model.
+The samples below are taken from the CLIC2020 dataset, external to the training set. The reconstructions are produced using the above `HIFIC-med` model (target bitrate `0.3 bpp`). It's interesting to try to guess which image is the original (images are saved as PNG for viewing - best viewed widescreen). You can expand the spoiler tags below each image to reveal the answer.
 
-### Notes
-
-* The reported `bpp` is the theoretical bitrate required to losslessly store the quantized latent representation of an image. Comparing this (not the size of the reconstruction) against the original size of the image will give you an idea of the reduction in memory footprint.
-* The total size of the model (using the original architecture) is around 737 MB. Forward pass time should scale sublinearly provided everything fits in memory. A complete forward pass using a batch of 10 `256 x 256` images takes around 45s on a 2.8 GHz Intel Core i7.
-* You may get an OOM error when compressing images which are too large (`>~ 4000 x 4000` on a typical consumer GPU). It's possible to get around this by splitting the input into distinct crops whose forward pass will fit in memory. We're working on a fix to automatically support this.
-
-### Contributing
-
-All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.
-
-### Examples
-
-The samples below are taken from the CLIC2020 dataset, external to the training set. The reconstructions are produced using the above pretrained model (target bitrate `0.3 bpp`). It's interesting to try to guess which image is the original (images are saved as PNG for viewing - best viewed widescreen). You can expand the spoiler tags below each image to reveal the answer.
+For more examples see [EXAMPLES.md](assets/EXAMPLES.md)
 
 A | B
 :-------------------------:|:-------------------------:
@@ -213,8 +172,12 @@ The last two show interesting failure modes: small figures in the distance are a
 
 ### Acknowledgements
 
-* The vectorized rANS implementation is based on the [Craystack repository](https://github.com/j-towns/craystack).
-* The code under `hific/perceptual_similarity/` implementing the perceptual distortion loss is modified from the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
+* The entropy coding implementation under `src/compression` is based on the [Tensorflow Compression repository](https://github.com/tensorflow/compression). The rANS encoder implementation is based on the [Craystack repository](https://github.com/j-towns/craystack).
+* The code under `src/perceptual_similarity/` implementing the perceptual distortion loss is based on the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
+
+### Contributing
+
+All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.
 
 ### References
 

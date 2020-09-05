@@ -1,5 +1,8 @@
 import torch
 import math
+import numpy as np
+
+from src.compression import entropy_coding
 
 def estimate_tails(cdf, target, shape, dtype=torch.float32, extra_counts=24):
     """
@@ -18,7 +21,7 @@ def estimate_tails(cdf, target, shape, dtype=torch.float32, extra_counts=24):
     cdf: A callable that computes cumulative distribution function, survival
          function, or similar.
     target: The desired target value.
-    shape: The shape of the `tf.Tensor` representing `x`.
+    shape: The shape of the tensor representing `x`.
     Returns:
     A `torch.Tensor` representing the solution (`x`).
     """
@@ -63,6 +66,109 @@ def check_argument_shapes(cdf, cdf_length, cdf_offset):
     if (len(cdf_offset.size()) != 1 or cdf_offset.size(0) != cdf.size(0)):
         raise ValueError("'cdf_offset' should be 1-D and its length "
             "should match the number of rows in 'cdf': ", cdf_offset.size())
+
+
+def ans_compress(symbols, indices, cdf, cdf_length, cdf_offset, coding_shape,
+    precision, vectorize=False, block_encode=True):
+
+    if vectorize is True:  # Inputs must be identically shaped
+
+        encoded = entropy_coding.vec_ans_index_encoder(
+            symbols=symbols,  # [N, C, H, W]
+            indices=indices,  # [N, C, H, W]
+            cdf=cdf,  # [n_scales, max_length + 2]
+            cdf_length=cdf_length,  # [n_scales]
+            cdf_offset=cdf_offset,  # [n_scales]
+            precision=precision,
+            coding_shape=coding_shape,
+        )
+
+    else:
+        if block_encode is True:
+
+            encoded = entropy_coding.ans_index_encoder(
+                symbols=symbols,  # [N, C, H, W]
+                indices=indices,  # [N, C, H, W]
+                cdf=cdf,  # [n_scales, max_length + 2]
+                cdf_length=cdf_length,  # [n_scales]
+                cdf_offset=cdf_offset,  # [n_scales]
+                precision=precision,
+                coding_shape=coding_shape,
+            )
+            
+        else: 
+
+            encoded = []
+
+            for i in range(symbols.shape[0]):
+
+                coded_string = entropy_coding.ans_index_encoder(
+                    symbols=symbols[i],  # [C, H, W]
+                    indices=indices[i],  # [C, H, W]
+                    cdf=cdf,  # [n_scales, max_length + 2]
+                    cdf_length=cdf_length,  # [n_scales]
+                    cdf_offset=cdf_offset,  # [n_scales]
+                    precision=precision,
+                    coding_shape=coding_shape,
+                )
+
+                encoded.append(coded_string)
+
+    return encoded
+
+
+def ans_decompress(encoded, indices, cdf, cdf_length, cdf_offset, coding_shape,
+    precision, vectorize=False, block_decode=True):
+
+    if vectorize is True:  # Inputs must be identically shaped
+
+        decoded = entropy_coding.vec_ans_index_decoder(
+            encoded,
+            indices=indices,
+            cdf=cdf,
+            cdf_length=cdf_length,
+            cdf_offset=cdf_offset,
+            precision=precision,
+            coding_shape=coding_shape,
+        )
+
+    else:
+        
+        if block_decode is True:
+
+            decoded = entropy_coding.ans_index_decoder(
+                encoded,
+                indices=indices,  # [N, C, H, W]
+                cdf=cdf,  # [n_scales, max_length + 2]
+                cdf_length=cdf_length,  # [n_scales]
+                cdf_offset=cdf_offset,  # [n_scales]
+                precision=precision,
+                coding_shape=coding_shape,
+            )
+
+        else: 
+
+            decoded = []
+            assert len(encoded) == batch_shape, (
+                f'Encoded batch dim {len(encoded)} != batch size {batch_shape}')
+
+            for i in range(batch_shape):
+
+                coded_string = entropy_coding.ans_index_decoder(
+                    encoded[i],  # [C, H, W]
+                    indices=indices[i],  # [C, H, W]
+                    cdf=cdf,  # [n_scales, max_length + 2]
+                    cdf_length=cdf_length,  # [n_scales]
+                    cdf_offset=cdf_offset,  # [n_scales]
+                    precision=precision,
+                    coding_shape=coding_shape,
+                )
+
+                decoded.append(coded_string)
+
+            decoded = np.stack(decoded, axis=0)
+
+    return decoded
 
 if __name__ == '__main__':
 

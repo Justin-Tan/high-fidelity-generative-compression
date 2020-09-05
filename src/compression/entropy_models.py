@@ -79,6 +79,7 @@ class ContinuousEntropyModel(nn.Module, metaclass=abc.ABCMeta):
         pass
 
 
+
 if __name__ == '__main__':
 
     print('Hi!')

@@ -5,8 +5,8 @@ import numpy as np
 from collections import namedtuple
 
 # Custom
-from src.compression import hyperprior_model, prior_model
 from src.helpers import maths, utils
+from src.compression import hyperprior_model, prior_model
 
 MIN_SCALE = 0.11
 LOG_SCALES_MIN = -3.
@@ -20,6 +20,18 @@ HyperInfo = namedtuple(
     "decoded "
     "latent_nbpp hyperlatent_nbpp total_nbpp latent_qbpp hyperlatent_qbpp total_qbpp "
     "bitstring side_bitstring",
+)
+
+CompressionOutput = namedtuple("CompressionOutput", 
+   ["hyperlatents_encoded",
+    "latents_encoded",
+    "hyperlatent_spatial_shape",
+    "batch_shape",
+    "spatial_shape",
+    "hyperlatent_bits",
+    "latent_bits",
+    "total_bits",
+    "total_bpp"]   
 )
 
 lower_bound_identity = maths.LowerBoundIdentity.apply
@@ -126,7 +138,8 @@ class CodingModel(nn.Module):
 class Hyperprior(CodingModel):
     
     def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, mode='large',
-        likelihood_type='gaussian', scale_lower_bound=MIN_SCALE):
+        likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, entropy_code=False,
+        vectorize_encoding=False, block_encode=True):
         """
         Introduces probabilistic model over latents of 
         latents.
@@ -160,6 +173,91 @@ class Hyperprior(CodingModel):
             self.standardized_CDF = maths.standardized_CDF_logistic
         else:
             raise ValueError('Unknown likelihood model: {}'.format(likelihood_type))
+
+        if entropy_code is True:
+            self.hyperprior_entropy_model = hyperprior_model.HyperpriorEntropyModel(
+                distribution=self.hyperlatent_likelihood)
+
+            self.prior_density = prior_model.PriorDensity(n_channels=bottleneck_capacity,
+                scale_lower_bound=self.scale_lower_bound, likelihood_type=likelihood_type)
+            self.prior_entropy_model = prior_model.PriorEntropyModel(
+                distribution=self.prior_density, min_scale=self.scale_lower_bound)
+            self.index_tables = self.prior_entropy_model.scale_table_tensor
+            self.vectorize_encoding = vectorize_encoding
+            self.block_encode = block_encode
+
+    def compress_forward(self, latents, spatial_shape, **kwargs):
+
+        # Obtain hyperlatents from hyperencoder
+        hyperlatents = self.analysis_net(latents)
+        hyperlatent_spatial_shape = hyperlatents.size()[2:]
+        batch_shape = latents.size(0)
+
+        # Estimate Shannon entropies for hyperlatents
+        hyp_agg = self.hyperprior_entropy_model._estimate_compression_bits(
+            hyperlatents, spatial_shape)
+        hyperlatent_bits, hyperlatent_bpp, hyperlatent_bpi = hyp_agg
+
+        # Compress, then decompress hyperlatents
+        hyperlatents_encoded, _ = self.hyperprior_entropy_model.compress(hyperlatents,
+            vectorize=self.vectorize_encoding, block_encode=self.block_encode)
+        hyperlatents_decoded, _ = self.hyperprior_entropy_model.decompress(hyperlatents_encoded,
+            batch_shape=batch_shape, broadcast_shape=hyperlatent_spatial_shape,
+            vectorize=self.vectorize_encoding, block_decode=self.block_encode)
+
+        # Recover latent statistics from compressed hyperlatents
+        latent_means = self.synthesis_mu(hyperlatents_decoded)
+        latent_scales = self.synthesis_std(hyperlatents_decoded)
+        latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
+
+        # Use latent statistics to build indexed probability tables, and compress latents
+        latents_encoded, _ = self.prior_entropy_model.compress(latents, means=latent_means,
+            scales=latent_scales, vectorize=self.vectorize_encoding, block_encode=self.block_encode)
+
+        # Estimate Shannon entropies for latents
+        latent_agg = self.prior_entropy_model._estimate_compression_bits(latents,
+            means=latent_means, scales=latent_scales, spatial_shape=spatial_shape)
+        latent_bits, latent_bpp, latent_bpi = latent_agg
+
+        # What the decoder needs for reconstruction
+        compression_output = CompressionOutput(
+            hyperlatents_encoded=hyperlatents_encoded,
+            latents_encoded=latents_encoded,
+            hyperlatent_spatial_shape=hyperlatent_spatial_shape,
+            batch_shape=batch_shape,
+            spatial_shape=spatial_shape,
+            hyperlatent_bits=hyperlatent_bits,  # for reporting 
+            latent_bits=latent_bits,
+            total_bits=hyperlatent_bits + latent_bits,
+            total_bpp=hyperlatent_bpp + latent_bpp,
+        )
+
+        return compression_output
+
+    def decompress_forward(self, compression_output):
+
+        hyperlatents_encoded = compression_output.hyperlatents_encoded
+        latents_encoded = compression_output.latents_encoded
+        hyperlatent_spatial_shape = compression_output.hyperlatent_spatial_shape
+        batch_shape = compression_output.batch_shape
+
+        # Decompress hyperlatents
+        hyperlatents_decoded, _ = self.hyperprior_entropy_model.decompress(hyperlatents_encoded,
+            batch_shape=batch_shape, broadcast_shape=hyperlatent_spatial_shape,
+            vectorize=self.vectorize_encoding, block_decode=self.block_encode)
+
+        # Recover latent statistics from compressed hyperlatents
+        latent_means = self.synthesis_mu(hyperlatents_decoded)
+        latent_scales = self.synthesis_std(hyperlatents_decoded)
+        latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
+        latent_spatial_shape = latent_scales.size()[2:]
+
+        # Use latent statistics to build indexed probability tables, and decompress latents
+        latents_decoded, _ = self.prior_entropy_model.decompress(latents_encoded, means=latent_means,
+            scales=latent_scales, broadcast_shape=latent_spatial_shape,
+            vectorize=self.vectorize_encoding, block_decode=self.block_encode)
+
+        return latents_decoded
 
 
     def forward(self, latents, spatial_shape, **kwargs):
@@ -291,7 +389,8 @@ Discretized logistic mixture model.
 class HyperpriorDLMM(CodingModel):
     
     def __init__(self, bottleneck_capacity=64, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, mode='large',
-        likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, mixture_components=4):
+        likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, mixture_components=4, 
+        entropy_code=False):
         """
         Introduces probabilistic model over latents of 
         latents.

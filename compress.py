@@ -64,7 +64,14 @@ def compress_batch(args):
             data = data.to(device, dtype=torch.float)
             B = data.size(0)
 
-            reconstruction, q_bpp, n_bpp = model(data, writeout=False)
+            if args.reconstruction is True:
+                # Reconstruction without compression
+                reconstruction, q_bpp = model(data, writeout=False)
+            else:
+                # Perform entropy coding
+                compressed_output = model.compress(data)
+                reconstruction = model.decompress(compressed_output)
+                q_bpp = compressed_output.total_bpp
 
             if args.normalize_input_image is True:
                 # [-1., 1.] -> [0., 1.]
@@ -117,6 +124,7 @@ def main(**kwargs):
         help="Path to directory to store output images")
     parser.add_argument('-bs', '--batch_size', type=int, default=1,
         help="Loader batch size. Set to 1 if images in directory are different sizes.")
+    parser.add_argument("-rc", "--reconstruct", help="Reconstruct input image without compression.", action="store_true")
     args = parser.parse_args()
 
     input_images = glob.glob(os.path.join(args.image_dir, '*.jpg'))

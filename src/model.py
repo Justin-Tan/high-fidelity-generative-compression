@@ -30,6 +30,7 @@ Intermediates = namedtuple("Intermediates",
 Disc_out= namedtuple("disc_out",
     ["D_real", "D_gen", "D_real_logits", "D_gen_logits"])
 
+
 class Model(nn.Module):
 
     def __init__(self, args, logger, storage_train=defaultdict(list), storage_test=defaultdict(list), model_mode=ModelModes.TRAINING, 
@@ -59,18 +60,23 @@ class Model(nn.Module):
         self.image_dims = self.args.image_dims  # Assign from dataloader
         self.batch_size = self.args.batch_size
 
+        self.entropy_code = False
+        if model_mode == ModelModes.EVALUATION:
+            self.entropy_code = True
+
         self.Encoder = encoder.Encoder(self.image_dims, self.batch_size, C=self.args.latent_channels,
             channel_norm=self.args.use_channel_norm)
+
         self.Generator = generator.Generator(self.image_dims, self.batch_size, C=self.args.latent_channels,
             n_residual_blocks=self.args.n_residual_blocks, channel_norm=self.args.use_channel_norm, sample_noise=
             self.args.sample_noise, noise_dim=self.args.noise_dim)
 
         if self.args.use_latent_mixture_model is True:
             self.Hyperprior = hyperprior.HyperpriorDLMM(bottleneck_capacity=self.args.latent_channels,
-                likelihood_type=self.args.likelihood_type, mixture_components=self.args.mixture_components)
+                likelihood_type=self.args.likelihood_type, mixture_components=self.args.mixture_components, entropy_code=self.entropy_code)
         else:
             self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.args.latent_channels,
-                likelihood_type=self.args.likelihood_type)
+                likelihood_type=self.args.likelihood_type, entropy_code=self.entropy_code)
 
         self.amortization_models = [self.Encoder, self.Generator]
         self.amortization_models.extend(self.Hyperprior.amortization_models)
@@ -254,6 +260,71 @@ class Model(nn.Module):
 
         return D_loss, G_loss
 
+    def compress(self, x):
+
+        """
+        * Pass image through encoder to obtain latents: x -> Encoder() -> y 
+        * Pass latents through hyperprior encoder to obtain hyperlatents:
+          y -> hyperencoder() -> z
+        * Encode hyperlatents via nonparametric entropy model. 
+        * Pass hyperlatents through mean-scale hyperprior decoder to obtain mean,
+          scale over latents: z -> hyperdecoder() -> (mu, sigma).
+        * Encode latents via entropy model derived from (mean, scale) hyperprior output.
+        """
+
+        assert self.model_mode == ModelModes.EVALUATION and (self.training is False), (
+            f'Set model mode to {ModelModes.EVALUATION} for compression.')
+        
+        spatial_shape = tuple(x.size()[2:])
+
+        if self.model_mode == ModelModes.EVALUATION and (self.training is False):
+            n_encoder_downsamples = self.Encoder.n_downsampling_layers
+            factor = 2 ** n_encoder_downsamples
+            self.logger.info('Padding input image to {}'.format(factor))
+            x = utils.pad_factor(x, x.size()[2:], factor)
+
+        # Encoder forward pass
+        y = self.Encoder(x)
+
+        if self.model_mode == ModelModes.EVALUATION and (self.training is False):
+            n_hyperencoder_downsamples = self.Hyperprior.analysis_net.n_downsampling_layers
+            factor = 2 ** n_hyperencoder_downsamples
+            self.logger.info('Padding latents to {}'.format(factor))
+            y = utils.pad_factor(y, y.size()[2:], factor)
+
+        compression_output = self.Hyperprior.compress_forward(y, spatial_shape)
+
+        return compression_output
+
+
+    def decompress(self, compression_output):
+
+        """
+        * Recover z* from compressed message.
+        * Pass recovered hyperlatents through mean-scale hyperprior decoder obtain mean,
+          scale over latents: z -> hyperdecoder() -> (mu, sigma).
+        * Use latent entropy model to recover y* from compressed image.
+        * Pass quantized latent through generator to obtain the reconstructed image.
+          y* -> Generator() -> x*.
+        """
+
+        assert self.model_mode == ModelModes.EVALUATION and (self.training is False), (
+            f'Set model mode to {ModelModes.EVALUATION} for decompression.')
+
+        latents_decoded = self.Hyperprior.decompress_forward(compression_output)
+
+        # Use quantized latents as input to G
+        reconstruction = self.Generator(latents_decoded)
+
+        if self.args.normalize_input_image is True:
+            reconstruction = torch.tanh(reconstruction)
+
+        # Undo padding
+        image_dims = compression_output.spatial_shape
+        reconstruction = reconstruction[:, :, :image_dims[0], :image_dims[1]]
+
+        return reconstruction
+
     def forward(self, x, train_generator=False, return_intermediates=False, writeout=True):
 
         self.writeout = writeout
@@ -301,12 +372,20 @@ class Model(nn.Module):
 
 if __name__ == '__main__':
 
+    compress_test = False
+
+    if compress_test is True:
+        model_mode = ModelModes.EVALUATION
+    else:
+        model_mode = ModelModes.TRAINING
+
     logger = utils.logger_setup(logpath=os.path.join(directories.experiments, 'logs'), filepath=os.path.abspath(__file__))
     device = utils.get_device()
     logger.info(f'Using device {device}')
     storage_train = defaultdict(list)
     storage_test = defaultdict(list)
-    model = Model(hific_args, logger, storage_train, storage_test, model_type=ModelTypes.COMPRESSION_GAN)
+
+    model = Model(hific_args, logger, storage_train, storage_test, model_mode=model_mode, model_type=ModelTypes.COMPRESSION_GAN)
     model.to(device)
 
     logger.info(model)
@@ -337,21 +416,32 @@ if __name__ == '__main__':
     for n, p in model.Hyperprior.hyperlatent_likelihood.named_parameters():
         logger.info(f'{n} - {p.shape}')
 
-    logger.info('DISCRIMINATOR PARAMETERS')
-    for n, p in model.Discriminator.named_parameters():
-        logger.info(f'{n} - {p.shape}')
+    if compress_test is False:
+        logger.info('DISCRIMINATOR PARAMETERS')
+        for n, p in model.Discriminator.named_parameters():
+            logger.info(f'{n} - {p.shape}')
 
     logger.info("Number of trainable parameters: {}".format(utils.count_parameters(model)))
     logger.info("Estimated size: {} MB".format(utils.count_parameters(model) * 4. / 10**6))
 
-    shape = [10, 3, 256, 256]
-    logger.info('Starting forward pass with input shape {}'.format(shape))
+    shape = [2, 3, 256, 256]
+    x = torch.randn(shape).to(device)
 
     start_time = time.time()
-    x = torch.randn(shape).to(device)
-    losses = model(x)
-    compression_loss, disc_loss = losses['compression'], losses['disc']
+
+    if compress_test is True:
+        model.eval()
+        logger.info('Starting compression with input shape {}'.format(shape))
+        compression_output = model.compress(x)
+        reconstruction = model.decompress(compression_output)
+
+        logger.info(f"n_bits: {compression_output.total_bits}")
+        logger.info(f"bpp: {compression_output.total_bpp}")
+        logger.info(f"MSE: {torch.mean(torch.square(reconstruction - x)).item()}")
+    else:
+        logger.info('Starting forward pass with input shape {}'.format(shape))
+        losses = model(x)
+        compression_loss, disc_loss = losses['compression'], losses['disc']
 
     logger.info('Delta t {:.3f}s'.format(time.time() - start_time))
-
-
+    
