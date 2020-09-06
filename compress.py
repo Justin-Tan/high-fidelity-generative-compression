@@ -85,13 +85,14 @@ def compress_batch(args):
                 if B > 1:
                     q_bpp_per_im = float(q_bpp.cpu().numpy()[subidx])
                 else:
-                    q_bpp_per_im = float(q_bpp.item())
+                    q_bpp_per_im = float(q_bpp.item()) if type(q_bpp) == torch.Tensor else float(q_bpp)
+
                 fname = os.path.join(args.output_dir, "{}_RECON_{:.3f}bpp.png".format(filenames[subidx], q_bpp_per_im))
                 torchvision.utils.save_image(reconstruction[subidx], fname, normalize=True)
                 output_filenames_total.append(fname)
 
             bpp_total[n:n + B] = bpp.data
-            q_bpp_total[n:n + B] = q_bpp.data
+            q_bpp_total[n:n + B] = q_bpp.data if type(q_bpp) == torch.Tensor else q_bpp
             LPIPS_total[n:n + B] = perceptual_loss.data
             n += B
 

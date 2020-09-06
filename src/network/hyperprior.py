@@ -31,6 +31,8 @@ CompressionOutput = namedtuple("CompressionOutput",
     "hyperlatent_bits",
     "latent_bits",
     "total_bits",
+    "hyperlatent_bpp",
+    "latent_bpp",
     "total_bpp"]   
 )
 
@@ -139,7 +141,7 @@ class Hyperprior(CodingModel):
     
     def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, mode='large',
         likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, entropy_code=False,
-        vectorize_encoding=True, block_encode=True):
+        vectorize_encoding=False, block_encode=True):
         """
         Introduces probabilistic model over latents of 
         latents.
@@ -227,10 +229,12 @@ class Hyperprior(CodingModel):
             hyperlatent_spatial_shape=hyperlatent_spatial_shape,
             batch_shape=batch_shape,
             spatial_shape=spatial_shape,
-            hyperlatent_bits=hyperlatent_bits,  # for reporting 
-            latent_bits=latent_bits,
-            total_bits=hyperlatent_bits + latent_bits,
-            total_bpp=hyperlatent_bpp + latent_bpp,
+            hyperlatent_bits=hyperlatent_bits.item(),  # for reporting 
+            latent_bits=latent_bits.item(),
+            total_bits=(hyperlatent_bits + latent_bits).item(),
+            hyperlatent_bpp=hyperlatent_bpp.item(),
+            latent_bpp=latent_bpp.item(),
+            total_bpp=(hyperlatent_bpp + latent_bpp).item(),
         )
 
         return compression_output

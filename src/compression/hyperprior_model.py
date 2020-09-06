@@ -73,8 +73,7 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         pmf = self.distribution.likelihood(samples, collapsed_format=True)
 
         # [n_channels, max_length]
-        pmf = torch.reshape(pmf, (max_length, -1))
-        pmf = torch.transpose(pmf, 0, 1)
+        pmf = torch.squeeze(pmf)
 
         # pmf_length = tf.broadcast_to(pmf_length, self.prior_shape_tensor)
         pmf_length = torch.reshape(pmf_length, [-1])
