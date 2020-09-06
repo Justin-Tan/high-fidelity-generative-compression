@@ -204,6 +204,7 @@ class Hyperprior(CodingModel):
         hyperlatents_decoded, _ = self.hyperprior_entropy_model.decompress(hyperlatents_encoded,
             batch_shape=batch_shape, broadcast_shape=hyperlatent_spatial_shape,
             vectorize=self.vectorize_encoding, block_decode=self.block_encode)
+        hyperlatents_decoded = hyperlatents_decoded.to(x)
 
         # Recover latent statistics from compressed hyperlatents
         latent_means = self.synthesis_mu(hyperlatents_decoded)
@@ -234,7 +235,7 @@ class Hyperprior(CodingModel):
 
         return compression_output
 
-    def decompress_forward(self, compression_output):
+    def decompress_forward(self, compression_output, device):
 
         hyperlatents_encoded = compression_output.hyperlatents_encoded
         latents_encoded = compression_output.latents_encoded
@@ -245,6 +246,7 @@ class Hyperprior(CodingModel):
         hyperlatents_decoded, _ = self.hyperprior_entropy_model.decompress(hyperlatents_encoded,
             batch_shape=batch_shape, broadcast_shape=hyperlatent_spatial_shape,
             vectorize=self.vectorize_encoding, block_decode=self.block_encode)
+        hyperlatents_decoded = hyperlatents_decoded.to(device)
 
         # Recover latent statistics from compressed hyperlatents
         latent_means = self.synthesis_mu(hyperlatents_decoded)
@@ -257,7 +259,7 @@ class Hyperprior(CodingModel):
             scales=latent_scales, broadcast_shape=latent_spatial_shape,
             vectorize=self.vectorize_encoding, block_decode=self.block_encode)
 
-        return latents_decoded
+        return latents_decoded.to(device)
 
 
     def forward(self, latents, spatial_shape, **kwargs):
