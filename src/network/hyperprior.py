@@ -139,7 +139,7 @@ class Hyperprior(CodingModel):
     
     def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, mode='large',
         likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, entropy_code=False,
-        vectorize_encoding=False, block_encode=True):
+        vectorize_encoding=True, block_encode=True):
         """
         Introduces probabilistic model over latents of 
         latents.
@@ -204,7 +204,7 @@ class Hyperprior(CodingModel):
         hyperlatents_decoded, _ = self.hyperprior_entropy_model.decompress(hyperlatents_encoded,
             batch_shape=batch_shape, broadcast_shape=hyperlatent_spatial_shape,
             vectorize=self.vectorize_encoding, block_decode=self.block_encode)
-        hyperlatents_decoded = hyperlatents_decoded.to(x)
+        hyperlatents_decoded = hyperlatents_decoded.to(latents)
 
         # Recover latent statistics from compressed hyperlatents
         latent_means = self.synthesis_mu(hyperlatents_decoded)

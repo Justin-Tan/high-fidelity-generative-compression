@@ -293,6 +293,7 @@ class Model(nn.Module):
             y = utils.pad_factor(y, y.size()[2:], factor)
 
         compression_output = self.Hyperprior.compress_forward(y, spatial_shape)
+        print('BPP', compression_output.total_bpp)
 
         return compression_output
 
