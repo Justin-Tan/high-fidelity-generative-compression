@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 
 # Custom
-from src.helpers import maths
+from src.helpers import maths, utils
 from src.compression import entropy_models, entropy_coding
 from src.compression import compression_utils
 
@@ -34,23 +34,23 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         super().__init__(distribution=distribution, likelihood_bound=likelihood_bound, 
             tail_mass=tail_mass, precision=precision)
 
-        median = self.distribution.median()
-        print('MEDIAN', median)
 
-    def build_tables(self, offsets=None, **kwargs):
+    def compute_medians(self):
+        self.medians = self.distribution.median().view(1,-1,1,1).cpu()
 
-        if offsets is None:
-            offsets = 0.
+    def build_tables(self, **kwargs):
         
-        # Shape [n_channels] or [B, n_channels]
-        # Compression is typically done for individual images
-        """
-        More generally, dimensions which are independent but
-        not necessarily identically distributed.
-        """
-        lower_tail = self.distribution.lower_tail(self.tail_mass)
-        upper_tail = self.distribution.upper_tail(self.tail_mass)
-        # median = self.distribution.median()
+        offsets = 0.
+
+        lower_tail = self.distribution.lower_tail(self.tail_mass).cpu()
+        upper_tail = self.distribution.upper_tail(self.tail_mass).cpu()
+
+        self.compute_medians()
+        medians = torch.squeeze(self.medians)
+
+        print(lower_tail[:10])
+        print(upper_tail[:10])
+        print(self.medians.flatten()[:10])
 
         # Largest distance observed between lower tail and median, 
         # and between median and upper tail.
@@ -71,8 +71,9 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         samples = torch.arange(max_length, dtype=self.distribution.dtype)
 
         # Broadcast to [n_channels,1,*] format
+        device = utils.get_device()
         samples = samples.view(1,-1) + pmf_start.view(-1,1,1)
-        pmf = self.distribution.likelihood(samples, collapsed_format=True)
+        pmf = self.distribution.likelihood(samples.to(device), collapsed_format=True).cpu()
 
         # [n_channels, max_length]
         pmf = torch.squeeze(pmf)
@@ -120,7 +121,7 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         EPS = 1e-9
         quotient = -np.log(2.)
 
-        quantized = self.quantize_st(x, offsets=None)
+        quantized = self.quantize_st(x)
         likelihood = self.distribution.likelihood(quantized)
         batch_size = likelihood.size()[0]
 
@@ -168,7 +169,7 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
             indices = indices.unsqueeze(0)
             indices = torch.repeat_interleave(indices, repeats=batch_shape, dim=0)
 
-        symbols = torch.round(bottleneck).to(torch.int32)
+        symbols = torch.floor(bottleneck + 0.5).to(torch.int32)
         rounded = symbols.clone()
 
         assert symbols.size() == indices.size(), 'Indices should have same size as inputs.'
@@ -398,6 +399,7 @@ if __name__ == '__main__':
     vectorize = False
     hyperprior_density = HyperpriorDensity(n_channels)
     hyperprior_entropy_model = HyperpriorEntropyModel(hyperprior_density)
+    hyperprior_entropy_model.build_tables()
 
     loc, scale = 2.401, 3.43
     n_data = 10

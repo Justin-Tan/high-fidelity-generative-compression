@@ -47,13 +47,12 @@ class ContinuousEntropyModel(nn.Module, metaclass=abc.ABCMeta):
         self.tail_mass = float(tail_mass)
         self.precision = int(precision)
 
-        self.build_tables()
-
     def quantize_st(self, inputs, offsets=None):
         # Ignore rounding in backward pass
         values = inputs
 
         if offsets is not None:
+            offsets = offsets.to(values)
             values = values - offsets
 
         delta = (torch.floor(values + 0.5) - values).detach()

@@ -32,7 +32,7 @@ def make_deterministic(seed=42):
 def compress_batch(args):
 
     # Reproducibility
-    make_deterministic()
+    # make_deterministic()
     perceptual_loss_fn = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available())
 
     # Load model
@@ -41,11 +41,16 @@ def compress_batch(args):
     loaded_args, model, _ = utils.load_model(args.ckpt_path, logger, device, model_mode=ModelModes.EVALUATION,
         current_args_d=None, prediction=True, strict=False)
 
+    # Override current arguments with recorded
     dictify = lambda x: dict((n, getattr(x, n)) for n in dir(x) if not (n.startswith('__') or 'logger' in n))
     loaded_args_d, args_d = dictify(loaded_args), dictify(args)
     loaded_args_d.update(args_d)
     args = utils.Struct(**loaded_args_d)
     logger.info(loaded_args_d)
+
+    # Build probability tables
+    model.Hyperprior.hyperprior_entropy_model.build_tables()
+
 
     eval_loader = datasets.get_dataloaders('evaluation', root=args.image_dir, batch_size=args.batch_size,
                                            logger=logger, shuffle=False, normalize=args.normalize_input_image)

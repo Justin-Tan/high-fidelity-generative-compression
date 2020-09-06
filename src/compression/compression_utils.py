@@ -3,6 +3,7 @@ import math
 import numpy as np
 
 from src.compression import entropy_coding
+from src.helpers import utils
 
 def estimate_tails(cdf, target, shape, dtype=torch.float32, extra_counts=24):
     """
@@ -30,7 +31,9 @@ def estimate_tails(cdf, target, shape, dtype=torch.float32, extra_counts=24):
     beta_1, beta_2 = 0.9, 0.99
 
     # Tails should be monotonically increasing
-    tails = torch.zeros(shape, dtype=dtype, requires_grad=True)
+    device = utils.get_device()
+    tails = torch.zeros(shape, dtype=dtype, requires_grad=True, device=device)
+
     m = torch.zeros(shape, dtype=dtype)
     v = torch.ones(shape, dtype=dtype)
     counts = torch.zeros(shape, dtype=torch.int32)
@@ -39,15 +42,15 @@ def estimate_tails(cdf, target, shape, dtype=torch.float32, extra_counts=24):
         loss = abs(cdf(tails) - target)
         loss.backward(torch.ones_like(tails))
 
-        grad = tails.grad
+        tgrad = tails.grad.cpu()
 
         with torch.no_grad():
-            m = beta_1 * m + (1. - beta_1) * tails.grad
-            v = beta_2 * v + (1. - beta_2) * torch.square(tails.grad)
-            tails -= lr * m / (torch.sqrt(v) + eps)
+            m = beta_1 * m + (1. - beta_1) * tgrad
+            v = beta_2 * v + (1. - beta_2) * torch.square(tgrad)
+            tails -= (lr * m / (torch.sqrt(v) + eps)).to(device)
 
         # Condition assumes tails init'd at zero
-        counts = torch.where(torch.logical_or(counts > 0, tails.grad * tails > 0), 
+        counts = torch.where(torch.logical_or(counts > 0, tgrad.cpu() * tails.cpu() > 0), 
             counts+1, counts)
 
         tails.grad.zero_()

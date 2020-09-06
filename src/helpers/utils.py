@@ -203,6 +203,7 @@ def load_model(save_path, logger, device, model_type=None, model_mode=None, curr
     logger.info('MODEL MODE: {}'.format(model_mode))
 
     model = Model(args, logger, model_type=model_type, model_mode=model_mode)
+
     # `strict` False if warmstarting
     model.load_state_dict(checkpoint['model_state_dict'], strict=strict)
 
