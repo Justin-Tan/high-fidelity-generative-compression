@@ -293,8 +293,19 @@ class Model(nn.Module):
             y = utils.pad_factor(y, y.size()[2:], factor)
 
         compression_output = self.Hyperprior.compress_forward(y, spatial_shape)
+        attained_hbpp = 32 * len(compression_output.hyperlatents_encoded) / np.prod(spatial_shape)
+        attained_lbpp = 32 * len(compression_output.latents_encoded) / np.prod(spatial_shape)
+        attained_bpp = 32 * ((len(compression_output.hyperlatents_encoded) +
+            len(compression_output.latents_encoded)) / np.prod(spatial_shape))
+        print('BPP', compression_output.total_bpp)
+        print('h BPP', compression_output.hyperlatent_bpp)
+        print('l BPP', compression_output.latent_bpp)
 
+        print('Actual BPP', attained_bpp)
+        print('h BPP', attained_hbpp)
+        print('l BPP', attained_lbpp)
         return compression_output
+
 
 
     def decompress(self, compression_output):

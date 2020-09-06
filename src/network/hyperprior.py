@@ -22,7 +22,7 @@ HyperInfo = namedtuple(
     "bitstring side_bitstring",
 )
 
-CompressionOutput = namedtuple("CompressionOutput", 
+CompressionOutput = namedtuple("CompressionOutput",
    ["hyperlatents_encoded",
     "latents_encoded",
     "hyperlatent_spatial_shape",
@@ -31,7 +31,9 @@ CompressionOutput = namedtuple("CompressionOutput",
     "hyperlatent_bits",
     "latent_bits",
     "total_bits",
-    "total_bpp"]   
+    "hyperlatent_bpp",
+    "latent_bpp",
+    "total_bpp"]
 )
 
 lower_bound_identity = maths.LowerBoundIdentity.apply
@@ -227,10 +229,12 @@ class Hyperprior(CodingModel):
             hyperlatent_spatial_shape=hyperlatent_spatial_shape,
             batch_shape=batch_shape,
             spatial_shape=spatial_shape,
-            hyperlatent_bits=hyperlatent_bits,  # for reporting 
-            latent_bits=latent_bits,
-            total_bits=hyperlatent_bits + latent_bits,
-            total_bpp=hyperlatent_bpp + latent_bpp,
+            hyperlatent_bits=hyperlatent_bits.item(),  # for reporting 
+            latent_bits=latent_bits.item(),
+            total_bits=(hyperlatent_bits + latent_bits).item(),
+            hyperlatent_bpp=hyperlatent_bpp.item(),
+            latent_bpp=latent_bpp.item(),
+            total_bpp=(hyperlatent_bpp + latent_bpp).item(),
         )
 
         return compression_output

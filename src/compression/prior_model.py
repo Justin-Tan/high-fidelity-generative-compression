@@ -316,7 +316,7 @@ if __name__ == '__main__':
 
     import time
 
-    n_channels = 50
+    n_channels = 32
     use_blocks = True
     vectorize = True
     prior_density = PriorDensity(n_channels)

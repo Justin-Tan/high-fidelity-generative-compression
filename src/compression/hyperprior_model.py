@@ -48,6 +48,7 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         """
         lower_tail = self.distribution.lower_tail(self.tail_mass)
         upper_tail = self.distribution.upper_tail(self.tail_mass)
+        # median = self.distribution.median()
 
         # Largest distance observed between lower tail and median, 
         # and between median and upper tail.
@@ -68,20 +69,18 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         samples = torch.arange(max_length, dtype=self.distribution.dtype)
 
         # Broadcast to [n_channels,1,*] format
+        print(pmf_start)
+        print(pmf_start.shape)
+        print(samples)
         samples = samples.view(1,-1) + pmf_start.view(-1,1,1)
-
+        print(samples.shape)
         pmf = self.distribution.likelihood(samples, collapsed_format=True)
 
         # [n_channels, max_length]
-        pmf = torch.reshape(pmf, (max_length, -1))
-        pmf = torch.transpose(pmf, 0, 1)
+        pmf = torch.squeeze(pmf)
 
-        # pmf_length = tf.broadcast_to(pmf_length, self.prior_shape_tensor)
-        pmf_length = torch.reshape(pmf_length, [-1])
         cdf_length = pmf_length + 2
-        # cdf_offset = tf.broadcast_to(-minima, self.prior_shape_tensor)
         cdf_offset = -minima
-        cdf_offset = torch.reshape(cdf_offset, [-1])
 
         cdf_length = cdf_length.to(torch.int32)
         cdf_offset = cdf_offset.to(torch.int32)
@@ -343,8 +342,13 @@ class HyperpriorDensity(nn.Module):
         cdf_logits_func = lambda x: self.cdf_logits(x, update_parameters=False)
         ut = compression_utils.estimate_tails(cdf_logits_func, target=np.log(2. / tail_mass - 1.), 
             shape=torch.Size((self.n_channels,1,1))).detach()
-
         return ut.reshape(self.n_channels)
+
+    def median(self):
+        cdf_logits_func = lambda x: self.cdf_logits(x, update_parameters=False)
+        _median = compression_utils.estimate_tails(cdf_logits_func, target=0., 
+            shape=torch.Size((self.n_channels,1,1))).detach()
+        return _median.reshape(self.n_channels)
 
     def likelihood(self, x, collapsed_format=False, **kwargs):
         """
@@ -393,14 +397,14 @@ if __name__ == '__main__':
 
     n_channels = 32
     use_blocks = True
-    vectorize = True
+    vectorize = False
     hyperprior_density = HyperpriorDensity(n_channels)
     hyperprior_entropy_model = HyperpriorEntropyModel(hyperprior_density)
 
     loc, scale = 2.401, 3.43
-    n_data = 1000
+    n_data = 10
     toy_shape = (n_data, n_channels, 16, 16)
-    bottleneck = torch.randn(toy_shape) * np.sqrt(scale) + loc
+    bottleneck = torch.randn(toy_shape)
 
     start_t = time.time()
 
