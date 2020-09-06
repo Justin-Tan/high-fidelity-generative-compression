@@ -22,7 +22,7 @@ HyperInfo = namedtuple(
     "bitstring side_bitstring",
 )
 
-CompressionOutput = namedtuple("CompressionOutput", 
+CompressionOutput = namedtuple("CompressionOutput",
    ["hyperlatents_encoded",
     "latents_encoded",
     "hyperlatent_spatial_shape",
@@ -33,7 +33,7 @@ CompressionOutput = namedtuple("CompressionOutput",
     "total_bits",
     "hyperlatent_bpp",
     "latent_bpp",
-    "total_bpp"]   
+    "total_bpp"]
 )
 
 lower_bound_identity = maths.LowerBoundIdentity.apply
@@ -141,7 +141,7 @@ class Hyperprior(CodingModel):
     
     def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, mode='large',
         likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, entropy_code=False,
-        vectorize_encoding=False, block_encode=True):
+        vectorize_encoding=True, block_encode=True):
         """
         Introduces probabilistic model over latents of 
         latents.

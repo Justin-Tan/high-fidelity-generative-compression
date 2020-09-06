@@ -307,6 +307,7 @@ class Model(nn.Module):
         return compression_output
 
 
+
     def decompress(self, compression_output):
 
         """
