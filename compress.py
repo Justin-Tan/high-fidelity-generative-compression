@@ -64,7 +64,7 @@ def compress_batch(args):
             data = data.to(device, dtype=torch.float)
             B = data.size(0)
 
-            if args.reconstruction is True:
+            if args.reconstruct is True:
                 # Reconstruction without compression
                 reconstruction, q_bpp = model(data, writeout=False)
             else:
