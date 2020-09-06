@@ -255,15 +255,15 @@ def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precisi
     value = symbols - cdf_offset[cdf_index]
 
     # If outside of this range, map value to non-negative integer overflow.
-    overflow = np.zeros_like(value)
+    # overflow = np.zeros_like(value)
 
-    of_mask = value < 0
-    overflow = np.where(of_mask, -2 * value - 1, overflow)
-    value = np.where(of_mask, max_value, value)
+    # of_mask = value < 0
+    # overflow = np.where(of_mask, -2 * value - 1, overflow)
+    # value = np.where(of_mask, max_value, value)
 
-    of_mask = value >= max_value
-    overflow = np.where(of_mask, 2 * (value - max_value), overflow)
-    value = np.where(of_mask, max_value, value)
+    # of_mask = value >= max_value
+    # overflow = np.where(of_mask, 2 * (value - max_value), overflow)
+    # value = np.where(of_mask, max_value, value)
 
     assert bool(np.all(value >= 0)), (
         "Invalid shifted value for current symbol - values must be non-negative.")

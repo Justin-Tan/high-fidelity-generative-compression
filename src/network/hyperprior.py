@@ -272,13 +272,13 @@ class Hyperprior(CodingModel):
         
         # Mismatch b/w continuous and discrete cases?
         # Differential entropy, hyperlatents
-        noisy_hyperlatents = self._quantize(hyperlatents, mode='noise')
+        noisy_hyperlatents = self._quantize(hyperlatents, mode='noise', means=self.hyperprior_entropy_model.medians)
         noisy_hyperlatent_likelihood = self.hyperlatent_likelihood(noisy_hyperlatents)
         noisy_hyperlatent_bits, noisy_hyperlatent_bpp = self._estimate_entropy(
             noisy_hyperlatent_likelihood, spatial_shape)
 
         # Discrete entropy, hyperlatents
-        quantized_hyperlatents = self._quantize(hyperlatents, mode='quantize')
+        quantized_hyperlatents = self._quantize(hyperlatents, mode='quantize', means=self.hyperprior_entropy_model.medians)
         quantized_hyperlatent_likelihood = self.hyperlatent_likelihood(quantized_hyperlatents)
         quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy(
             quantized_hyperlatent_likelihood, spatial_shape)
