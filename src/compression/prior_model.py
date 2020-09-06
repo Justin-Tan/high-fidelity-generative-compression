@@ -187,7 +187,7 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         symbols = symbols.cpu().numpy()
         indices = indices.cpu().numpy()
 
-        cdf = self.CDF.cpu().numpy().astype('uint64')
+        cdf = self.CDF.cpu().numpy().astype('uint32')
         cdf_length = self.CDF_length.cpu().numpy()
         cdf_offset = self.CDF_offset.cpu().numpy()
 
@@ -231,7 +231,7 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
                 raise ValueError('Mean dims mismatch!')
 
         indices = indices.cpu().numpy()
-        cdf = self.CDF.cpu().numpy().astype('uint64')
+        cdf = self.CDF.cpu().numpy().astype('uint32')
         cdf_length = self.CDF_length.cpu().numpy()
         cdf_offset = self.CDF_offset.cpu().numpy()
 
@@ -316,7 +316,7 @@ if __name__ == '__main__':
 
     import time
 
-    n_channels = 32
+    n_channels = 50
     use_blocks = True
     vectorize = True
     prior_density = PriorDensity(n_channels)
@@ -324,7 +324,7 @@ if __name__ == '__main__':
 
     loc, scale = 2.401, 3.43
     n_data = 50
-    toy_shape = (n_data, n_channels, 4 ,4)
+    toy_shape = (n_data, n_channels, 16, 16)
     bottleneck, means = torch.randn(toy_shape), torch.randn(toy_shape)
     scales = torch.randn(toy_shape) * np.sqrt(scale) + loc
     scales = torch.clamp(scales, min=MIN_SCALE)

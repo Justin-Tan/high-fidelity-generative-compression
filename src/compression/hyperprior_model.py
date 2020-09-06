@@ -181,7 +181,7 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         symbols = symbols.cpu().numpy()
         indices = indices.cpu().numpy()
 
-        cdf = self.CDF.cpu().numpy().astype('uint64')
+        cdf = self.CDF.cpu().numpy().astype('uint32')
         cdf_length = self.CDF_length.cpu().numpy()
         cdf_offset = self.CDF_offset.cpu().numpy()
         
@@ -239,7 +239,7 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
             f"Index ({indices_size}) - symbol ({symbols_shape}) shape mismatch!")
 
         indices = indices.cpu().numpy()
-        cdf = self.CDF.cpu().numpy().astype('uint64')
+        cdf = self.CDF.cpu().numpy().astype('uint32')
         cdf_length = self.CDF_length.cpu().numpy()
         cdf_offset = self.CDF_offset.cpu().numpy()
 

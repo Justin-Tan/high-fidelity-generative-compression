@@ -16,6 +16,7 @@ cast2u64 = lambda x: np.array(x, dtype=np.uint64)
 
 OVERFLOW_WIDTH = 4
 OVERFLOW_CODE = 1 << (1 << OVERFLOW_WIDTH)
+CHUNKSIZE = 20
 
 def base_codec(enc_statfun, dec_statfun, precision):
     if np.any(precision >= 24):
