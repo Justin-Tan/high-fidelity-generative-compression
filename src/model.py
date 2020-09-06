@@ -311,7 +311,7 @@ class Model(nn.Module):
         assert self.model_mode == ModelModes.EVALUATION and (self.training is False), (
             f'Set model mode to {ModelModes.EVALUATION} for decompression.')
 
-        latents_decoded = self.Hyperprior.decompress_forward(compression_output)
+        latents_decoded = self.Hyperprior.decompress_forward(compression_output, device=utils.get_device())
 
         # Use quantized latents as input to G
         reconstruction = self.Generator(latents_decoded)
