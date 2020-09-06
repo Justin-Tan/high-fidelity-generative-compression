@@ -34,6 +34,8 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         super().__init__(distribution=distribution, likelihood_bound=likelihood_bound, 
             tail_mass=tail_mass, precision=precision)
 
+        self.medians = self.distribution.median().view(1,-1,1,1)
+        print(self.medians)
 
     def build_tables(self, offsets=None, **kwargs):
 
@@ -48,7 +50,8 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         """
         lower_tail = self.distribution.lower_tail(self.tail_mass)
         upper_tail = self.distribution.upper_tail(self.tail_mass)
-        # median = self.distribution.median()
+        medians = self.distribution.median()
+        offsets = medians
 
         # Largest distance observed between lower tail and median, 
         # and between median and upper tail.
@@ -69,11 +72,7 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         samples = torch.arange(max_length, dtype=self.distribution.dtype)
 
         # Broadcast to [n_channels,1,*] format
-        print(pmf_start)
-        print(pmf_start.shape)
-        print(samples)
         samples = samples.view(1,-1) + pmf_start.view(-1,1,1)
-        print(samples.shape)
         pmf = self.distribution.likelihood(samples, collapsed_format=True)
 
         # [n_channels, max_length]
@@ -122,7 +121,7 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         EPS = 1e-9
         quotient = -np.log(2.)
 
-        quantized = self.quantize_st(x, offsets=None)
+        quantized = self.quantize_st(x, offsets=self.medians)
         likelihood = self.distribution.likelihood(quantized)
         batch_size = likelihood.size()[0]
 
@@ -170,7 +169,7 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
             indices = indices.unsqueeze(0)
             indices = torch.repeat_interleave(indices, repeats=batch_shape, dim=0)
 
-        symbols = torch.round(bottleneck).to(torch.int32)
+        symbols = torch.floor(bottleneck + 0.5 - self.medians).to(torch.int32)
         rounded = symbols.clone()
 
         assert symbols.size() == indices.size(), 'Indices should have same size as inputs.'
@@ -248,7 +247,7 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         symbols = torch.Tensor(decoded)
         symbols = torch.reshape(symbols, symbols_shape)
         decoded_raw = symbols.clone()
-        outputs = self.dequantize(symbols)
+        outputs = self.dequantize(symbols, offsets=self.medians)
 
         return outputs, decoded_raw
 
