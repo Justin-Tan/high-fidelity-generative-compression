@@ -67,6 +67,7 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         super().__init__(distribution=distribution, likelihood_bound=likelihood_bound, 
             tail_mass=tail_mass, precision=precision)
 
+        self.build_tables()
         scale_table_tensor = torch.Tensor(tuple(float(s) for s in self.scale_table))
         self.register_buffer('scale_table_tensor', scale_table_tensor)
         self.register_buffer('min_scale_tensor', torch.Tensor([float(self.min_scale)]))

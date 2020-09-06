@@ -37,10 +37,7 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         self.medians = self.distribution.median().view(1,-1,1,1)
         print(self.medians)
 
-    def build_tables(self, offsets=None, **kwargs):
-
-        if offsets is None:
-            offsets = 0.
+    def build_tables(self, **kwargs):
         
         # Shape [n_channels] or [B, n_channels]
         # Compression is typically done for individual images

@@ -46,8 +46,6 @@ class ContinuousEntropyModel(nn.Module, metaclass=abc.ABCMeta):
         self.likelihood_bound = float(likelihood_bound)
         self.tail_mass = float(tail_mass)
         self.precision = int(precision)
-        
-        self.build_tables()
 
     def quantize_st(self, inputs, offsets=None):
         # Ignore rounding in backward pass
