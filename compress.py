@@ -32,7 +32,7 @@ def make_deterministic(seed=42):
 def compress_batch(args):
 
     # Reproducibility
-    make_deterministic()
+    # make_deterministic()
     perceptual_loss_fn = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available())
 
     # Load model
@@ -41,11 +41,16 @@ def compress_batch(args):
     loaded_args, model, _ = utils.load_model(args.ckpt_path, logger, device, model_mode=ModelModes.EVALUATION,
         current_args_d=None, prediction=True, strict=False)
 
+    # Override current arguments with recorded
     dictify = lambda x: dict((n, getattr(x, n)) for n in dir(x) if not (n.startswith('__') or 'logger' in n))
     loaded_args_d, args_d = dictify(loaded_args), dictify(args)
     loaded_args_d.update(args_d)
     args = utils.Struct(**loaded_args_d)
     logger.info(loaded_args_d)
+
+    # Build probability tables
+    model.Hyperprior.hyperprior_entropy_model.build_tables()
+
 
     eval_loader = datasets.get_dataloaders('evaluation', root=args.image_dir, batch_size=args.batch_size,
                                            logger=logger, shuffle=False, normalize=args.normalize_input_image)
@@ -54,7 +59,8 @@ def compress_batch(args):
     input_filenames_total = list()
     output_filenames_total = list()
     bpp_total, q_bpp_total, LPIPS_total = torch.Tensor(N), torch.Tensor(N), torch.Tensor(N)
-
+    utils.makedirs(args.output_dir)
+    
     start_time = time.time()
 
     with torch.no_grad():
@@ -63,7 +69,14 @@ def compress_batch(args):
             data = data.to(device, dtype=torch.float)
             B = data.size(0)
 
-            reconstruction, q_bpp, n_bpp = model(data, writeout=False)
+            if args.reconstruct is True:
+                # Reconstruction without compression
+                reconstruction, q_bpp = model(data, writeout=False)
+            else:
+                # Perform entropy coding
+                compressed_output = model.compress(data)
+                reconstruction = model.decompress(compressed_output)
+                q_bpp = compressed_output.total_bpp
 
             if args.normalize_input_image is True:
                 # [-1., 1.] -> [0., 1.]
@@ -77,13 +90,14 @@ def compress_batch(args):
                 if B > 1:
                     q_bpp_per_im = float(q_bpp.cpu().numpy()[subidx])
                 else:
-                    q_bpp_per_im = float(q_bpp.item())
+                    q_bpp_per_im = float(q_bpp.item()) if type(q_bpp) == torch.Tensor else float(q_bpp)
+
                 fname = os.path.join(args.output_dir, "{}_RECON_{:.3f}bpp.png".format(filenames[subidx], q_bpp_per_im))
                 torchvision.utils.save_image(reconstruction[subidx], fname, normalize=True)
                 output_filenames_total.append(fname)
 
             bpp_total[n:n + B] = bpp.data
-            q_bpp_total[n:n + B] = q_bpp.data
+            q_bpp_total[n:n + B] = q_bpp.data if type(q_bpp) == torch.Tensor else q_bpp
             LPIPS_total[n:n + B] = perceptual_loss.data
             n += B
 
@@ -116,6 +130,7 @@ def main(**kwargs):
         help="Path to directory to store output images")
     parser.add_argument('-bs', '--batch_size', type=int, default=1,
         help="Loader batch size. Set to 1 if images in directory are different sizes.")
+    parser.add_argument("-rc", "--reconstruct", help="Reconstruct input image without compression.", action="store_true")
     args = parser.parse_args()
 
     input_images = glob.glob(os.path.join(args.image_dir, '*.jpg'))
@@ -125,7 +140,7 @@ def main(**kwargs):
 
     print('Input images')
     pprint(input_images)
-    # Launch training
+
     compress_batch(args)
 
 if __name__ == '__main__':

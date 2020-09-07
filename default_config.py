@@ -14,7 +14,7 @@ class ModelTypes(object):
 class ModelModes(object):
     TRAINING = 'training'
     VALIDATION = 'validation'
-    EVALUATION = 'evaluation'
+    EVALUATION = 'evaluation'  # actual entropy coding
 
 class Datasets(object):
     OPENIMAGES = 'openimages'
@@ -28,12 +28,6 @@ class DatasetPaths(object):
 
 class directories(object):
     experiments = 'experiments'
-
-class checkpoints(object):
-    low_rate1 = 'experiments/norm_low_rate_openimages_compression_2020_08_19_16_13/checkpoints/norm_low_rate_openimages_compression_2020_08_19_16_13_epoch2_idx168720_2020_08_21_04:00.pt'
-    low_rate_nrb9 = 'experiments/low_rate9_norm_openimages_compression_2020_08_19_16_59/checkpoints/low_rate9_norm_openimages_compression_2020_08_19_16_59_epoch4_idx237436_2020_08_22_00:21.pt'
-    # python3 train.py -n low_rate_gan_v1_norm -mt compression_gan -bs 8 -norm --regime low -steps 1e6 --warmstart -ckpt
-    # experiments/norm_low_rate_openimages_compression_2020_08_19_16_13/checkpoints/norm_low_rate_openimages_compression_2020_08_19_16_13_epoch2_idx168720_2020_08_21_04:00.pt
 
 class args(object):
     """
