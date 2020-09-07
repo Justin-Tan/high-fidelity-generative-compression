@@ -7,7 +7,7 @@ Craystack ANS implementation: https://github.com/j-towns/craystack/blob/master/c
 
 OVERFLOW_WIDTH = 4
 OVERFLOW_CODE = 1 << (1 << OVERFLOW_WIDTH)
-PATCH_SIZE = (4,4)
+PATCH_SIZE = (1,1)
 
 import torch
 import numpy as np
@@ -57,11 +57,10 @@ def _vec_indexed_cdf_to_enc_statfun(cdf_i):
         # (coding_shape) = (C,H,W) by default but can  be generalized
         # cdf_i: [(coding_shape), pmf_length + 2]
         # value: [(coding_shape)]
-        lower = np.squeeze(np.take_along_axis(cdf_i, 
-            np.expand_dims(value, -1), axis=-1))
-        upper = np.squeeze(np.take_along_axis(cdf_i, 
-            np.expand_dims(value + 1, -1), axis=-1))
-
+        lower = np.take_along_axis(cdf_i, 
+            np.expand_dims(value, -1), axis=-1)[..., 0]
+        upper = np.take_along_axis(cdf_i, 
+            np.expand_dims(value + 1, -1), axis=-1)[..., 0]
         return lower, upper - lower
 
     return _enc_statfun
@@ -293,7 +292,7 @@ def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precisi
         values, _ = compression_utils.decompose(values, n_channels)
         cdf_index, unfolded_shape = compression_utils.decompose(indices, n_channels)
         coding_shape = values.shape[1:]
-
+        print(coding_shape)
     message = vrans.empty_message(coding_shape)
 
     # LIFO - last item compressed is first item decompressed
