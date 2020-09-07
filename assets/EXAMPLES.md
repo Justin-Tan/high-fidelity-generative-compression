@@ -8,10 +8,10 @@ Images are losslessly saved to PNG for viewing. More examples can be found in [t
 
 Original | Reconstruction
 :-------------------------:|:-------------------------:
-![guess](originals/cathedral_13.2bpp) | ![guess](hific/cathedral_RECON_0.168bpp)
+![guess](originals/cathedral_13.2bpp.png) | ![guess](hific/cathedral_RECON_0.168bpp.png)
 
 ```python
-Original: 9.93 bpp | HIFIC: 0.090 bpp
+Original: 13.2 bpp | HIFIC: 0.168 bpp
 ```
 
 
