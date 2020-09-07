@@ -1,62 +1,40 @@
+The images below were generated using the `HIFIC-low` model. You can generate the reconstructions by downloading the model weights and using the following command. The bitrate is reported in bits-per-pixel (`bpp`) of the compressed representation.
+
+```bash
+python3 compress.py -i /path/to/input/images --ckpt /path/to/model/checkpoint --reconstruct
+```
+
+Images are losslessly saved to PNG for viewing. More examples can be found in [this shared drive.](https://drive.google.com/drive/folders/1lH1pTmekC1jL-gPi1fhEDuyjhfe5x6WG).
+
 Original | Reconstruction
 :-------------------------:|:-------------------------:
-![guess](assets/hific/CLIC2020_5_RECON_0.160bpp.png) | ![guess](assets/originals/CLIC2020_5.png)
+![guess](assets/originals/cathedral_9.93bpp) | ![guess](assets/hific/cathedral_RECON_0.090bpp)
 
-<details>
+```python
+Original: 9.93 bpp | HIFIC: 0.090 bpp
+```
 
-  <summary>Image 1</summary>
-  
-  ```python
-  Original: B (11.6 bpp) | HIFIC: A (0.160 bpp). Ratio: 72.5.
-  ```
 
-</details>
-
-A             |  B
+Original | Reconstruction
 :-------------------------:|:-------------------------:
-![guess](assets/originals/CLIC2020_20.png) | ![guess](assets/hific/CLIC2020_20_RECON_0.330bpp.png)
+![guess](assets/originals/satellite_4.31bpp.png) | ![guess](assets/hific/satellite_RECON_0.039bpp.png)
 
-<details>
+```python
+Original: 4.31 bpp | HIFIC: 0.039 bpp
+```
 
-  <summary>Image 2</summary>
-
-  ```python
-  Original: A (14.6 bpp) | HIFIC: B (0.330 bpp). Ratio: 44.2
-  ```
-
-</details>
-
-A | B
+Original | Reconstruction
 :-------------------------:|:-------------------------:
-![guess](assets/originals/CLIC2020_18.png) | ![guess](assets/hific/CLIC2020_18_RECON_0.209bpp.png)
+![guess](assets/originals/telephone_5.61bpp.png) | ![guess](assets/hific/telephone_RECON_0.083bpp.png)
 
-<details>
+```python
+Original: 5.61 bpp | HIFIC: 0.083 bpp
+```
 
-  <summary>Image 3</summary>
-  
-  ```python
-  Original: A (12.3 bpp) | HIFIC: B (0.209 bpp). Ratio: 58.9
-  ```
-  
-</details>
-
-A             |  B
+Original | Reconstruction
 :-------------------------:|:-------------------------:
-![guess](assets/hific/CLIC2020_19_RECON_0.565bpp.png) | ![guess](assets/originals/CLIC2020_19.png)
+![guess](assets/originals/clocktower_9.93bpp.png) | ![guess](assets/hific/clocktower_RECON_0.090bpp.png)
 
-<details>
-
-  <summary>Image 4</summary>
-  
-  ```python
-  Original: B (19.9 bpp) | HIFIC: A (0.565 bpp). Ratio: 35.2
-  ```
-  
-</details>
-
-| Tables        | Are           | Cool  |
-|:------------- |:-------------:| -----:|
-| col 3 is      | right-aligned | $1600 |
-| col 2 is      | centered      |   $12 |
-| col 1 is      | left-aligned  |   $42 |
-| zebra stripes | are neat      |    $1 |
+```python
+Original: 9.93 bpp | HIFIC: 0.090 bpp
+```
