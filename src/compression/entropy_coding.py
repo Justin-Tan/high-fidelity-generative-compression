@@ -280,6 +280,8 @@ def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precisi
 
     if B == 1:
         # Vectorize on patches
+        print(symbols_shape[2])
+        print(symbols_shape[3])
         assert (symbols_shape[2] % PATCH_SIZE[0] == 0) and (symbols_shape[3] % PATCH_SIZE[1] == 0)
         values, _ = compression_utils.decompose(values, n_channels)
         cdf_index, unfolded_shape = compression_utils.decompose(indices, n_channels)

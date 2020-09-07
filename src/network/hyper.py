@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from src.helpers import maths
-from src.hyperprior import LOG_SCALES_MIN
 lower_bound_toward = maths.LowerBoundToward.apply
 
 def get_num_DLMM_channels(C, K=4, params=['mu','scale','mix']):
@@ -16,7 +15,7 @@ def get_num_DLMM_channels(C, K=4, params=['mu','scale','mix']):
 def get_num_mixtures(K_agg, C, params=['mu','scale','mix']):
     return K_agg // (len(params) * C)
 
-def unpack_likelihood_params(x, conv_out):
+def unpack_likelihood_params(x, conv_out, log_scales_min):
     
     N, C, H, W = x.shape
     K_agg = conv_out.shape[1]
@@ -28,7 +27,7 @@ def unpack_likelihood_params(x, conv_out):
     logit_pis = conv_out[:, 0, ...]
     means = conv_out[:, 1, ...]
     log_scales = conv_out[:, 2, ...]
-    log_scales = lower_bound_toward(log_scales, LOG_SCALES_MIN)
+    log_scales = lower_bound_toward(log_scales, log_scales_min)
     x = x.reshape(N, C, 1, H, W)
 
     return x, (logit_pis, means, log_scales), K

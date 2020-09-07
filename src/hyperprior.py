@@ -375,7 +375,8 @@ class HyperpriorDLMM(CodingModel):
     def latent_log_likelihood_DLMM(self, x, DLMM_params):
 
         # (B C K H W)
-        x, (logit_pis, means, log_scales), K = hyper.unpack_likelihood_params(x, DLMM_params)
+        x, (logit_pis, means, log_scales), K = hyper.unpack_likelihood_params(x, 
+            DLMM_params, LOG_SCALES_MIN)
 
         # Assumes 1 - CDF(x) = CDF(-x) symmetry
         # Numerical stability, do subtraction in left tail
