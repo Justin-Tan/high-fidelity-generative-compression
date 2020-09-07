@@ -60,7 +60,6 @@ def push(x, starts, freqs, precisions):
         precision:  Determines normalization factor of probability distribution.
     """
     head, tail = x
-
     assert head.shape == starts.shape == freqs.shape, (
         f"Inconsistent encoder shapes! head: {head.shape} | "
         f"starts: {starts.shape} | freqs: {freqs.shape}")

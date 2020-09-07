@@ -133,7 +133,6 @@ class Model(nn.Module):
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_encoder_downsamples = self.Encoder.n_downsampling_layers
             factor = 2 ** n_encoder_downsamples
-            self.logger.info('Padding input image by {}'.format(factor))
             x = utils.pad_factor(x, x.size()[2:], factor)
 
         # Encoder forward pass
@@ -142,7 +141,6 @@ class Model(nn.Module):
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_hyperencoder_downsamples = self.Hyperprior.analysis_net.n_downsampling_layers
             factor = 2 ** n_hyperencoder_downsamples
-            self.logger.info('Padding latents by {}'.format(factor))
             y = utils.pad_factor(y, y.size()[2:], factor)
 
         hyperinfo = self.Hyperprior(y, spatial_shape=x.size()[2:])
@@ -281,7 +279,6 @@ class Model(nn.Module):
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_encoder_downsamples = self.Encoder.n_downsampling_layers
             factor = 2 ** n_encoder_downsamples
-            self.logger.info('Padding input image to {}'.format(factor))
             x = utils.pad_factor(x, x.size()[2:], factor)
 
         # Encoder forward pass
@@ -290,7 +287,6 @@ class Model(nn.Module):
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_hyperencoder_downsamples = self.Hyperprior.analysis_net.n_downsampling_layers
             factor = 2 ** n_hyperencoder_downsamples
-            self.logger.info('Padding latents to {}'.format(factor))
             y = utils.pad_factor(y, y.size()[2:], factor)
 
         compression_output = self.Hyperprior.compress_forward(y, spatial_shape)
@@ -298,13 +294,16 @@ class Model(nn.Module):
         attained_lbpp = 32 * len(compression_output.latents_encoded) / np.prod(spatial_shape)
         attained_bpp = 32 * ((len(compression_output.hyperlatents_encoded) +  
             len(compression_output.latents_encoded)) / np.prod(spatial_shape))
-        print('BPP', compression_output.total_bpp)
-        print('h BPP', compression_output.hyperlatent_bpp)
-        print('l BPP', compression_output.latent_bpp)
 
-        print('Actual BPP', attained_bpp)
-        print('h BPP', attained_hbpp)
-        print('l BPP', attained_lbpp)
+        self.logger.info('[ESTIMATED]')
+        self.logger.info(f'BPP: {compression_output.total_bpp:.3f}')
+        self.logger.info(f'HL BPP: {compression_output.hyperlatent_bpp:.3f}')
+        self.logger.info(f'L BPP: {compression_output.latent_bpp:.3f}')
+
+        self.logger.info('[ATTAINED]')
+        self.logger.info(f'BPP: {attained_bpp:.3f}')
+        self.logger.info(f'HL BPP: {attained_hbpp:.3f}')
+        self.logger.info(f'L BPP: {attained_lbpp:.3f}')
         return compression_output
 
 

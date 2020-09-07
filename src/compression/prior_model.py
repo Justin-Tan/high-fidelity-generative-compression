@@ -317,7 +317,7 @@ if __name__ == '__main__':
 
     import time
 
-    n_channels = 64
+    n_channels = 256
     use_blocks = True
     vectorize = True
     prior_density = PriorDensity(n_channels)
@@ -325,7 +325,7 @@ if __name__ == '__main__':
 
     loc, scale = 2.401, 3.43
     n_data = 1
-    toy_shape = (n_data, n_channels, 149, 175)
+    toy_shape = (n_data, n_channels, 34, 50)
     bottleneck, means = torch.randn(toy_shape), torch.randn(toy_shape)
     scales = torch.randn(toy_shape) * np.sqrt(scale) + loc
     scales = torch.clamp(scales, min=MIN_SCALE)

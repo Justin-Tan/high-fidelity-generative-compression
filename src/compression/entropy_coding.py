@@ -7,7 +7,7 @@ Craystack ANS implementation: https://github.com/j-towns/craystack/blob/master/c
 
 OVERFLOW_WIDTH = 4
 OVERFLOW_CODE = 1 << (1 << OVERFLOW_WIDTH)
-PATCH_SIZE = (1,2)
+PATCH_SIZE = (1,1)
 
 import torch
 import numpy as np
@@ -57,11 +57,10 @@ def _vec_indexed_cdf_to_enc_statfun(cdf_i):
         # (coding_shape) = (C,H,W) by default but canbe generalized
         # cdf_i: [(coding_shape), pmf_length + 2]
         # value: [(coding_shape)]
-        lower = np.squeeze(np.take_along_axis(cdf_i, 
-            np.expand_dims(value, -1), axis=-1))
-        upper = np.squeeze(np.take_along_axis(cdf_i, 
-            np.expand_dims(value + 1, -1), axis=-1))
-
+        lower = np.take_along_axis(cdf_i, 
+            np.expand_dims(value, -1), axis=-1)[..., 0]
+        upper = np.take_along_axis(cdf_i, 
+            np.expand_dims(value + 1, -1), axis=-1)[..., 0]
         return lower, upper - lower
 
     return _enc_statfun
@@ -280,14 +279,11 @@ def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precisi
     if B == 1:
         # Vectorize on patches - there's probably a way to interlace patches with
         # batch elements for B > 1 ...
-        print('og', values.sh
         if ((symbols_shape[2] % PATCH_SIZE[0] == 0) and (symbols_shape[3] % PATCH_SIZE[1] == 0)) is False:
             values = utils.pad_factor(torch.Tensor(values), symbols_shape[2:], 
                 factor=PATCH_SIZE).cpu().numpy().astype(np.int32)
             indices = utils.pad_factor(torch.Tensor(indices), symbols_shape[2:], 
                 factor=PATCH_SIZE).cpu().numpy().astype(np.int32)
-        print(values.shape)
-        print(symbols.shape)
 
         assert (values.shape[2] % PATCH_SIZE[0] == 0) and (values.shape[3] % PATCH_SIZE[1] == 0)
         assert (indices.shape[2] % PATCH_SIZE[0] == 0) and (indices.shape[3] % PATCH_SIZE[1] == 0)
