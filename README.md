@@ -34,7 +34,7 @@ JPG, 0.264 bpp / 90.1 kB
 
 The image shown is an out-of-sample instance from the CLIC-2020 dataset. The HIFIC image is obtained by reconstruction via a learned model provided below. The JPG image is obtained by the `imagemagick` command `mogrify -format jpg -quality 42 assets/camp_original.png`. Despite using around 1.5x the bitrate, the JPG image exhibits visible compression artifacts which are absent from the HIFIC-generated image.
 
-Note that the learned model was not adapted in any way for evaluation on this image. More sample outputs from this model can be found at the end of the README.
+Note that the learned model was not adapted in any way for evaluation on this image. More sample outputs from this model can be found at the end of the README and in [EXAMPLES.md](assets/EXAMPLES.md).
 
 ## Note
 
@@ -166,7 +166,7 @@ The last two show interesting failure modes: small figures in the distance are a
 
 ### Acknowledgements
 * The compression routines under `src/compression/` are derived from the [Tensorflow Compression library](https://github.com/tensorflow/compression).
-* The rANS enco*der implementation is based on the [Craystack repository](https://github.com/j-towns/craystack).
+* The rANS encoder implementation is based on the [Craystack repository](https://github.com/j-towns/craystack).
 * The code under `src/perceptual_similarity/` implementing the perceptual distortion loss is based on the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
 
 ### Contributing
