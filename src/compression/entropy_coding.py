@@ -16,7 +16,7 @@ from warnings import warn
 from collections import namedtuple
 
 # Custom
-from src.helpers import maths
+from src.helpers import maths, utils
 from src.compression import ans as vrans
 from src.compression import compression_utils
 
@@ -279,8 +279,17 @@ def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precisi
         "Invalid shifted value for current symbol - outside cdf index bounds.")
 
     if B == 1:
-        # Vectorize on patches
-        assert (symbols_shape[2] % PATCH_SIZE[0] == 0) and (symbols_shape[3] % PATCH_SIZE[1] == 0)
+        # Vectorize on patches - there's probably a way to interlace patches with
+        # batch elements for B > 1 ...
+        if ((symbols_shape[2] % PATCH_SIZE[0] == 0) and (symbols_shape[3] % PATCH_SIZE[1] == 0)) is False:
+            values = utils.pad_factor(torch.Tensor(values), symbols_shape[2:], 
+                factor=PATCH_SIZE).cpu().numpy().astype(np.int32)
+            indices = utils.pad_factor(torch.Tensor(indices), symbols_shape[2:], 
+                factor=PATCH_SIZE).cpu().numpy().astype(np.int32)
+
+        assert (values.shape[2] % PATCH_SIZE[0] == 0) and (values.shape[3] % PATCH_SIZE[1] == 0)
+        assert (indices.shape[2] % PATCH_SIZE[0] == 0) and (indices.shape[3] % PATCH_SIZE[1] == 0)
+  
         values, _ = compression_utils.decompose(values, n_channels)
         cdf_index, unfolded_shape = compression_utils.decompose(indices, n_channels)
         coding_shape = values.shape[1:]
@@ -423,9 +432,15 @@ def vec_ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precisi
     if B == 1:
         # Vectorize on patches - there's probably a way to interlace patches with
         # batch elements for B > 1 ...
-        indices, unfolded_shape = compression_utils.decompose(indices, n_channels)
-        cdf_index = indices
-        assert indices.shape[1:] == coding_shape, 'Shape of vectorized patches invalid.'
+
+        if ((original_shape[2] % PATCH_SIZE[0] == 0) and (original_shape[3] % PATCH_SIZE[1] == 0)) is False:
+            indices = utils.pad_factor(torch.Tensor(indices), original_shape[2:], 
+                factor=PATCH_SIZE).cpu().numpy().astype(np.int32)
+        padded_shape = indices.shape
+        assert (indices.shape[2] % PATCH_SIZE[0] == 0) and (indices.shape[3] % PATCH_SIZE[1] == 0)
+        cdf_index, unfolded_shape = compression_utils.decompose(indices, n_channels)
+        coding_shape = cdf_index.shape[1:]
+
 
     symbols = []
     for i in range(len(cdf_index)):
@@ -442,7 +457,10 @@ def vec_ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precisi
         symbols.append(symbol)
 
     if B == 1:
-        decoded = compression_utils.reconstitute(np.stack(symbols, axis=0), original_shape, unfolded_shape)
+        decoded = compression_utils.reconstitute(np.stack(symbols, axis=0), padded_shape, unfolded_shape)
+
+        if tuple(decoded.shape) != tuple(original_shape):
+            decoded = decoded[:, :, :original_shape[2], :original_shape[3]]
     else:
         decoded = np.stack(symbols, axis=0)
     return decoded

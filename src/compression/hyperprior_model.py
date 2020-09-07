@@ -398,8 +398,8 @@ if __name__ == '__main__':
     hyperprior_entropy_model.build_tables()
 
     loc, scale = 2.401, 3.43
-    n_data = 4
-    toy_shape = (n_data, n_channels, 64, 64)
+    n_data = 1
+    toy_shape = (n_data, n_channels, 117, 185)
     bottleneck = torch.randn(toy_shape)
 
     bits, bpp, bpi = hyperprior_entropy_model._estimate_compression_bits(bottleneck, 

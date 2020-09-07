@@ -133,7 +133,7 @@ class Model(nn.Module):
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_encoder_downsamples = self.Encoder.n_downsampling_layers
             factor = 2 ** n_encoder_downsamples
-            self.logger.info('Padding input image to {}'.format(factor))
+            self.logger.info('Padding input image by {}'.format(factor))
             x = utils.pad_factor(x, x.size()[2:], factor)
 
         # Encoder forward pass
@@ -142,7 +142,7 @@ class Model(nn.Module):
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_hyperencoder_downsamples = self.Hyperprior.analysis_net.n_downsampling_layers
             factor = 2 ** n_hyperencoder_downsamples
-            self.logger.info('Padding latents to {}'.format(factor))
+            self.logger.info('Padding latents by {}'.format(factor))
             y = utils.pad_factor(y, y.size()[2:], factor)
 
         hyperinfo = self.Hyperprior(y, spatial_shape=x.size()[2:])
