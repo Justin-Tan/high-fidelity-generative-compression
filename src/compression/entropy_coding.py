@@ -7,7 +7,7 @@ Craystack ANS implementation: https://github.com/j-towns/craystack/blob/master/c
 
 OVERFLOW_WIDTH = 4
 OVERFLOW_CODE = 1 << (1 << OVERFLOW_WIDTH)
-PATCH_SIZE = (4,4)
+PATCH_SIZE = (1,2)
 
 import torch
 import numpy as np
@@ -16,7 +16,7 @@ from warnings import warn
 from collections import namedtuple
 
 # Custom
-from src.helpers import maths
+from src.helpers import maths, utils
 from src.compression import ans as vrans
 from src.compression import compression_utils
 
@@ -54,7 +54,7 @@ def _indexed_cdf_to_enc_statfun(cdf_i):
 def _vec_indexed_cdf_to_enc_statfun(cdf_i):
     # enc_statfun: symbol |-> start, freq
     def _enc_statfun(value):
-        # (coding_shape) = (C,H,W) by default but can  be generalized
+        # (coding_shape) = (C,H,W) by default but canbe generalized
         # cdf_i: [(coding_shape), pmf_length + 2]
         # value: [(coding_shape)]
         lower = np.squeeze(np.take_along_axis(cdf_i, 
@@ -75,7 +75,6 @@ def _indexed_cdf_to_dec_statfun(cdf_i, cdf_i_length):
     )
 
     def _dec_statfun(cum_freq):
-        # cum_freq in [0, 2 ** precision]
         # Search such that CDF[s] <= cum_freq < CDF[s+1]
         sym = np.searchsorted(cdf_i, cum_freq, side='right') - 1
         return sym
@@ -279,10 +278,20 @@ def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precisi
         "Invalid shifted value for current symbol - outside cdf index bounds.")
 
     if B == 1:
-        # Vectorize on patches
-        print(symbols_shape[2])
-        print(symbols_shape[3])
-        assert (symbols_shape[2] % PATCH_SIZE[0] == 0) and (symbols_shape[3] % PATCH_SIZE[1] == 0)
+        # Vectorize on patches - there's probably a way to interlace patches with
+        # batch elements for B > 1 ...
+        print('og', values.sh
+        if ((symbols_shape[2] % PATCH_SIZE[0] == 0) and (symbols_shape[3] % PATCH_SIZE[1] == 0)) is False:
+            values = utils.pad_factor(torch.Tensor(values), symbols_shape[2:], 
+                factor=PATCH_SIZE).cpu().numpy().astype(np.int32)
+            indices = utils.pad_factor(torch.Tensor(indices), symbols_shape[2:], 
+                factor=PATCH_SIZE).cpu().numpy().astype(np.int32)
+        print(values.shape)
+        print(symbols.shape)
+
+        assert (values.shape[2] % PATCH_SIZE[0] == 0) and (values.shape[3] % PATCH_SIZE[1] == 0)
+        assert (indices.shape[2] % PATCH_SIZE[0] == 0) and (indices.shape[3] % PATCH_SIZE[1] == 0)
+  
         values, _ = compression_utils.decompose(values, n_channels)
         cdf_index, unfolded_shape = compression_utils.decompose(indices, n_channels)
         coding_shape = values.shape[1:]
@@ -425,9 +434,15 @@ def vec_ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precisi
     if B == 1:
         # Vectorize on patches - there's probably a way to interlace patches with
         # batch elements for B > 1 ...
-        indices, unfolded_shape = compression_utils.decompose(indices, n_channels)
-        cdf_index = indices
-        assert indices.shape[1:] == coding_shape, 'Shape of vectorized patches invalid.'
+
+        if ((original_shape[2] % PATCH_SIZE[0] == 0) and (original_shape[3] % PATCH_SIZE[1] == 0)) is False:
+            indices = utils.pad_factor(torch.Tensor(indices), original_shape[2:], 
+                factor=PATCH_SIZE).cpu().numpy().astype(np.int32)
+        padded_shape = indices.shape
+        assert (indices.shape[2] % PATCH_SIZE[0] == 0) and (indices.shape[3] % PATCH_SIZE[1] == 0)
+        cdf_index, unfolded_shape = compression_utils.decompose(indices, n_channels)
+        coding_shape = cdf_index.shape[1:]
+
 
     symbols = []
     for i in range(len(cdf_index)):
@@ -444,7 +459,10 @@ def vec_ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precisi
         symbols.append(symbol)
 
     if B == 1:
-        decoded = compression_utils.reconstitute(np.stack(symbols, axis=0), original_shape, unfolded_shape)
+        decoded = compression_utils.reconstitute(np.stack(symbols, axis=0), padded_shape, unfolded_shape)
+
+        if tuple(decoded.shape) != tuple(original_shape):
+            decoded = decoded[:, :, :original_shape[2], :original_shape[3]]
     else:
         decoded = np.stack(symbols, axis=0)
     return decoded

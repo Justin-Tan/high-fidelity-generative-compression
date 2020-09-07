@@ -45,7 +45,7 @@ python3 train.py --model_type compression_gan --regime low --n_steps 1e6 --warms
   * Reducing the number of residual blocks in the generator (`n_residual_blocks`, default 7, the original paper used 9).
   * Training on smaller crops (`crop_size`, default `256 x 256`).
 
-* Logs for each experiment are automatically created and periodically saved under `experiments/` with the appropriate name/timestamp. Metrics can be visualized via `tensorboard`:
+* Logs for each experiment, including image reconstructions, are automatically created and periodically saved under `experiments/` with the appropriate name/timestamp. Metrics can be visualized via `tensorboard`:
 
 ```bash
 tensorboard --logdir experiments/my_experiment/tensorboard --port 2401

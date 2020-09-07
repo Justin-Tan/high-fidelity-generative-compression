@@ -49,9 +49,16 @@ def count_parameters(model):
 
 def pad_factor(input_image, spatial_dims, factor):
     """Pad `input_image` (N,C,H,W) such that H and W are divisible by `factor`."""
+
+    if isinstance(factor, int) is True:
+        factor_H = factor
+        factor_W = factor_H
+    else:
+        factor_H, factor_W = factor
+
     H, W = spatial_dims[0], spatial_dims[1]
-    pad_H = (factor - (H % factor)) % factor
-    pad_W = (factor - (W % factor)) % factor
+    pad_H = (factor_H - (H % factor_H)) % factor_H
+    pad_W = (factor_W - (W % factor_W)) % factor_W
     return F.pad(input_image, pad=(0, pad_W, 0, pad_H), mode='reflect')
 
 def get_scheduled_params(param, param_schedule, step_counter, ignore_schedule=False):
