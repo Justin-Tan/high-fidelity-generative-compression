@@ -5,6 +5,7 @@ import numpy as np
 from collections import namedtuple
 
 # Custom
+from src.network import hyper
 from src.helpers import maths, utils
 from src.compression import hyperprior_model, prior_model
 
@@ -18,8 +19,7 @@ LARGE_HYPERLATENT_FILTERS = 320
 HyperInfo = namedtuple(
     "HyperInfo",
     "decoded "
-    "latent_nbpp hyperlatent_nbpp total_nbpp latent_qbpp hyperlatent_qbpp total_qbpp "
-    "bitstring side_bitstring",
+    "latent_nbpp hyperlatent_nbpp total_nbpp latent_qbpp hyperlatent_qbpp total_qbpp",
 )
 
 CompressionOutput = namedtuple("CompressionOutput",
@@ -139,9 +139,10 @@ class CodingModel(nn.Module):
 
 class Hyperprior(CodingModel):
     
-    def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, mode='large',
-        likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, entropy_code=False,
+    def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, 
+        mode='large', likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, entropy_code=False,
         vectorize_encoding=True, block_encode=True):
+
         """
         Introduces probabilistic model over latents of 
         latents.
@@ -149,13 +150,14 @@ class Hyperprior(CodingModel):
         The hyperprior over the standard latents is modelled as
         a non-parametric, fully factorized density.
         """
+
         super(Hyperprior, self).__init__(n_channels=bottleneck_capacity)
         
         self.bottleneck_capacity = bottleneck_capacity
         self.scale_lower_bound = scale_lower_bound
 
-        analysis_net = HyperpriorAnalysis
-        synthesis_net = HyperpriorSynthesis
+        analysis_net = hyper.HyperpriorAnalysis
+        synthesis_net = hyper.HyperpriorSynthesis
 
         if mode == 'small':
             hyperlatent_filters = SMALL_HYPERLATENT_FILTERS
@@ -317,80 +319,17 @@ class Hyperprior(CodingModel):
             latent_qbpp=quantized_latent_bpp,
             hyperlatent_qbpp=quantized_hyperlatent_bpp,
             total_qbpp=quantized_latent_bpp + quantized_hyperlatent_bpp,
-            bitstring=None,  # TODO
-            side_bitstring=None, # TODO
         )
 
         return info
 
-class HyperpriorAnalysis(nn.Module):
-    """
-    Hyperprior 'analysis model' as proposed in [1]. 
-
-    [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
-        arXiv:1802.01436 (2018).
-
-    C:  Number of input channels
-    """
-    def __init__(self, C=220, N=320, activation='relu'):
-        super(HyperpriorAnalysis, self).__init__()
-
-        cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, padding_mode='reflect')
-        self.activation = getattr(F, activation)
-        self.n_downsampling_layers = 2
-
-        self.conv1 = nn.Conv2d(C, N, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(N, N, **cnn_kwargs)
-        self.conv3 = nn.Conv2d(N, N, **cnn_kwargs)
-
-    def forward(self, x):
-        
-        # x = torch.abs(x)
-        x = self.activation(self.conv1(x))
-        x = self.activation(self.conv2(x))
-        x = self.conv3(x)
-
-        return x
-
-
-class HyperpriorSynthesis(nn.Module):
-    """
-    Hyperprior 'synthesis model' as proposed in [1]. Outputs 
-    distribution parameters of input latents.
-
-    [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
-        arXiv:1802.01436 (2018).
-
-    C:  Number of output channels
-    """
-    def __init__(self, C=220, N=320, activation='relu', final_activation=None):
-        super(HyperpriorSynthesis, self).__init__()
-
-        cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, output_padding=1)
-        self.activation = getattr(F, activation)
-        self.final_activation = final_activation
-
-        self.conv1 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
-        self.conv2 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
-        self.conv3 = nn.ConvTranspose2d(N, C, kernel_size=3, stride=1, padding=1)
-
-        if self.final_activation is not None:
-            self.final_activation = getattr(F, final_activation)
-
-    def forward(self, x):
-        x = self.activation(self.conv1(x))
-        x = self.activation(self.conv2(x))
-        x = self.conv3(x)
-
-        if self.final_activation is not None:
-            x = self.final_activation(x)
-        return x
 
 """
 ========
 Discretized logistic mixture model.
 ========
 """
+
 
 class HyperpriorDLMM(CodingModel):
     
@@ -411,8 +350,8 @@ class HyperpriorDLMM(CodingModel):
         self.scale_lower_bound = scale_lower_bound
         self.mixture_components = mixture_components
 
-        analysis_net = HyperpriorAnalysis
-        synthesis_net = HyperpriorSynthesisDLMM
+        analysis_net = hyper.HyperpriorAnalysis
+        synthesis_net = hyper.HyperpriorSynthesisDLMM
 
         if mode == 'small':
             hyperlatent_filters = SMALL_HYPERLATENT_FILTERS
@@ -436,7 +375,7 @@ class HyperpriorDLMM(CodingModel):
     def latent_log_likelihood_DLMM(self, x, DLMM_params):
 
         # (B C K H W)
-        x, (logit_pis, means, log_scales), K = unpack_likelihood_params(x, DLMM_params)
+        x, (logit_pis, means, log_scales), K = hyper.unpack_likelihood_params(x, DLMM_params)
 
         # Assumes 1 - CDF(x) = CDF(-x) symmetry
         # Numerical stability, do subtraction in left tail
@@ -507,72 +446,10 @@ class HyperpriorDLMM(CodingModel):
             latent_qbpp=quantized_latent_bpp,
             hyperlatent_qbpp=quantized_hyperlatent_bpp,
             total_qbpp=quantized_latent_bpp + quantized_hyperlatent_bpp,
-            bitstring=None,  # TODO
-            side_bitstring=None, # TODO
         )
 
         return info
 
-def get_num_DLMM_channels(C, K=4, params=['mu','scale','mix']):
-    """
-    C:  Channels of latent representation (L3C uses 5).
-    K:  Number of mixture coefficients.
-    """
-    return C * K * len(params)
-
-def get_num_mixtures(K_agg, C, params=['mu','scale','mix']):
-    return K_agg // (len(params) * C)
-
-def unpack_likelihood_params(x, conv_out):
-    
-    N, C, H, W = x.shape
-    K_agg = conv_out.shape[1]
-
-    K = get_num_mixtures(K_agg, C)
-
-    # For each channel: K pi / K mu / K sigma 
-    conv_out = conv_out.reshape(N, 3, C, K, H, W)
-    logit_pis = conv_out[:, 0, ...]
-    means = conv_out[:, 1, ...]
-    log_scales = conv_out[:, 2, ...]
-    log_scales = lower_bound_toward(log_scales, LOG_SCALES_MIN)
-    x = x.reshape(N, C, 1, H, W)
-
-    return x, (logit_pis, means, log_scales), K
-
-
-
-class HyperpriorSynthesisDLMM(nn.Module):
-    """
-    Outputs distribution parameters of input latents, conditional on 
-    hyperlatents, assuming a discrete logistic mixture model.
-
-    C:  Number of output channels
-    """
-    def __init__(self, C=64, N=320, activation='relu', final_activation=None):
-        super(HyperpriorSynthesisDLMM, self).__init__()
-
-        cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, output_padding=1)
-        self.activation = getattr(F, activation)
-        self.final_activation = final_activation
-
-        self.conv1 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
-        self.conv2 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
-        self.conv3 = nn.ConvTranspose2d(N, C, kernel_size=3, stride=1, padding=1)
-        self.conv_out = nn.Conv2d(C, get_num_DLMM_channels(C), kernel_size=1, stride=1)
-
-        if self.final_activation is not None:
-            self.final_activation = getattr(F, final_activation)
-
-    def forward(self, x):
-        x = self.activation(self.conv1(x))
-        x = self.activation(self.conv2(x))
-        x = self.conv3(x)
-        x = self.conv_out(x)
-
-        if self.final_activation is not None:
-            x = self.final_activation(x)
-        return x
         
 
 if __name__ == '__main__':

@@ -13,9 +13,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # Custom modules
-from src.network import hyperprior, encoder, generator, discriminator
-from src.helpers import maths, datasets, utils
+from src import hyperprior
 from src.loss import losses
+from src.helpers import maths, datasets, utils
+from src.network import encoder, generator, discriminator, hyper
 from src.loss.perceptual_similarity import perceptual_loss as ps 
 
 from default_config import ModelModes, ModelTypes, hific_args, directories
@@ -435,7 +436,8 @@ if __name__ == '__main__':
     logger.info("Number of trainable parameters: {}".format(utils.count_parameters(model)))
     logger.info("Estimated size: {} MB".format(utils.count_parameters(model) * 4. / 10**6))
 
-    shape = [2, 3, 256, 256]
+    B = 10
+    shape = [B, 3, 256, 256]
     x = torch.randn(shape).to(device)
 
     start_time = time.time()

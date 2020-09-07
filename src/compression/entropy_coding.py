@@ -1,22 +1,27 @@
 """
-Based on many sources, mainly https://github.com/j-towns/craystack/blob/master/craystack/rans.py
+Based on many sources, mainly:
+
+Fabian Gielsen's ANS implementation: https://github.com/rygorous/ryg_rans
+Craystack ANS implementation: https://github.com/j-towns/craystack/blob/master/craystack/rans.py
 """
 
+OVERFLOW_WIDTH = 4
+OVERFLOW_CODE = 1 << (1 << OVERFLOW_WIDTH)
+PATCH_SIZE = (4,4)
+
+import torch
 import numpy as np
 
 from warnings import warn
+from collections import namedtuple
 
 # Custom
 from src.helpers import maths
 from src.compression import ans as vrans
-from collections import namedtuple
+from src.compression import compression_utils
 
 Codec = namedtuple('Codec', ['push', 'pop'])
 cast2u64 = lambda x: np.array(x, dtype=np.uint64)
-
-OVERFLOW_WIDTH = 4
-OVERFLOW_CODE = 1 << (1 << OVERFLOW_WIDTH)
-CHUNKSIZE = 20
 
 def base_codec(enc_statfun, dec_statfun, precision):
     if np.any(precision >= 24):
@@ -150,6 +155,7 @@ def ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision,
     """
 
     message = vrans.empty_message(())
+    coding_shape = symbols.shape[1:]
     symbols = symbols.astype(np.int32).flatten()
     indices = indices.astype(np.int32).flatten()
 
@@ -225,8 +231,9 @@ def ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision,
 
     encoded = vrans.flatten(message)
     message_length = len(encoded)
-    print('Symbol compressed to {:.3f} bits.'.format(32 * message_length))
-    return encoded
+    # print('Symbol compressed to {:.3f} bits.'.format(32 * message_length))
+    return encoded, coding_shape
+
 
 def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision, 
     coding_shape, overflow_width=OVERFLOW_WIDTH, **kwargs):
@@ -236,11 +243,11 @@ def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precisi
 
     ANS-encodes unbounded integer data using an indexed probability table.
     """
-
-    B = symbols.shape[0]
+    
+    symbols_shape = symbols.shape
+    B, n_channels = symbols_shape[:2]
     symbols = symbols.astype(np.int32)
     indices = indices.astype(np.int32)
-
     cdf_index = indices
         
     assert bool(np.all(cdf_index >= 0)) and bool(np.all(cdf_index < cdf.shape[0])), (
@@ -252,35 +259,38 @@ def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precisi
         "Invalid max length.")
 
     # Map values with tracked probabilities to range [0, ..., max_value]
-    value = symbols - cdf_offset[cdf_index]
+    values = symbols - cdf_offset[cdf_index]
 
     # If outside of this range, map value to non-negative integer overflow.
-    overflow = np.zeros_like(value)
+    overflow = np.zeros_like(values)
 
-    of_mask = value < 0
-    overflow = np.where(of_mask, -2 * value - 1, overflow)
-    value = np.where(of_mask, max_value, value)
+    of_mask = values < 0
+    overflow = np.where(of_mask, -2 * values - 1, overflow)
+    values = np.where(of_mask, max_value, values)
 
-    of_mask = value >= max_value
-    overflow = np.where(of_mask, 2 * (value - max_value), overflow)
-    value = np.where(of_mask, max_value, value)
+    of_mask = values >= max_value
+    overflow = np.where(of_mask, 2 * (values - max_value), overflow)
+    values = np.where(of_mask, max_value, values)
 
-    assert bool(np.all(value >= 0)), (
+    assert bool(np.all(values >= 0)), (
         "Invalid shifted value for current symbol - values must be non-negative.")
 
-    assert bool(np.all(value < cdf_length[cdf_index] - 1)), (
+    assert bool(np.all(values < cdf_length[cdf_index] - 1)), (
         "Invalid shifted value for current symbol - outside cdf index bounds.")
 
-    """
-    Handle overflows here
-    """
+    if B == 1:
+        # Vectorize on patches
+        assert (symbols_shape[2] % PATCH_SIZE[0] == 0) and (symbols_shape[3] % PATCH_SIZE[1] == 0)
+        values, _ = compression_utils.decompose(values, n_channels)
+        cdf_index, unfolded_shape = compression_utils.decompose(indices, n_channels)
+        coding_shape = values.shape[1:]
 
     message = vrans.empty_message(coding_shape)
 
     # LIFO - last item compressed is first item decompressed
-    for i in reversed(range(B)):  # loop over batch dimension
+    for i in reversed(range(len(cdf_index))):  # loop over batch dimension
         # Bin of discrete CDF that value belongs to
-        value_i = value[i]
+        value_i = values[i]
         cdf_index_i = cdf_index[i]        
         cdf_i = cdf[cdf_index_i]
         cdf_i_length = cdf_length[cdf_index_i]
@@ -298,9 +308,9 @@ def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precisi
     encoded = vrans.flatten(message)
     message_length = len(encoded)
 
-    print('{} symbols compressed to {:.3f} bits.'.format(B, 32 * message_length))
+    # print('{} symbols compressed to {:.3f} bits.'.format(B, 32 * message_length))
 
-    return encoded
+    return encoded, coding_shape
 
 
 def ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precision,
@@ -385,7 +395,6 @@ def ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precision,
 
     return decoded
 
-    
 
 def vec_ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precision, 
     coding_shape, overflow_width=OVERFLOW_WIDTH, **kwargs):
@@ -397,11 +406,10 @@ def vec_ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precisi
     identical to the inputs to `vec_ans_index_encoder` used to generate the encoded tensor.
     """
 
-    B = indices.shape[0]
+    original_shape = indices.shape
+    B, n_channels, *_ = original_shape
     message = vrans.unflatten(encoded, coding_shape)
     indices = indices.astype(np.int32)
-    decoded = np.empty(indices.shape)
-
     cdf_index = indices
         
     assert bool(np.all(cdf_index >= 0)) and bool(np.all(cdf_index < cdf.shape[0])), (
@@ -412,8 +420,15 @@ def vec_ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precisi
     assert bool(np.all(max_value >= 0)) and bool(np.all(max_value < cdf.shape[1] - 1)), (
         "Invalid max length.")
 
+    if B == 1:
+        # Vectorize on patches - there's probably a way to interlace patches with
+        # batch elements for B > 1 ...
+        indices, unfolded_shape = compression_utils.decompose(indices, n_channels)
+        cdf_index = indices
+        assert indices.shape[1:] == coding_shape, 'Shape of vectorized patches invalid.'
+
     symbols = []
-    for i in range(B):
+    for i in range(len(cdf_index)):
         cdf_index_i = cdf_index[i]
         cdf_i = cdf[cdf_index_i]
         cdf_length_i = cdf_length[cdf_index_i]
@@ -426,124 +441,12 @@ def vec_ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precisi
         symbol = value + cdf_offset[cdf_index_i]
         symbols.append(symbol)
 
-    return np.stack(symbols, axis=0)
+    if B == 1:
+        decoded = compression_utils.reconstitute(np.stack(symbols, axis=0), original_shape, unfolded_shape)
+    else:
+        decoded = np.stack(symbols, axis=0)
+    return decoded
 
 def ans_encode_decode_test(symbols, decompressed_symbols):
     return np.testing.assert_almost_equal(symbols, decompressed_symbols)
 
-
-
-if __name__ == '__main__':
-
-    import torch
-    import torch.nn.functional as F
-    import random
-    import cProfile
-    import time
-
-    SCALES_MIN = 0.11
-    SCALES_MAX = 256
-    SCALES_LEVELS = 64
-
-    def prior_scale_table(scales_min=SCALES_MIN, scales_max=SCALES_MAX, levels=SCALES_LEVELS):
-        scale_table = np.exp(np.linspace(np.log(scales_min), np.log(scales_max), levels))
-        return scale_table
-
-    def compute_indices(scales, scale_table):
-        # Compute the indexes into the table for each of the passed-in scales.
-        indices = torch.ones_like(scales, dtype=torch.int32) * (len(scale_table) - 1)
-
-        for s in scale_table[:-1]:
-            indices = indices - (scales <= s).to(torch.int32) 
-
-        return indices   
-
-    _standardized_quantile = maths.standardized_quantile_gaussian
-    _standardized_cumulative = maths.standardized_CDF_gaussian
-
-    def build_tables(scale_table, tail_mass=2**(-8), precision=16):
-        
-        scale_table = torch.Tensor(scale_table)
-        multiplier = -_standardized_quantile(tail_mass / 2)
-        pmf_center = torch.ceil(scale_table * multiplier).to(torch.int32)
-        pmf_length = 2 * pmf_center + 1
-        # [n_scales]
-        max_length = torch.max(pmf_length).item()
-
-        samples = torch.abs(torch.arange(max_length).int() - pmf_center[:, None]).float()
-        samples_scale = scale_table.unsqueeze(1).float()
-
-        upper = _standardized_cumulative((.5 - samples) / samples_scale)
-        lower = _standardized_cumulative((-.5 - samples) / samples_scale)
-        pmf = upper - lower  # [n_scales, max_length]
-
-        # [n_scales]
-        tail_mass = 2 * lower[:, :1]
-        cdf_length = pmf_length + 2
-        cdf_offset = -pmf_center  # How far away we have to go to pass the tail mass
-        cdf_length = cdf_length.to(torch.int32)
-        cdf_offset = cdf_offset.to(torch.int32)
-
-        # CDF shape [n_scales,  max_length + 2] - account for fenceposts + overflow
-        CDF = torch.zeros((len(pmf_length), max_length + 2), dtype=torch.int32)
-        for n, (pmf_, pmf_length_, tail_) in enumerate(zip(pmf, pmf_length, tail_mass)):
-            pmf_ = pmf_[:pmf_length_]  # [max_length]
-            overflow = torch.clamp(1. - torch.sum(pmf_, dim=0, keepdim=True), min=0.)  
-            pmf_ = torch.cat((pmf_, tail_), dim=0)  # pmf_ = torch.cat((pmf_, overflow), dim=0)
-
-            cdf_ = maths.pmf_to_quantized_cdf(pmf_, precision)
-            cdf_ = F.pad(cdf_, (0, max_length - pmf_length_), mode='constant', value=0)
-            CDF[n] = cdf_
-
-        return CDF, cdf_length, cdf_offset
-
-    n_data = 500
-    toy_shape = (n_data,10,10)
-    bottleneck = torch.randn(toy_shape)
-    scales = torch.randn(toy_shape)*np.sqrt(4.2) + 4.2
-    scales = torch.clamp(scales, min=SCALES_MIN)
-
-    scale_table = prior_scale_table()
-    indices = compute_indices(scales, scale_table)
-
-    cdf, cdf_length, cdf_offset = build_tables(scale_table)
-
-    input_shape = tuple(bottleneck.size())
-    batch_shape = input_shape[0]
-    coding_shape = input_shape[1:]  # (C,H,W)
-    symbols = torch.round(bottleneck).to(torch.int32)
-
-    start_t = time.time()
-    encoded = ans_index_encoder(symbols.numpy(), indices.numpy(), cdf.numpy().astype('uint64'), 
-        cdf_length.numpy(), cdf_offset.numpy(), precision=16, coding_shape=toy_shape[1:])
-
-    decoded = ans_index_decoder(encoded, indices.numpy(), cdf.numpy().astype('uint64'), 
-        cdf_length.numpy(), cdf_offset.numpy(), precision=16, coding_shape=toy_shape[1:])
-
-    decoded = np.reshape(decoded, input_shape)
-    delta_t = time.time() - start_t
-    print(f'Scalar, delta_t {delta_t:.2f} s | ', (symbols.numpy() == decoded).mean())
-
-    start_t = time.time()
-    encoded = vec_ans_index_encoder(symbols.numpy(), indices.numpy(), cdf.numpy().astype('uint64'), 
-        cdf_length.numpy(), cdf_offset.numpy(), precision=16, coding_shape=toy_shape[1:])
-
-    decoded = vec_ans_index_decoder(encoded, indices.numpy(), cdf.numpy().astype('uint64'), 
-        cdf_length.numpy(), cdf_offset.numpy(), precision=16, coding_shape=toy_shape[1:])
-
-    delta_t = time.time() - start_t
-    print(f'Vector, delta_t {delta_t:.2f} s | ', (symbols.numpy() == decoded).mean())
-
-
-
-    """
-    Profiling
-    """
-
-    profile = False
-    if profile is True:
-        cProfile.run("ans_index_encoder(symbols.numpy(), indices.numpy(), cdf.numpy().astype('uint64')," 
-            "cdf_length.numpy(), cdf_offset.numpy(), precision=16, coding_shape=toy_shape[1:])")
-
-        cProfile.run("vec_ans_index_encoder(symbols.numpy(), indices.numpy(), cdf.numpy().astype('uint64')," 
-        "cdf_length.numpy(), cdf_offset.numpy(), precision=16, coding_shape=toy_shape[1:])")

@@ -48,10 +48,6 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         self.compute_medians()
         medians = torch.squeeze(self.medians)
 
-        print(lower_tail[:10])
-        print(upper_tail[:10])
-        print(self.medians.flatten()[:10])
-
         # Largest distance observed between lower tail and median, 
         # and between median and upper tail.
         minima = offsets - lower_tail
@@ -194,14 +190,14 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         `index` should be in the half-open interval `[0, cdf.shape[0])`.
         """
 
-        encoded = compression_utils.ans_compress(symbols, indices, cdf, cdf_length, cdf_offset,
+        encoded, coding_shape = compression_utils.ans_compress(symbols, indices, cdf, cdf_length, cdf_offset,
             coding_shape, precision=self.precision, vectorize=vectorize, 
             block_encode=block_encode)
 
-        return encoded, rounded
+        return encoded, coding_shape, rounded
 
     
-    def decompress(self, encoded, batch_shape, broadcast_shape, vectorize=False, 
+    def decompress(self, encoded, batch_shape, broadcast_shape, coding_shape, vectorize=False, 
         block_decode=True):
         """
         Decompress bitstrings to floating-point tensors.
@@ -213,7 +209,8 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         encoded:            Tensor containing the compressed bit strings produced by the 
                             `compress()` method.
         batch_shape         Int. Number of tensors encoded in `encoded`.
-        broadcast_shape:    Iterable of ints. Spatial extent of quantized feature map. 
+        broadcast_shape:    Iterable of ints. Spatial extent of quantized feature map.
+        coding_shape:       Shape of encoded messages.
 
         Returns:
         decoded:            Tensor of same shape as input to `compress()`.
@@ -222,7 +219,6 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         n_channels = self.distribution.n_channels
         # same as `input_shape` to `compress()`
         symbols_shape =  (batch_shape, n_channels, *broadcast_shape)
-        coding_shape = symbols_shape[1:]
 
         indices = self.compute_indices(broadcast_shape)
 
@@ -247,9 +243,9 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         symbols = torch.Tensor(decoded)
         symbols = torch.reshape(symbols, symbols_shape)
         decoded_raw = symbols.clone()
-        outputs = self.dequantize(symbols)
+        decoded = self.dequantize(symbols)
 
-        return outputs, decoded_raw
+        return decoded, decoded_raw
 
 
 class HyperpriorDensity(nn.Module):
@@ -394,21 +390,23 @@ if __name__ == '__main__':
 
     import time
 
-    n_channels = 32
+    n_channels = 64
     use_blocks = True
-    vectorize = False
+    vectorize = True
     hyperprior_density = HyperpriorDensity(n_channels)
     hyperprior_entropy_model = HyperpriorEntropyModel(hyperprior_density)
     hyperprior_entropy_model.build_tables()
 
     loc, scale = 2.401, 3.43
-    n_data = 10
-    toy_shape = (n_data, n_channels, 16, 16)
+    n_data = 4
+    toy_shape = (n_data, n_channels, 64, 64)
     bottleneck = torch.randn(toy_shape)
 
-    start_t = time.time()
+    bits, bpp, bpi = hyperprior_entropy_model._estimate_compression_bits(bottleneck, 
+        spatial_shape=toy_shape[2:])
 
-    encoded, symbols = hyperprior_entropy_model.compress(bottleneck,
+    start_t = time.time()
+    encoded, coding_shape, symbols = hyperprior_entropy_model.compress(bottleneck,
         block_encode=use_blocks, vectorize=vectorize)
 
     if (use_blocks is True) or (vectorize is True): 
@@ -419,16 +417,13 @@ if __name__ == '__main__':
     print('Encoded shape', enc_shape)
 
     decoded, decoded_raw = hyperprior_entropy_model.decompress(encoded, n_data,
-        broadcast_shape=toy_shape[2:], block_decode=use_blocks,
+        broadcast_shape=toy_shape[2:], coding_shape=coding_shape, block_decode=use_blocks,
         vectorize=vectorize)
 
     print('Decoded shape', decoded.shape)
-
     delta_t = time.time() - start_t
     print(f'Delta t {delta_t:.2f} s | ', torch.mean((decoded_raw == symbols).float()).item())
 
-    bits, bpp, bpi = hyperprior_entropy_model._estimate_compression_bits(bottleneck, 
-        spatial_shape=toy_shape[2:])
 
     cbits = enc_shape * 32
     print(f'Symbols compressed to {cbits:.1f} bits.')

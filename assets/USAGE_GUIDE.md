@@ -1,5 +1,17 @@
 # Usage Guide
 
+## Details
+
+This repository defines a model for learnable image compression capable of compressing images of arbitrary size and resolution based on the paper ["High-Fidelity Generative Image Compression" (HIFIC) by Mentzer et. al.](https://hific.github.io/). There are three main components to this model, as described in the original paper:
+
+1. An autoencoding architecture defining a nonlinear transform to latent space. This is used in place of the linear transforms used by traditional image codecs.
+2. A hierarchical (two-level in this case) entropy model over the quantized latent representation enabling lossless compression through standard entropy coding.
+3. A generator-discriminator component that encourages the decoder/generator component to yield realistic reconstructions.
+
+The model is then trained end-to-end by optimization of a modified rate-distortion Lagrangian. Loosely, the model can be thought of as 'amortizing' the storage requirements for an generic input image through training a learnable compression/decompression scheme. The method is further described in the original paper [[0](https://arxiv.org/abs/2006.09965)]. The model is capable of yielding perceptually similar reconstructions to the input that tend to be more visually pleasing than standard image codecs which operate at comparable or higher bitrates.
+
+This repository also includes a partial port of the [Tensorflow Compression library](https://github.com/tensorflow/compression) for general tools for neural image compression.
+
 ## Training
 
 * Download a large (> 100,000) dataset of diverse color images. We found that using 1-2 training divisions of the [OpenImages](https://storage.googleapis.com/openimages/web/index.html) dataset was able to produce satisfactory results on arbitrary images. [Fabian Mentzer's L3C Repo](https://github.com/fab-jul/L3C-PyTorch/) provides utility functions for downloading and preprocessing OpenImages (the trained models did not use this exact split). Add the dataset path under the `DatasetPaths` class in `default_config.py`. Check default config/command line arguments:
@@ -93,7 +105,17 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --reconstru
 
 ## Contributing
 
-Feel free to submit any corrections/suggestions/bugs as issues. Pull requests are welcome. Thanks to Grace for helping refactor my code.
+Feel free to submit any questions/corrections/suggestions/bugs as issues. Pull requests are welcome. Thanks to Grace for helping refactor my code.
+
+### References
+
+The following additional papers were useful to understand implementation details.
+
+0. Fabian Mentzer, George Toderici, Michael Tschannen, Eirikur Agustsson. High-Fidelity Generative Image Compression. [arXiv:2006.09965 (2020)](https://arxiv.org/abs/2006.09965).
+1. Johannes Ballé, David Minnen, Saurabh Singh, Sung Jin Hwang, Nick Johnston. Variational image compression with a scale hyperprior. [arXiv:1802.01436 (2018)](https://arxiv.org/abs/1802.01436).
+2. David Minnen, Johannes Ballé, George Toderici. Joint Autoregressive and Hierarchical Priors for Learned Image Compression. [arXiv 1809.02736 (2018)](https://arxiv.org/abs/1809.02736).
+3. Johannes Ballé, Valero Laparra, Eero P. Simoncelli. End-to-end optimization of nonlinear transform codes for perceptual quality. [arXiv 1607.05006 (2016)](https://arxiv.org/abs/1607.05006).
+4. Fabian Mentzer, Eirikur Agustsson, Michael Tschannen, Radu Timofte, Luc Van Gool. Practical Full Resolution Learned Lossless Image Compression. [arXiv 1811.12817 (2018)](https://arxiv.org/abs/1811.12817).
 
 ## TODO (priority descending)
 
@@ -101,4 +123,3 @@ Feel free to submit any corrections/suggestions/bugs as issues. Pull requests ar
 * Implement universal code for overflow values.
 * Investigate bit overhead in vectorized rANS implementation.
 * Rewrite rANS implementation for speed.
-* Data/model parallelism.

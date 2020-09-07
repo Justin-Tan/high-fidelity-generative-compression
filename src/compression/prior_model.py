@@ -192,14 +192,14 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         cdf_length = self.CDF_length.cpu().numpy()
         cdf_offset = self.CDF_offset.cpu().numpy()
 
-        encoded = compression_utils.ans_compress(symbols, indices, cdf, cdf_length, cdf_offset,
+        encoded, coding_shape = compression_utils.ans_compress(symbols, indices, cdf, cdf_length, cdf_offset,
             coding_shape, precision=self.precision, vectorize=vectorize, 
             block_encode=block_encode)
 
-        return encoded, rounded
+        return encoded, coding_shape, rounded
 
     
-    def decompress(self, encoded, means, scales, broadcast_shape, vectorize=False, 
+    def decompress(self, encoded, means, scales, broadcast_shape, coding_shape, vectorize=False, 
         block_decode=True):
         """
         Decompress bitstrings to floating-point tensors.
@@ -211,6 +211,7 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         encoded:            Tensor containing compressed bit strings produced by
                             the `compress()` method. Arguments must be identical.
         broadcast_shape:    Iterable of ints. Spatial extent of quantized feature map. 
+        coding_shape:       Shape of encoded messages.
 
         Returns:
         decoded:            Tensor of same shape as input to `compress()`.
@@ -220,7 +221,6 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
         n_channels = self.distribution.n_channels
         # same as `input_shape` to `compress()`
         symbols_shape = (batch_shape, n_channels, *broadcast_shape)
-        coding_shape = symbols_shape[1:]
 
         indices = self.compute_indices(scales)
 
@@ -317,41 +317,41 @@ if __name__ == '__main__':
 
     import time
 
-    n_channels = 32
+    n_channels = 64
     use_blocks = True
     vectorize = True
     prior_density = PriorDensity(n_channels)
     prior_entropy_model = PriorEntropyModel(distribution=prior_density)
 
     loc, scale = 2.401, 3.43
-    n_data = 50
-    toy_shape = (n_data, n_channels, 16, 16)
+    n_data = 1
+    toy_shape = (n_data, n_channels, 64, 64)
     bottleneck, means = torch.randn(toy_shape), torch.randn(toy_shape)
     scales = torch.randn(toy_shape) * np.sqrt(scale) + loc
     scales = torch.clamp(scales, min=MIN_SCALE)
 
+    bits, bpp, bpi = prior_entropy_model._estimate_compression_bits(bottleneck, means, 
+        scales, spatial_shape=toy_shape[2:])
+
     start_t = time.time()
 
-    encoded, rounded = prior_entropy_model.compress(bottleneck, means, scales,
+    encoded, coding_shape, rounded = prior_entropy_model.compress(bottleneck, means, scales,
         block_encode=use_blocks, vectorize=vectorize)
     
     if (use_blocks is True) or (vectorize is True): 
         enc_shape = encoded.shape[0]
     else:
         enc_shape = sum([len(enc) for enc in encoded])
-        
+
     print('Encoded shape', enc_shape)
 
     decoded, decoded_raw = prior_entropy_model.decompress(encoded, means, scales, 
-        broadcast_shape=toy_shape[2:], block_decode=use_blocks,
+        broadcast_shape=toy_shape[2:], coding_shape=coding_shape, block_decode=use_blocks,
         vectorize=vectorize)
 
     print('Decoded shape', decoded.shape)
     delta_t = time.time() - start_t
     print(f'Delta t {delta_t:.2f} s | ', torch.mean((decoded_raw == rounded).float()).item())
-
-    bits, bpp, bpi = prior_entropy_model._estimate_compression_bits(bottleneck, means, 
-        scales, spatial_shape=toy_shape[2:])
 
     cbits = enc_shape * 32
     print(f'Symbols compressed to {cbits:.1f} bits.')

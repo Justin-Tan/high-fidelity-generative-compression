@@ -20,7 +20,7 @@ lower_bound_toward = maths.LowerBoundToward.apply
     
 class ContinuousEntropyModel(nn.Module, metaclass=abc.ABCMeta):
     """
-    Base class for pre-computation of integer probability tables for use in rANS encoder/decoder.
+    Base class for pre-computation of integer probability tables for use in entropy coding.
     """
     def __init__(self, distribution, likelihood_bound=MIN_LIKELIHOOD, tail_mass=TAIL_MASS,
         precision=PRECISION_P):

@@ -8,15 +8,9 @@ This is a preliminary version. There may be sharp edges.
 
 ## Details
 
-This repository defines a model for learnable image compression capable of compressing images of arbitrary size and resolution based on the paper ["High-Fidelity Generative Image Compression" (HIFIC) by Mentzer et. al.](https://hific.github.io/). There are three main components to this model, as described in the original paper:
+This repository defines a model for learnable image compression based on the paper ["High-Fidelity Generative Image Compression" (HIFIC) by Mentzer et. al.](https://hific.github.io/). The model is capable of compressing images of arbitrary size and resolution while maintaining perceptually similar reconstructions that tend to be more visually pleasing than standard image codecs operating at higher bitrates.
 
-1. An autoencoding architecture defining a nonlinear transform to latent space. This is used in place of the linear transforms used by traditional image codecs.
-2. A hierarchical (two-level in this case) entropy model over the quantized latent representation enabling lossless compression through standard entropy coding.
-3. A generator-discriminator component that encourages the decoder/generator component to yield realistic reconstructions.
-
-The model is then trained end-to-end by optimization of a modified rate-distortion Lagrangian. Loosely, the model can be thought of as 'amortizing' the storage requirements for an generic input image through training a learnable compression/decompression scheme. The method is further described in the original paper [[0](https://arxiv.org/abs/2006.09965)]. The model is capable of yielding perceptually similar reconstructions to the input that tend to be more visually pleasing than standard image codecs which operate at comparable or higher bitrates.
-
-This repository includes a partial port of the [Tensorflow Compression library](https://github.com/tensorflow/compression) for general tools for neural image compression.
+This repository also includes a partial port of the [Tensorflow Compression library](https://github.com/tensorflow/compression) which provides general tools for neural image compression in Pytorch.
 
 ## Example
 
@@ -38,9 +32,9 @@ JPG, 0.264 bpp / 90.1 kB
 
 ![guess](assets/camp_jpg_compress.png)
 
-The image shown is an out-of-sample instance from the CLIC-2020 dataset. The HIFIC image is obtained by reconstruction via the learned model (checkpoint below). The JPG image is obtained by the `imagemagick` command `mogrify -format jpg -quality 42 camp_original.png`. Despite using around 1.5x the bitrate, the JPG image exhibits visible compression artifacts which are absent from the HIFIC-generated image.
+The image shown is an out-of-sample instance from the CLIC-2020 dataset. The HIFIC image is obtained by reconstruction via a learned model provided below. The JPG image is obtained by the `imagemagick` command `mogrify -format jpg -quality 42 assets/camp_original.png`. Despite using around 1.5x the bitrate, the JPG image exhibits visible compression artifacts which are absent from the HIFIC-generated image.
 
-Note that the learned model was not adapted in any way for evaluation on this image. More sample outputs from this model can be found at the end of the readme. All images are losslessly compressed to PNG format for viewing.
+Note that the learned model was not adapted in any way for evaluation on this image. More sample outputs from this model can be found at the end of the README.
 
 ## Note
 
@@ -105,7 +99,7 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --reconstru
 
 The samples below are taken from the CLIC2020 dataset, external to the training set. The reconstructions are produced using the above `HIFIC-med` model (target bitrate `0.3 bpp`). It's interesting to try to guess which image is the original (images are saved as PNG for viewing - best viewed widescreen). You can expand the spoiler tags below each image to reveal the answer.
 
-For more examples see [EXAMPLES.md](assets/EXAMPLES.md)
+For more examples see [EXAMPLES.md](assets/EXAMPLES.md).
 
 A | B
 :-------------------------:|:-------------------------:
@@ -171,23 +165,13 @@ The last two show interesting failure modes: small figures in the distance are a
 * Justin Tan
 
 ### Acknowledgements
-
-* The entropy coding implementation under `src/compression` is based on the [Tensorflow Compression repository](https://github.com/tensorflow/compression). The rANS encoder implementation is based on the [Craystack repository](https://github.com/j-towns/craystack).
+* The compression routines under `src/compression/` are derived from the [Tensorflow Compression library](https://github.com/tensorflow/compression).
+* The rANS enco*der implementation is based on the [Craystack repository](https://github.com/j-towns/craystack).
 * The code under `src/perceptual_similarity/` implementing the perceptual distortion loss is based on the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
 
 ### Contributing
 
 All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.
-
-### References
-
-The following additional papers were useful to understand implementation details.
-
-0. Fabian Mentzer, George Toderici, Michael Tschannen, Eirikur Agustsson. High-Fidelity Generative Image Compression. [arXiv:2006.09965 (2020)](https://arxiv.org/abs/2006.09965).
-1. Johannes Ballé, David Minnen, Saurabh Singh, Sung Jin Hwang, Nick Johnston. Variational image compression with a scale hyperprior. [arXiv:1802.01436 (2018)](https://arxiv.org/abs/1802.01436).
-2. David Minnen, Johannes Ballé, George Toderici. Joint Autoregressive and Hierarchical Priors for Learned Image Compression. [arXiv 1809.02736 (2018)](https://arxiv.org/abs/1809.02736).
-3. Johannes Ballé, Valero Laparra, Eero P. Simoncelli. End-to-end optimization of nonlinear transform codes for perceptual quality. [arXiv 1607.05006 (2016)](https://arxiv.org/abs/1607.05006).
-4. Fabian Mentzer, Eirikur Agustsson, Michael Tschannen, Radu Timofte, Luc Van Gool. Practical Full Resolution Learned Lossless Image Compression. [arXiv 1811.12817 (2018)](https://arxiv.org/abs/1811.12817).
 
 ## Citation
 

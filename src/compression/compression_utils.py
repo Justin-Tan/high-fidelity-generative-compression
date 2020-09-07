@@ -2,8 +2,10 @@ import torch
 import math
 import numpy as np
 
-from src.compression import entropy_coding
 from src.helpers import utils
+from src.compression import entropy_coding
+
+PATCH_SIZE = entropy_coding.PATCH_SIZE
 
 def estimate_tails(cdf, target, shape, dtype=torch.float32, extra_counts=24):
     """
@@ -56,6 +58,29 @@ def estimate_tails(cdf, target, shape, dtype=torch.float32, extra_counts=24):
         tails.grad.zero_()
 
     return tails
+
+def decompose(x, n_channels, patch_size=PATCH_SIZE):
+    # Decompose input x into spatial patches
+    if isinstance(x, torch.Tensor) is False:
+        x = torch.Tensor(x)
+
+    y = x.unfold(1, n_channels, n_channels).unfold(2, *patch_size).unfold(3, *patch_size)
+    unfolded_shape = tuple(y.size())
+    y = torch.reshape(y, (-1, n_channels, *patch_size))  # (n_patches, n_channels, *patch_size)
+    return y.cpu().numpy().astype(np.int32), unfolded_shape
+    
+def reconstitute(x, original_shape, unfolded_shape, patch_size=PATCH_SIZE):
+    # Reconstitute patches into original input
+    if isinstance(x, torch.Tensor) is False:
+        x = torch.Tensor(x)
+        
+    B, n_channels, *_ = original_shape
+
+    x_re = torch.reshape(x, 
+        (B, 1, unfolded_shape[2], unfolded_shape[3], n_channels, *patch_size))
+    x_re = x_re.permute(0, 1, 4, 2, 5, 3, 6).contiguous().view(original_shape)
+
+    return x_re.cpu().numpy().astype(np.int32)
 
 
 def check_argument_shapes(cdf, cdf_length, cdf_offset):
