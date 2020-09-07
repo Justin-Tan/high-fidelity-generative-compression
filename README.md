@@ -95,6 +95,15 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --reconstru
 | 0.30 | [`HIFIC-med`](https://drive.google.com/open?id=1QNoX0AGKTBkthMJGPfQI0dT0_tnysYUb) | <pre lang=bash>`python3 train.py --model_type compression_gan --regime med --warmstart -ckpt path/to/trained/model --likelihood_type logistic`</pre> |
 | 0.45 | [`HIFIC-high`](https://drive.google.com/open?id=1BFYpvhVIA_Ek2QsHBbKnaBE8wn1GhFyA) | <pre lang=bash>`python3 train.py --model_type compression_gan --regime high --warmstart -ckpt path/to/trained/model -nrb 9 -norm`</pre> |
 
+### Compression
+* To obtain a _theoretical_ measure of the storage bitrate of generic images under some trained model, run `compress.py`. This performs a forward pass through the model to obtain the reconstructed image. This model will work with images of arbitrary size/resolution (subject to memory).
+```
+python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model
+```
+
+* The reported `bpp` is the theoretical bitrate required to losslessly store the quantized latent representation of an image. Comparing this (not the size of the reconstruction) against the original size of the image will give you an idea of the reduction in memory footprint. This repository does not currently support actual compression to a bitstring ([TensorFlow Compression](https://github.com/tensorflow/compression) does this well). We're working on an ANS entropy coder to support this in the future.
+
+
 ## Examples
 
 The samples below are taken from the CLIC2020 dataset, external to the training set. The reconstructions are produced using the above `HIFIC-med` model (target bitrate `0.3 bpp`). It's interesting to try to guess which image is the original (images are saved as PNG for viewing - best viewed widescreen). You can expand the spoiler tags below each image to reveal the answer.
