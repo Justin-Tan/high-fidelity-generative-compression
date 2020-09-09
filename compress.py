@@ -32,16 +32,24 @@ def make_deterministic(seed=42):
     
     np.random.seed(seed)
 
-def prepare_compress(ckpt_path, input_dir, output_dir, batch_size=1):
+def prepare_dataloader(input_dir, output_dir, batch_size=1):
 
-    make_deterministic()
-
+    # `batch_size` must be 1 for images of different shapes
     input_images = glob.glob(os.path.join(input_dir, '*.jpg'))
     input_images += glob.glob(os.path.join(input_dir, '*.png'))
     assert len(input_images) > 0, 'No valid image files found in supplied directory!'
     print('Input images')
     pprint(input_images)
 
+    eval_loader = datasets.get_dataloaders('evaluation', root=input_dir, batch_size=batch_size,
+                                           logger=logger, shuffle=False, normalize=loaded_args.normalize_input_image)
+    utils.makedirs(output_dir)
+
+    return eval_loader
+
+def prepare_model(ckpt_path, input_dir):
+
+    make_deterministic()
     device = utils.get_device()
     logger = utils.logger_setup(logpath=os.path.join(input_dir, f'logs_{time.time()}'), filepath=os.path.abspath(__file__))
     loaded_args, model, _ = utils.load_model(ckpt_path, logger, device, model_mode=ModelModes.EVALUATION,
@@ -53,12 +61,7 @@ def prepare_compress(ckpt_path, input_dir, output_dir, batch_size=1):
     model.Hyperprior.hyperprior_entropy_model.build_tables()
     model.logger.info('All tables built.')
 
-    # `batch_size` must be 1 for images of different shapes
-    eval_loader = datasets.get_dataloaders('evaluation', root=input_dir, batch_size=batch_size,
-                                           logger=logger, shuffle=False, normalize=loaded_args.normalize_input_image)
-    utils.makedirs(output_dir)
-
-    return model, loaded_args, eval_loader
+    return model, loaded_args
 
 def compress_and_save(model, args, data_loader, output_dir):
     # Compress and save compressed format to disk
