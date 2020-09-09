@@ -167,7 +167,8 @@ def save_model(model, optimizers, mean_epoch_loss, epoch, device, args, logger, 
     return model_path
    
 
-def load_model(save_path, logger, device, model_type=None, model_mode=None, current_args_d=None, prediction=True, strict=False):
+def load_model(save_path, logger, device, model_type=None, model_mode=None, current_args_d=None, prediction=True, 
+    strict=False, silent=False):
 
     start_time = time.time()
     from src.model import Model
@@ -177,15 +178,16 @@ def load_model(save_path, logger, device, model_type=None, model_mode=None, curr
     args = Struct(**loaded_args_d)
 
     if current_args_d is not None:
-        for k,v in current_args_d.items():
-            try:
-                loaded_v = loaded_args_d[k]
-            except KeyError:
-                logger.warning('Argument {} (value {}) not present in recorded arguments. Using current argument.'.format(k,v))
-                continue
+        if silent is False:
+            for k,v in current_args_d.items():
+                try:
+                    loaded_v = loaded_args_d[k]
+                except KeyError:
+                    logger.warning('Argument {} (value {}) not present in recorded arguments. Using current argument.'.format(k,v))
+                    continue
 
-            if loaded_v !=v:
-                logger.warning('Current argument {} (value {}) does not match recorded argument (value {}). Recorded argument will be overriden.'.format(k, v, loaded_v))
+                if loaded_v !=v:
+                    logger.warning('Current argument {} (value {}) does not match recorded argument (value {}). Recorded argument will be overriden.'.format(k, v, loaded_v))
 
         # HACK
         loaded_args_d.update(current_args_d)
@@ -206,21 +208,22 @@ def load_model(save_path, logger, device, model_type=None, model_mode=None, curr
         args.sample_noise = False
         args.noise_dim = 0
 
-    logger.info('MODEL TYPE: {}'.format(model_type))
-    logger.info('MODEL MODE: {}'.format(model_mode))
-
     model = Model(args, logger, model_type=model_type, model_mode=model_mode)
 
     # `strict` False if warmstarting
     model.load_state_dict(checkpoint['model_state_dict'], strict=strict)
 
-    logger.info(model)
-    logger.info('Trainable parameters:')
-    for n, p in model.named_parameters():
-        logger.info('{} - {}'.format(n, p.shape))
+    logger.info('Loading model ...')
+    if silent is False:
+        logger.info('MODEL TYPE: {}'.format(model_type))
+        logger.info('MODEL MODE: {}'.format(model_mode))
+        logger.info(model)
+        logger.info('Trainable parameters:')
+        for n, p in model.named_parameters():
+            logger.info('{} - {}'.format(n, p.shape))
 
-    logger.info("Number of trainable parameters: {}".format(count_parameters(model)))
-    logger.info("Estimated size (under fp32): {:.3f} MB".format(count_parameters(model) * 4. / 10**6))
+        logger.info("Number of trainable parameters: {}".format(count_parameters(model)))
+    logger.info("Estimated model size (under fp32): {:.3f} MB".format(count_parameters(model) * 4. / 10**6))
     logger.info('Model init {:.3f}s'.format(time.time() - start_time))
 
     model = model.to(device)

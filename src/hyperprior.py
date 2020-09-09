@@ -181,9 +181,9 @@ class Hyperprior(CodingModel):
             raise ValueError('Unknown likelihood model: {}'.format(likelihood_type))
 
         if entropy_code is True:
+            print('Building prior probability tables.')
             self.hyperprior_entropy_model = hyperprior_model.HyperpriorEntropyModel(
                 distribution=self.hyperlatent_likelihood)
-
             self.prior_density = prior_model.PriorDensity(n_channels=bottleneck_capacity,
                 scale_lower_bound=self.scale_lower_bound, likelihood_type=likelihood_type)
             self.prior_entropy_model = prior_model.PriorEntropyModel(
@@ -230,11 +230,11 @@ class Hyperprior(CodingModel):
         compression_output = CompressionOutput(
             hyperlatents_encoded=hyperlatents_encoded,
             latents_encoded=latents_encoded,
-            hyperlatent_spatial_shape=hyperlatent_spatial_shape,
+            hyperlatent_spatial_shape=hyperlatent_spatial_shape,  # 2D
+            spatial_shape=spatial_shape,  # 2D
+            hyper_coding_shape=hyper_coding_shape,  # C,H,W
+            latent_coding_shape=latent_coding_shape,  # C,H,W
             batch_shape=batch_shape,
-            spatial_shape=spatial_shape,
-            hyper_coding_shape=hyper_coding_shape,
-            latent_coding_shape=latent_coding_shape,
             hyperlatent_bits=hyperlatent_bits.item(),  # for reporting 
             latent_bits=latent_bits.item(),
             total_bits=(hyperlatent_bits + latent_bits).item(),

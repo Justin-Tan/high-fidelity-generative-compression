@@ -1,11 +1,28 @@
 import torch
 import math
 import numpy as np
+import functools
+import os
+
+from collections import namedtuple
 
 from src.helpers import utils
 from src.compression import entropy_coding
 
+# Random bits for fencing in bitstream
+_MAGIC_VALUE_SEP = b'\x46\xE2\x84\x92'
+
 PATCH_SIZE = entropy_coding.PATCH_SIZE
+
+CompressionOutput = namedtuple("CompressionOutput",
+   ["hyperlatents_encoded",
+    "latents_encoded",
+    "hyperlatent_spatial_shape",
+    "batch_shape",
+    "spatial_shape",
+    "hyper_coding_shape",
+    "latent_coding_shape"]
+)
 
 def estimate_tails(cdf, target, shape, dtype=torch.float32, extra_counts=24):
     """
@@ -197,6 +214,147 @@ def ans_decompress(encoded, indices, cdf, cdf_length, cdf_offset, coding_shape,
             decoded = np.stack(decoded, axis=0)
 
     return decoded
+
+def compose(*args):
+    """
+    :param args: a list of functions
+    :return: composition of the functions
+    """
+    def compose2(f1, f2):
+        def composed(*args_c, **kwargs_c):
+            return f1(f2(*args_c, **kwargs_c))
+        return composed
+
+    return functools.reduce(compose2, args)
+
+def return_list(f):
+    """ Can be used to decorate generator functions. """
+    return compose(list, f)
+
+def write_coding_shape(shape, fout):
+    """
+    Write tuple (C,H,W) to file.
+    """
+    assert len(shape) == 3, shape
+    assert shape[0] < 2**16, shape
+    assert shape[1] < 2**16, shape
+    assert shape[2] < 2**16, shape
+    write_bytes(fout, [np.uint16, np.uint16, np.uint16], shape)
+    return 6  # number of bytes written
+
+def write_shapes(shape, fout):
+    """
+    Write tuple (H,W) or (C,H,W) to file.
+    """
+    for s in shape:
+        assert s < 2**16, s
+
+    write_bytes(fout, [np.uint16]*len(shape), shape)
+    return 2*len(shape)  # number of bytes written
+
+def read_shapes(fin, shape_len):
+    return tuple(map(int, read_bytes(fin, [np.uint16]*shape_len)))
+
+def write_num_bytes_encoded(num_bytes, fout):
+    assert num_bytes < 2**32
+    write_bytes(fout, [np.uint32], [num_bytes])
+    return 4  # number of bytes written
+
+def read_num_bytes_encoded(fin):
+    return int(read_bytes(fin, [np.uint32])[0])
+
+def write_bytes(f, ts, xs):
+    for t, x in zip(ts, xs):
+        f.write(t(x).tobytes())
+
+@return_list
+def read_bytes(f, ts):
+    for t in ts:
+        num_bytes_to_read = t().itemsize
+        yield np.frombuffer(f.read(num_bytes_to_read), t, count=1)
+
+def message_to_bytes(f_out, message):
+    # Message should be of type np.int32
+    # with open(p, 'wb') as f:
+    f_out.write(message.tobytes())
+
+def message_from_bytes(f_in, num_bytes, t=np.uint32):
+    message = np.frombuffer(f_in.read(num_bytes), t, count=-1)
+    return message
+
+
+def save_compressed_format(compression_output, out_path):
+    # Saves compressed output to disk at `out_path`, together with
+    # necessary meta-information
+
+    # See format of compressed output in `hyperprior.py`
+    entropy_coding_bytes = []
+
+    with open(out_path, 'wb') as f_out:
+
+        # Write meta information
+        write_shapes(compression_output.hyperlatent_spatial_shape, f_out)  # (H,W)
+        write_shapes(compression_output.spatial_shape, f_out)  # (H,W)
+        write_shapes(compression_output.hyper_coding_shape, f_out)  # (C,H,W)
+        write_shapes(compression_output.latent_coding_shape, f_out)  # (C,H,W)
+        write_shapes([compression_output.batch_shape], f_out)  # (B)
+        f_out.write(_MAGIC_VALUE_SEP)
+
+        # Write hyperlatents
+        enc_hyperlatents = compression_output.hyperlatents_encoded  # np.uint32
+        write_num_bytes_encoded(len(enc_hyperlatents) * 4, f_out)
+        message_to_bytes(f_out, enc_hyperlatents)
+        f_out.write(_MAGIC_VALUE_SEP)
+
+        # Write latents
+        enc_latents = compression_output.latents_encoded
+        write_num_bytes_encoded(len(enc_latents) * 4, f_out)
+        message_to_bytes(f_out, enc_latents)
+        f_out.write(_MAGIC_VALUE_SEP)
+
+    actual_num_bytes = os.path.getsize(out_path)
+    actual_bpp = 8. * float(actual_num_bytes) / np.prod(compression_output.spatial_shape)
+    try:
+        theoretical_bpp = float(compression_output.total_bpp.item())
+    except AttributeError:
+        theoretical_bpp = float(compression_output.total_bpp)
+
+    return actual_bpp, theoretical_bpp
+
+def load_compressed_format(in_path):
+    # Loads necessary meta-information and compressed format from binary
+    # format on disk
+
+    with open(in_path, 'rb') as f_in:
+
+        # Read meta information
+        hyperlatent_spatial_shape = read_shapes(f_in, 2)
+        spatial_shape = read_shapes(f_in, 2)
+        hyper_coding_shape = read_shapes(f_in, 3)
+        latent_coding_shape = read_shapes(f_in, 3)
+        batch_shape = read_shapes(f_in, 1)
+        assert f_in.read(4) == _MAGIC_VALUE_SEP  # assert valid file
+        
+        # Read hyperlatents
+        num_bytes = read_num_bytes_encoded(f_in)
+        hyperlatents_encoded = message_from_bytes(f_in, num_bytes)
+        assert f_in.read(4) == _MAGIC_VALUE_SEP  # assert valid file
+
+        # Read latents
+        num_bytes = read_num_bytes_encoded(f_in)
+        latents_encoded = message_from_bytes(f_in, num_bytes)
+        assert f_in.read(4) == _MAGIC_VALUE_SEP  # assert valid file
+
+    compression_output = CompressionOutput(
+        hyperlatents_encoded=hyperlatents_encoded,
+        latents_encoded=latents_encoded,
+        hyperlatent_spatial_shape=hyperlatent_spatial_shape,  # 2D
+        spatial_shape=spatial_shape,  # 2D
+        hyper_coding_shape=hyper_coding_shape,  # C,H,W
+        latent_coding_shape=latent_coding_shape,  # C,H,W
+        batch_shape=batch_shape[0])
+
+    return compression_output
 
 if __name__ == '__main__':
 
