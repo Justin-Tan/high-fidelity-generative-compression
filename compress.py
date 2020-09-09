@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
-import os, glob, time, datetime
-import logging, pickle, argparse
-import functools, itertools
+import os, glob, time
+import logging, argparse
+import functools
 
 from pprint import pprint
 from tqdm import tqdm, trange
@@ -32,7 +32,7 @@ def make_deterministic(seed=42):
     
     np.random.seed(seed)
 
-def prepare_compress(model_path, input_dir, output_dir, batch_size=1):
+def prepare_compress(ckpt_path, input_dir, output_dir, batch_size=1):
 
     make_deterministic()
 
@@ -44,8 +44,8 @@ def prepare_compress(model_path, input_dir, output_dir, batch_size=1):
 
     device = utils.get_device()
     logger = utils.logger_setup(logpath=os.path.join(input_dir, 'logs'), filepath=os.path.abspath(__file__))
-    loaded_args, model, _ = utils.load_model(args.ckpt_path, logger, device, model_mode=ModelModes.EVALUATION,
-        current_args_d=None, prediction=True, strict=False)
+    loaded_args, model, _ = utils.load_model(ckpt_path, logger, device, model_mode=ModelModes.EVALUATION,
+        current_args_d=None, prediction=True, strict=False, silent=True)
 
     # Build probability tables
     model.Hyperprior.hyperprior_entropy_model.build_tables()
@@ -59,19 +59,19 @@ def prepare_compress(model_path, input_dir, output_dir, batch_size=1):
 
 def compress_and_save(model, args, data_loader, output_dir):
     # Compress and save compressed format to disk
-
+    device = utils.get_device()
     with torch.no_grad():
-        for idx, (data, bpp, filenames) in enumerate(tqdm(eval_loader), 0):
+        for idx, (data, bpp, filenames) in enumerate(tqdm(data_loader), 0):
             data = data.to(device, dtype=torch.float)
             assert data.size(0) == 1, 'Currently only supports saving single images.'
 
             # Perform entropy coding
             compressed_output = model.compress(data)
 
-            out_path = os.path.join(output_dir, "{filenames[0]}_compressed.hfc")
+            out_path = os.path.join(output_dir, f"{filenames[0]}_compressed.hfc")
             actual_bpp, theoretical_bpp = compression_utils.save_compressed_format(compressed_output,
                 out_path=out_path)
-            model.logger(f'Attained: {actual_bpp:.3f} bpp vs. theoretical: {theoretical_bpp:.3f} bpp.')
+            model.logger.info(f'Attained: {actual_bpp:.3f} bpp vs. theoretical: {theoretical_bpp:.3f} bpp.')
 
 
 def load_and_decompress(model, compressed_format_path, out_path):
@@ -82,13 +82,10 @@ def load_and_decompress(model, compressed_format_path, out_path):
     with torch.no_grad():
         reconstruction = model.decompress(compressed_output)
 
-    q_bpp = compressed_output.total_bpp
-    q_bpp = float(q_bpp.item()) if type(q_bpp) == torch.Tensor else float(q_bpp)
-
     torchvision.utils.save_image(reconstruction, out_path, normalize=True)
     delta_t = time.time() - start_time
-    logger.info('Decoding time: {:.3f} s'.format(delta_t))
-    model.logger(f'Reconstruction saved to {out_path}')
+    model.logger.info('Decoding time: {:.2f} s'.format(delta_t))
+    model.logger.info(f'Reconstruction saved to {out_path}')
 
 def compress_and_decompress(args):
 

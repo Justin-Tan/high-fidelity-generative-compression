@@ -2,6 +2,9 @@ import torch
 import math
 import numpy as np
 import functools
+import os
+
+from collections import namedtuple
 
 from src.helpers import utils
 from src.compression import entropy_coding
@@ -311,7 +314,10 @@ def save_compressed_format(compression_output, out_path):
 
     actual_num_bytes = os.path.getsize(out_path)
     actual_bpp = float(actual_num_bytes) / np.prod(compression_output.spatial_shape)
-    theoretical_bpp = float(compression_output.total_bpp.item())
+    try:
+        theoretical_bpp = float(compression_output.total_bpp.item())
+    except AttributeError:
+        theoretical_bpp = float(compression_output.total_bpp)
 
     return actual_bpp, theoretical_bpp
 
@@ -346,7 +352,7 @@ def load_compressed_format(in_path):
         spatial_shape=spatial_shape,  # 2D
         hyper_coding_shape=hyper_coding_shape,  # C,H,W
         latent_coding_shape=latent_coding_shape,  # C,H,W
-        batch_shape=batch_shape)
+        batch_shape=batch_shape[0])
 
     return compression_output
 
