@@ -32,7 +32,7 @@ def make_deterministic(seed=42):
     
     np.random.seed(seed)
 
-def prepare_dataloader(input_dir, output_dir, batch_size=1):
+def prepare_dataloader(args, input_dir, output_dir, batch_size=1):
 
     # `batch_size` must be 1 for images of different shapes
     input_images = glob.glob(os.path.join(input_dir, '*.jpg'))
@@ -42,7 +42,7 @@ def prepare_dataloader(input_dir, output_dir, batch_size=1):
     pprint(input_images)
 
     eval_loader = datasets.get_dataloaders('evaluation', root=input_dir, batch_size=batch_size,
-                                           logger=logger, shuffle=False, normalize=loaded_args.normalize_input_image)
+                                           logger=None, shuffle=False, normalize=args.normalize_input_image)
     utils.makedirs(output_dir)
 
     return eval_loader
