@@ -259,7 +259,7 @@ class Model(nn.Module):
 
         return D_loss, G_loss
 
-    def compress(self, x):
+    def compress(self, x, silent=False):
 
         """
         * Pass image through encoder to obtain latents: x -> Encoder() -> y 
@@ -295,17 +295,18 @@ class Model(nn.Module):
         attained_bpp = 32 * ((len(compression_output.hyperlatents_encoded) +  
             len(compression_output.latents_encoded)) / np.prod(spatial_shape))
 
-        self.logger.info('[ESTIMATED]')
-        self.logger.info(f'BPP: {compression_output.total_bpp:.3f}')
-        self.logger.info(f'HL BPP: {compression_output.hyperlatent_bpp:.3f}')
-        self.logger.info(f'L BPP: {compression_output.latent_bpp:.3f}')
+        if silent is False:
+            self.logger.info('[ESTIMATED]')
+            self.logger.info(f'BPP: {compression_output.total_bpp:.3f}')
+            self.logger.info(f'HL BPP: {compression_output.hyperlatent_bpp:.3f}')
+            self.logger.info(f'L BPP: {compression_output.latent_bpp:.3f}')
 
-        self.logger.info('[ATTAINED]')
-        self.logger.info(f'BPP: {attained_bpp:.3f}')
-        self.logger.info(f'HL BPP: {attained_hbpp:.3f}')
-        self.logger.info(f'L BPP: {attained_lbpp:.3f}')
+            self.logger.info('[ATTAINED]')
+            self.logger.info(f'BPP: {attained_bpp:.3f}')
+            self.logger.info(f'HL BPP: {attained_hbpp:.3f}')
+            self.logger.info(f'L BPP: {attained_lbpp:.3f}')
+
         return compression_output
-
 
 
     def decompress(self, compression_output):

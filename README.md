@@ -2,11 +2,7 @@
 
 Pytorch implementation of the paper ["High-Fidelity Generative Image Compression" by Mentzer et. al.](https://hific.github.io/). This repo also provides general utilities for lossless compression that interface with Pytorch.
 
-## Warning
-
-This is a preliminary version. There may be sharp edges.
-
-## Details
+## About
 
 This repository defines a model for learnable image compression based on the paper ["High-Fidelity Generative Image Compression" (HIFIC) by Mentzer et. al.](https://hific.github.io/). The model is capable of compressing images of arbitrary size and resolution while maintaining perceptually similar reconstructions that tend to be more visually pleasing than standard image codecs operating at higher bitrates.
 
@@ -44,20 +40,20 @@ The generator is trained to achieve realistic and not exact reconstruction. It m
 
 ## Usage
 
-* Install Pytorch nightly and dependencies from [https://pytorch.org/](https://pytorch.org/). Then install other requirements.
+* Install Pytorch nightly and dependencies from [https://pytorch.org/](https://pytorch.org/). Then install other requirements:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-* Clone this repository, `cd` in.
+* Clone this repository, `cd` in:
 
 ```bash
 git clone https://github.com/Justin-Tan/high-fidelity-generative-compression.git
 cd high-fidelity-generative-compression
 ```
 
-To check if your setup is working, run `python3 -m src.model` in root. Detailed usage instructions can be found in the [user's guide](assets/USAGE_GUIDE.md).
+To check if your setup is working, run `python3 -m src.model` in root. Usage instructions can be found in the [user's guide](assets/USAGE_GUIDE.md).
 
 ### Training
 
@@ -97,9 +93,9 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --reconstru
 
 ## Examples
 
-The samples below are taken from the CLIC2020 dataset, external to the training set. The reconstructions are produced using the above `HIFIC-med` model (target bitrate `0.3 bpp`). It's interesting to try to guess which image is the original (images are saved as PNG for viewing - best viewed widescreen). You can expand the spoiler tags below each image to reveal the answer.
+The samples below are taken from the CLIC2020 dataset, external to the training set. The bitrate is reported in bits-per-pixel (`bpp`). The reconstructions are produced using the above `HIFIC-med` model (target bitrate `0.3 bpp`). It's interesting to try to guess which image is the original (images are saved as PNG for viewing - best viewed widescreen). You can expand the spoiler tags below each image to reveal the answer.
 
-For more examples see [EXAMPLES.md](assets/EXAMPLES.md). For even more examples see [this shared folder](https://drive.google.com/drive/folders/1lH1pTmekC1jL-gPi1fhEDuyjhfe5x6WG) (using the `HIFIC-low` model).
+For more examples see [EXAMPLES.md](assets/EXAMPLES.md). For even more examples see [this shared folder](https://drive.google.com/drive/folders/1lH1pTmekC1jL-gPi1fhEDuyjhfe5x6WG) (generated using the `HIFIC-low` model).
 
 A | B
 :-------------------------:|:-------------------------:
@@ -157,7 +153,7 @@ A             |  B
   
 </details>
 
-The last two show interesting failure modes: small figures in the distance are almost entirely removed (top of the central rock in the penultimate image), and the model bitrate increases significantly when the image is dominated by high-frequency components.
+The last two show interesting failure modes: small figures in the distance are almost entirely removed (top of the central rock in the penultimate image), and the required model bitrate increases significantly when the image is dominated by high-frequency components.
 
 ### Authors
 
@@ -166,8 +162,8 @@ The last two show interesting failure modes: small figures in the distance are a
 
 ### Acknowledgements
 * The compression routines under `src/compression/` are derived from the [Tensorflow Compression library](https://github.com/tensorflow/compression).
-* The rANS encoder implementation is based on the [Craystack repository](https://github.com/j-towns/craystack).
-* The code under `src/perceptual_similarity/` implementing the perceptual distortion loss is based on the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
+* The rANS encoder implementation under is based on the [Craystack repository](https://github.com/j-towns/craystack).
+* The code under `src/loss/perceptual_similarity/` implementing the perceptual distortion loss is based on the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
 
 ### Contributing
 

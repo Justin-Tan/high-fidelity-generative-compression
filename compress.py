@@ -6,7 +6,7 @@ import functools, itertools
 
 from pprint import pprint
 from tqdm import tqdm, trange
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 import torch
 import torchvision
@@ -15,24 +15,85 @@ import torch.nn.functional as F
 
 # Custom modules
 from src.helpers import utils, datasets
+from src.compression import compression_utils
 from src.loss.perceptual_similarity import perceptual_loss as ps
 from default_config import hific_args, mse_lpips_args, directories, ModelModes, ModelTypes
 from default_config import args as default_args
+
+File = namedtuple('File', ['original_path', 'compressed_path',
+                           'compressed_num_bytes', 'bpp'])
 
 def make_deterministic(seed=42):
 
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.benchmark = False  # Don't go fast boi :(
     
     np.random.seed(seed)
 
+def prepare_compress(model_path, input_dir, output_dir, batch_size=1):
 
-def compress_batch(args):
+    make_deterministic()
+
+    input_images = glob.glob(os.path.join(input_dir, '*.jpg'))
+    input_images += glob.glob(os.path.join(input_dir, '*.png'))
+    assert len(input_images) > 0, 'No valid image files found in supplied directory!'
+    print('Input images')
+    pprint(input_images)
+
+    device = utils.get_device()
+    logger = utils.logger_setup(logpath=os.path.join(input_dir, 'logs'), filepath=os.path.abspath(__file__))
+    loaded_args, model, _ = utils.load_model(args.ckpt_path, logger, device, model_mode=ModelModes.EVALUATION,
+        current_args_d=None, prediction=True, strict=False)
+
+    # Build probability tables
+    model.Hyperprior.hyperprior_entropy_model.build_tables()
+
+    # `batch_size` must be 1 for images of different shapes
+    eval_loader = datasets.get_dataloaders('evaluation', root=input_dir, batch_size=batch_size,
+                                           logger=logger, shuffle=False, normalize=loaded_args.normalize_input_image)
+    utils.makedirs(output_dir)
+
+    return model, loaded_args, eval_loader
+
+def compress_and_save(model, args, data_loader, output_dir):
+    # Compress and save compressed format to disk
+
+    with torch.no_grad():
+        for idx, (data, bpp, filenames) in enumerate(tqdm(eval_loader), 0):
+            data = data.to(device, dtype=torch.float)
+            assert data.size(0) == 1, 'Currently only supports saving single images.'
+
+            # Perform entropy coding
+            compressed_output = model.compress(data)
+
+            out_path = os.path.join(output_dir, "{filenames[0]}_compressed.hfc")
+            actual_bpp, theoretical_bpp = compression_utils.save_compressed_format(compressed_output,
+                out_path=out_path)
+            model.logger(f'Attained: {actual_bpp:.3f} bpp vs. theoretical: {theoretical_bpp:.3f} bpp.')
+
+
+def load_and_decompress(model, compressed_format_path, out_path):
+    # Decompress single image from compressed format on disk
+
+    compressed_output = compression_utils.load_compressed_format(compressed_format_path)
+    start_time = time.time()
+    with torch.no_grad():
+        reconstruction = model.decompress(compressed_output)
+
+    q_bpp = compressed_output.total_bpp
+    q_bpp = float(q_bpp.item()) if type(q_bpp) == torch.Tensor else float(q_bpp)
+
+    torchvision.utils.save_image(reconstruction, out_path, normalize=True)
+    delta_t = time.time() - start_time
+    logger.info('Decoding time: {:.3f} s'.format(delta_t))
+    model.logger(f'Reconstruction saved to {out_path}')
+
+def compress_and_decompress(args):
 
     # Reproducibility
-    # make_deterministic()
+    make_deterministic()
     perceptual_loss_fn = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available())
 
     # Load model
@@ -68,6 +129,7 @@ def compress_batch(args):
         for idx, (data, bpp, filenames) in enumerate(tqdm(eval_loader), 0):
             data = data.to(device, dtype=torch.float)
             B = data.size(0)
+            input_filenames_total.extend(filenames)
 
             if args.reconstruct is True:
                 # Reconstruction without compression
@@ -75,6 +137,12 @@ def compress_batch(args):
             else:
                 # Perform entropy coding
                 compressed_output = model.compress(data)
+
+                if args.save is True:
+                    assert B == 1, 'Currently only supports saving single images.'
+                    compression_utils.save_compressed_format(compressed_output, 
+                        out_path="{filenames[0]}_compressed.hfc")
+
                 reconstruction = model.decompress(compressed_output)
                 q_bpp = compressed_output.total_bpp
 
@@ -84,7 +152,6 @@ def compress_batch(args):
 
             perceptual_loss = perceptual_loss_fn.forward(reconstruction, data, normalize=True)
 
-            input_filenames_total.extend(filenames)
 
             for subidx in range(reconstruction.shape[0]):
                 if B > 1:
@@ -131,6 +198,7 @@ def main(**kwargs):
     parser.add_argument('-bs', '--batch_size', type=int, default=1,
         help="Loader batch size. Set to 1 if images in directory are different sizes.")
     parser.add_argument("-rc", "--reconstruct", help="Reconstruct input image without compression.", action="store_true")
+    parser.add_argument("-save", "--save", help="Save compressed format to disk.", action="store_true")
     args = parser.parse_args()
 
     input_images = glob.glob(os.path.join(args.image_dir, '*.jpg'))
@@ -141,7 +209,7 @@ def main(**kwargs):
     print('Input images')
     pprint(input_images)
 
-    compress_batch(args)
+    compress_and_decompress(args)
 
 if __name__ == '__main__':
     main()

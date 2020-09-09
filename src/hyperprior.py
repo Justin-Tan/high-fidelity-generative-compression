@@ -230,11 +230,11 @@ class Hyperprior(CodingModel):
         compression_output = CompressionOutput(
             hyperlatents_encoded=hyperlatents_encoded,
             latents_encoded=latents_encoded,
-            hyperlatent_spatial_shape=hyperlatent_spatial_shape,
+            hyperlatent_spatial_shape=hyperlatent_spatial_shape,  # 2D
+            spatial_shape=spatial_shape,  # 2D
+            hyper_coding_shape=hyper_coding_shape,  # C,H,W
+            latent_coding_shape=latent_coding_shape,  # C,H,W
             batch_shape=batch_shape,
-            spatial_shape=spatial_shape,
-            hyper_coding_shape=hyper_coding_shape,
-            latent_coding_shape=latent_coding_shape,
             hyperlatent_bits=hyperlatent_bits.item(),  # for reporting 
             latent_bits=latent_bits.item(),
             total_bits=(hyperlatent_bits + latent_bits).item(),
