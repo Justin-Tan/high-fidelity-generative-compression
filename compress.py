@@ -43,12 +43,15 @@ def prepare_compress(ckpt_path, input_dir, output_dir, batch_size=1):
     pprint(input_images)
 
     device = utils.get_device()
-    logger = utils.logger_setup(logpath=os.path.join(input_dir, 'logs'), filepath=os.path.abspath(__file__))
+    logger = utils.logger_setup(logpath=os.path.join(input_dir, f'logs_{time.time()}'), filepath=os.path.abspath(__file__))
     loaded_args, model, _ = utils.load_model(ckpt_path, logger, device, model_mode=ModelModes.EVALUATION,
         current_args_d=None, prediction=True, strict=False, silent=True)
+    model.logger.info('Model loaded from disk.')
 
     # Build probability tables
+    model.logger.info('Building hyperprior probability tables...')
     model.Hyperprior.hyperprior_entropy_model.build_tables()
+    model.logger.info('All tables built.')
 
     # `batch_size` must be 1 for images of different shapes
     eval_loader = datasets.get_dataloaders('evaluation', root=input_dir, batch_size=batch_size,

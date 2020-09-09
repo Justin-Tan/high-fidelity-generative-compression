@@ -112,6 +112,12 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --save
 
 Feel free to submit any questions/corrections/suggestions/bugs as issues. Pull requests are welcome. Thanks to Grace for helping refactor my code.
 
+## Colab Demo
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Justin-Tan/high-fidelity-generative-compression/blob/hific_demo/assets/HiFIC_torch_colab_demo.ipynb)
+
+To take a look under the hood, you can play with the [demonstration of the model in Colab](https://colab.research.google.com/github/Justin-Tan/high-fidelity-generative-compression/blob/hific_demo/assets/HiFIC_torch_colab_demo.ipynb), and compress your own images.
+
+
 ### References
 
 The following additional papers were useful to understand implementation details.

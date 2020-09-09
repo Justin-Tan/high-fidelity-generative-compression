@@ -106,6 +106,9 @@ def _vec_indexed_cdf_to_dec_statfun(cdf_i, cdf_i_length):
 def ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision, 
     overflow_width=OVERFLOW_WIDTH, **kwargs):
     """
+    Based on "https://github.com/tensorflow/compression/blob/master/tensorflow_compression/cc/
+    kernels/unbounded_index_range_coding_kernels.cc"
+    
     ANS-encodes unbounded integer data using an indexed probability table. 
     Encodes scalars sequentially.
 

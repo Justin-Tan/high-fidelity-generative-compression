@@ -1,5 +1,7 @@
 The images below were generated using the `HIFIC-low` model. You can generate the reconstructions by downloading the model weights and using the following command. The bitrate is reported in bits-per-pixel (`bpp`) of the compressed representation.
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Justin-Tan/high-fidelity-generative-compression/blob/hific_demo/assets/HiFIC_torch_colab_demo.ipynb)
+
 ```bash
 python3 compress.py -i /path/to/input/images --ckpt /path/to/model/checkpoint --reconstruct
 ```

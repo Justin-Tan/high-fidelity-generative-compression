@@ -313,7 +313,7 @@ def save_compressed_format(compression_output, out_path):
         f_out.write(_MAGIC_VALUE_SEP)
 
     actual_num_bytes = os.path.getsize(out_path)
-    actual_bpp = float(actual_num_bytes) / np.prod(compression_output.spatial_shape)
+    actual_bpp = 8. * float(actual_num_bytes) / np.prod(compression_output.spatial_shape)
     try:
         theoretical_bpp = float(compression_output.total_bpp.item())
     except AttributeError:

@@ -181,9 +181,9 @@ class Hyperprior(CodingModel):
             raise ValueError('Unknown likelihood model: {}'.format(likelihood_type))
 
         if entropy_code is True:
+            print('Building prior probability tables.')
             self.hyperprior_entropy_model = hyperprior_model.HyperpriorEntropyModel(
                 distribution=self.hyperlatent_likelihood)
-
             self.prior_density = prior_model.PriorDensity(n_channels=bottleneck_capacity,
                 scale_lower_bound=self.scale_lower_bound, likelihood_type=likelihood_type)
             self.prior_entropy_model = prior_model.PriorEntropyModel(

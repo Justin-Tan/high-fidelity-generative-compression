@@ -8,6 +8,11 @@ This repository defines a model for learnable image compression based on the pap
 
 This repository also includes a partial port of the [Tensorflow Compression library](https://github.com/tensorflow/compression) which provides general tools for neural image compression in Pytorch.
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Justin-Tan/high-fidelity-generative-compression/blob/hific_demo/assets/HiFIC_torch_colab_demo.ipynb)
+
+You can play with a [demonstration of the model in Colab](https://colab.research.google.com/github/Justin-Tan/high-fidelity-generative-compression/blob/hific_demo/assets/HiFIC_torch_colab_demo.ipynb), where you can compress your own images.
+
+
 ## Example
 
 ```bash
