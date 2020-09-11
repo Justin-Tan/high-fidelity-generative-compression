@@ -65,7 +65,10 @@ def prepare_model(ckpt_path, input_dir):
 
 def compress_and_save(model, args, data_loader, output_dir):
     # Compress and save compressed format to disk
+
     device = utils.get_device()
+    model.logger.info('Starting compression...')
+
     with torch.no_grad():
         for idx, (data, bpp, filenames) in enumerate(tqdm(data_loader), 0):
             data = data.to(device, dtype=torch.float)
@@ -93,6 +96,8 @@ def load_and_decompress(model, compressed_format_path, out_path):
     model.logger.info('Decoding time: {:.2f} s'.format(delta_t))
     model.logger.info(f'Reconstruction saved to {out_path}')
 
+    return reconstruction
+
 def compress_and_decompress(args):
 
     # Reproducibility
@@ -113,7 +118,9 @@ def compress_and_decompress(args):
     logger.info(loaded_args_d)
 
     # Build probability tables
+    logger.info('Building hyperprior probability tables...')
     model.Hyperprior.hyperprior_entropy_model.build_tables()
+    logger.info('All tables built.')
 
 
     eval_loader = datasets.get_dataloaders('evaluation', root=args.image_dir, batch_size=args.batch_size,
@@ -125,6 +132,7 @@ def compress_and_decompress(args):
     bpp_total, q_bpp_total, LPIPS_total = torch.Tensor(N), torch.Tensor(N), torch.Tensor(N)
     utils.makedirs(args.output_dir)
     
+    logger.info('Starting compression...')
     start_time = time.time()
 
     with torch.no_grad():
@@ -144,7 +152,7 @@ def compress_and_decompress(args):
                 if args.save is True:
                     assert B == 1, 'Currently only supports saving single images.'
                     compression_utils.save_compressed_format(compressed_output, 
-                        out_path="{filenames[0]}_compressed.hfc")
+                        out_path=os.path.join(args.output_dir, f"{filenames[0]}_compressed.hfc"))
 
                 reconstruction = model.decompress(compressed_output)
                 q_bpp = compressed_output.total_bpp

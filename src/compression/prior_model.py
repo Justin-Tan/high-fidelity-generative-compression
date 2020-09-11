@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from tqdm import tqdm
 
 # Custom
 from src.helpers import maths
@@ -96,7 +97,7 @@ class PriorEntropyModel(entropy_models.ContinuousEntropyModel):
 
         # CDF shape [n_scales,  max_length + 2] - account for fenceposts + overflow
         CDF = torch.zeros((len(pmf_length), max_length + 2), dtype=torch.int32)
-        for n, (pmf_, pmf_length_, tail_) in enumerate(zip(pmf, pmf_length, tail_mass)):
+        for n, (pmf_, pmf_length_, tail_) in enumerate((zip(tqdm(pmf), pmf_length, tail_mass))): 
             pmf_ = pmf_[:pmf_length_]  # [max_length]
             overflow = torch.clamp(1. - torch.sum(pmf_, dim=0, keepdim=True), min=0.)  
             # pmf_ = torch.cat((pmf_, overflow), dim=0)
@@ -317,7 +318,7 @@ if __name__ == '__main__':
 
     import time
 
-    n_channels = 256
+    n_channels = 4
     use_blocks = True
     vectorize = True
     prior_density = PriorDensity(n_channels)
@@ -325,7 +326,7 @@ if __name__ == '__main__':
 
     loc, scale = 2.401, 3.43
     n_data = 1
-    toy_shape = (n_data, n_channels, 34, 50)
+    toy_shape = (n_data, n_channels, 32, 32)
     bottleneck, means = torch.randn(toy_shape), torch.randn(toy_shape)
     scales = torch.randn(toy_shape) * np.sqrt(scale) + loc
     scales = torch.clamp(scales, min=MIN_SCALE)

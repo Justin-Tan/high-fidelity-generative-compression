@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from tqdm import tqdm
 
 # Custom
 from src.helpers import maths, utils
@@ -82,7 +83,7 @@ class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
         
         # CDF shape [n_channels, max_length + 2] - account for fenceposts + overflow
         CDF = torch.zeros((len(pmf_length), max_length + 2), dtype=torch.int32)
-        for n, (pmf_, pmf_length_) in enumerate(zip(pmf, pmf_length)):
+        for n, (pmf_, pmf_length_) in enumerate(zip(tqdm(pmf), pmf_length)):
             pmf_ = pmf_[:pmf_length_]  # [max_length]
             overflow = torch.clamp(1. - torch.sum(pmf_, dim=0, keepdim=True), min=0.)
             pmf_ = torch.cat((pmf_, overflow), dim=0)

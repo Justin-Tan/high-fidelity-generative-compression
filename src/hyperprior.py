@@ -143,7 +143,7 @@ class Hyperprior(CodingModel):
     
     def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, 
         mode='large', likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, entropy_code=False,
-        vectorize_encoding=True, block_encode=True):
+        vectorize_encoding=False, block_encode=True):
 
         """
         Introduces probabilistic model over latents of 
@@ -181,7 +181,7 @@ class Hyperprior(CodingModel):
             raise ValueError('Unknown likelihood model: {}'.format(likelihood_type))
 
         if entropy_code is True:
-            print('Building prior probability tables.')
+            print('Building prior probability tables...')
             self.hyperprior_entropy_model = hyperprior_model.HyperpriorEntropyModel(
                 distribution=self.hyperlatent_likelihood)
             self.prior_density = prior_model.PriorDensity(n_channels=bottleneck_capacity,
