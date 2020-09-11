@@ -103,14 +103,15 @@ def _vec_indexed_cdf_to_dec_statfun(cdf_i, cdf_i_length):
 
     return _dec_statfun
 
-def ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision, 
+def ans_index_buffered_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision, 
     overflow_width=OVERFLOW_WIDTH, **kwargs):
+
     """
     Based on "https://github.com/tensorflow/compression/blob/master/tensorflow_compression/cc/
     kernels/unbounded_index_range_coding_kernels.cc"
     
     ANS-encodes unbounded integer data using an indexed probability table. 
-    Encodes scalars sequentially.
+    Pushes instructions for encoding scalars sequentially to a buffer.
 
     For each value in data, the corresponding value in index determines which probability model 
     in cdf is used to encode it. The data can be arbitrary signed integers, where the integer 
@@ -155,7 +156,8 @@ def ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision,
     cdf <-> cdf_offset <-> cdf_length
     """
 
-    message = vrans.empty_message(())
+    instructions = []
+
     coding_shape = symbols.shape[1:]
     symbols = symbols.astype(np.int32).flatten()
     indices = indices.astype(np.int32).flatten()
@@ -170,8 +172,8 @@ def ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision,
     overflow_push, overflow_pop = base_codec(enc_statfun_overflow,
         dec_statfun_overflow, overflow_width)
 
-    # LIFO - last item compressed is first item decompressed
-    for i in reversed(range(len(indices))):  # loop over flattened axis
+    # LIFO - last item in buffer is first item decompressed
+    for i in range(len(indices)):  # loop over flattened axis
 
         cdf_index = indices[i]
         cdf_i = cdf[cdf_index]
@@ -208,35 +210,64 @@ def ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision,
         dec_statfun = _indexed_cdf_to_dec_statfun(cdf_i, cdf_length_i)
         symbol_push, symbol_pop = base_codec(enc_statfun, dec_statfun, precision)
 
-        message = symbol_push(message, value)
+        start, freq = enc_statfun(value)
+        instructions.append((start, freq, False))
 
         # When value is outside of the given interval, the overflow value is encoded,
         # followed by a variable-length encoding of the actual data value.
         if value == max_value:
-            pass
-            # widths = 0
-            # while ((overflow >> (widths * overflow_width)) != 0):
-            #     widths += 1
+            # pass
+            widths = 0
+            while ((overflow >> (widths * overflow_width)) != 0):
+                widths += 1
 
-            # val = widths
-            # while (val >= max_overflow):
-            #     message = overflow_push(message, cast2u64(max_overflow))
-            #     val -= max_overflow
+            val = widths
+            while (val >= max_overflow):
+                start, freq = enc_statfun_overflow(cast2u64(max_overflow))
+                instructions.append((start, freq, True))
+                val -= max_overflow
             
-            # message = overflow_push(message, cast2u64(val))
+            start, freq = enc_statfun_overflow(cast2u64(val))
+            instructions.append((start, freq, True))
 
-            # for j in range(widths):
-            #     val = (overflow >> (j * overflow_width)) & max_overflow
-            #     message = overflow_push(message, cast2u64(val))
+            for j in range(widths):
+                val = (overflow >> (j * overflow_width)) & max_overflow
+                start, freq = enc_statfun_overflow(cast2u64(val))
+                instructions.append((start, freq, True))
 
+    return instructions, coding_shape
+
+def ans_index_encoder_flush(instructions, precision, overflow_width=OVERFLOW_WIDTH, **kwargs):
+
+    message = vrans.empty_message(())
+
+    # LIFO - last item compressed is first item decompressed
+    for i in reversed(range(len(instructions))):
+        
+        start, freq, flag = instructions[i]
+
+        if flag is False:
+            message = vrans.push(message, start, freq, precision)
+        else:
+            message = vrans.push(message, start, freq, overflow_width)
 
     encoded = vrans.flatten(message)
     message_length = len(encoded)
-    # print('Symbol compressed to {:.3f} bits.'.format(32 * message_length))
+    print('Symbol compressed to {:.3f} bits.'.format(32 * message_length))
+    return encoded
+
+def ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision, 
+    overflow_width=OVERFLOW_WIDTH, **kwargs):
+
+    instructions, coding_shape = ans_index_buffered_encoder(symbols, indices, cdf,
+        cdf_length, cdf_offset, precision, overflow_width)
+
+    encoded = ans_index_encoder_flush(instructions, precision, overflow_width)
+
     return encoded, coding_shape
 
 
-def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision, 
+def vec_ans_index_buffered_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision, 
     coding_shape, overflow_width=OVERFLOW_WIDTH, **kwargs):
     """
     Vectorized version of `ans_index_encoder`. Incurs constant bit overhead, 
@@ -245,6 +276,8 @@ def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precisi
     ANS-encodes unbounded integer data using an indexed probability table.
     """
     
+    instructions = []
+
     symbols_shape = symbols.shape
     B, n_channels = symbols_shape[:2]
     symbols = symbols.astype(np.int32)
@@ -295,10 +328,8 @@ def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precisi
         cdf_index, unfolded_shape = compression_utils.decompose(indices, n_channels)
         coding_shape = values.shape[1:]
 
-    message = vrans.empty_message(coding_shape)
-
-    # LIFO - last item compressed is first item decompressed
-    for i in reversed(range(len(cdf_index))):  # loop over batch dimension
+    # LIFO - last item in buffer is first item decompressed
+    for i in range(len(cdf_index)):  # loop over batch dimension
         # Bin of discrete CDF that value belongs to
         value_i = values[i]
         cdf_index_i = cdf_index[i]        
@@ -309,19 +340,55 @@ def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precisi
         dec_statfun = _vec_indexed_cdf_to_dec_statfun(cdf_i, cdf_i_length)
         symbol_push, symbol_pop = base_codec(enc_statfun, dec_statfun, precision)
 
-        message = symbol_push(message, value_i)
+        start, freq = enc_statfun(value_i)
+        instructions.append((start, freq, False))
 
         """
-        Also encode overflows here
+        Encode overflows here
         """
+        # of_mask = values == max_value
+        # widths = np.zeros_like(values)
+        # widths[of_mask] = 1
+
+        # overflow = 
+        
+        # cond_mask = overflow >> (widths * overflow_width) != 0
+        # while np.all(cond_mask) is False:
+        #     widths[cond_mask] += 1
+
+        # val = widths
+    
+    return instructions, coding_shape
+
+
+def vec_ans_index_encoder_flush(instructions, precision, coding_shape, overflow_width=OVERFLOW_WIDTH, **kwargs):
+
+    message = vrans.empty_message(coding_shape)
+
+    # LIFO - last item compressed is first item decompressed
+    for i in reversed(range(len(instructions))):
+        
+        start, freq, flag = instructions[i]
+
+        if flag is False:
+            message = vrans.push(message, start, freq, precision)
+        else:
+            message = vrans.push(message, start, freq, overflow_width)
 
     encoded = vrans.flatten(message)
     message_length = len(encoded)
+    print('Symbol compressed to {:.3f} bits.'.format(32 * message_length))
+    return encoded
 
-    # print('{} symbols compressed to {:.3f} bits.'.format(B, 32 * message_length))
+def vec_ans_index_encoder(symbols, indices, cdf, cdf_length, cdf_offset, precision, 
+    coding_shape, overflow_width=OVERFLOW_WIDTH, **kwargs):
+
+    instructions, coding_shape = vec_ans_index_buffered_encoder(symbols, indices, cdf,
+        cdf_length, cdf_offset, precision, coding_shape, overflow_width)
+
+    encoded = vec_ans_index_encoder_flush(instructions, precision, coding_shape, overflow_width)
 
     return encoded, coding_shape
-
 
 def ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precision,
     coding_shape, overflow_width=OVERFLOW_WIDTH, **kwargs):
@@ -375,30 +442,29 @@ def ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precision,
         """
 
         if value == max_value:
-            pass
-            # message, val = overflow_pop(message)
-            # val = int(val)
-            # widths = val
+            # pass
+            message, val = overflow_pop(message)
+            val = int(val)
+            widths = val
 
-            # while val == max_overflow:
-            #     message, val = overflow_pop(message)
-            #     val = int(val)
-            #     widths += val
+            while val == max_overflow:
+                message, val = overflow_pop(message)
+                val = int(val)
+                widths += val
             
-            # overflow = 0
-            # print(widths)
-            # for j in range(widths):
-            #     message, val = overflow_pop(message)
-            #     val = int(val)
-            #     assert val <= max_overflow
-            #     overflow |= val << (j * overflow_width)
+            overflow = 0
+            for j in range(widths):
+                message, val = overflow_pop(message)
+                val = int(val)
+                assert val <= max_overflow
+                overflow |= val << (j * overflow_width)
 
-            # # Map positive values back to integer values.
-            # value = overflow >> 1
-            # if (overflow & 1):
-            #     value = -value - 1
-            # else:
-            #     value += max_value
+            # Map positive values back to integer values.
+            value = overflow >> 1
+            if (overflow & 1):
+                value = -value - 1
+            else:
+                value += max_value
         
         symbol = value + cdf_offset[cdf_index]
         decoded[i] = symbol
@@ -468,4 +534,3 @@ def vec_ans_index_decoder(encoded, indices, cdf, cdf_length, cdf_offset, precisi
 
 def ans_encode_decode_test(symbols, decompressed_symbols):
     return np.testing.assert_almost_equal(symbols, decompressed_symbols)
-
