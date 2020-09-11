@@ -11,7 +11,7 @@ from src.helpers import maths
 MIN_SCALE = 0.11
 MIN_LIKELIHOOD = 1e-9
 MAX_LIKELIHOOD = 1e4
-TAIL_MASS = 2**(-8)
+TAIL_MASS = 2**(-9)
 
 PRECISION_P = 16  # Precision of rANS coder
 
