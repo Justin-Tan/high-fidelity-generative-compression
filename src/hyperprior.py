@@ -143,7 +143,7 @@ class Hyperprior(CodingModel):
     
     def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, 
         mode='large', likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, entropy_code=False,
-        vectorize_encoding=False, block_encode=True):
+        vectorize_encoding=True, block_encode=True):
 
         """
         Introduces probabilistic model over latents of 
