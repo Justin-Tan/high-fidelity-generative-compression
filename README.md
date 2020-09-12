@@ -12,28 +12,17 @@ This repository also includes a partial port of the [Tensorflow Compression libr
 
 You can play with a [demonstration of the model in Colab](https://colab.research.google.com/github/Justin-Tan/high-fidelity-generative-compression/blob/hific_demo/assets/HiFIC_torch_colab_demo.ipynb), where you can compress your own images.
 
-
 ## Example
 
-```bash
-Original, 8.05 bpp / 2747 kB
+Original | Reconstruction
+:-------------------------:|:-------------------------:
+![guess](assets/originals/CLIC2020_5.png) | ![guess](assets/hific/CLIC2020_5_RECON_0.160bpp.png)
+
+```python
+Original: (6.01 bpp - 2100 kB) | HIFIC: A (0.160 bpp - 56 kB). Ratio: 37.5.
 ```
 
-![guess](assets/originals/camp_original.png)
-
-```bash
-HIFIC, 0.188 bpp / 64.1 kB
-```
-
-![guess](assets/hific/camp_hific.png)
-
-```bash
-JPG, 0.264 bpp / 90.1 kB
-```
-
-![guess](assets/camp_jpg_compress.png)
-
-The image shown is an out-of-sample instance from the CLIC-2020 dataset. The HIFIC image is obtained by reconstruction via a learned model provided below. The JPG image is obtained by the `imagemagick` command `mogrify -format jpg -quality 42 assets/camp_original.png`. Despite using around 1.5x the bitrate, the JPG image exhibits visible compression artifacts which are absent from the HIFIC-generated image.
+The image shown is an out-of-sample instance from the CLIC-2020 dataset. The HIFIC image is obtained by reconstruction via a learned model provided below.
 
 Note that the learned model was not adapted in any way for evaluation on this image. More sample outputs from this model can be found at the end of the README and in [EXAMPLES.md](assets/EXAMPLES.md).
 
@@ -101,20 +90,6 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --reconstru
 The samples below are taken from the CLIC2020 dataset, external to the training set. The bitrate is reported in bits-per-pixel (`bpp`). The reconstructions are produced using the above `HIFIC-med` model (target bitrate `0.3 bpp`). It's interesting to try to guess which image is the original (images are saved as PNG for viewing - best viewed widescreen). You can expand the spoiler tags below each image to reveal the answer.
 
 For more examples see [EXAMPLES.md](assets/EXAMPLES.md). For even more examples see [this shared folder](https://drive.google.com/drive/folders/1lH1pTmekC1jL-gPi1fhEDuyjhfe5x6WG) (generated using the `HIFIC-low` model).
-
-A | B
-:-------------------------:|:-------------------------:
-![guess](assets/hific/CLIC2020_5_RECON_0.160bpp.png) | ![guess](assets/originals/CLIC2020_5.png)
-
-<details>
-
-  <summary>Image 1</summary>
-  
-  ```python
-  Original: B (11.6 bpp) | HIFIC: A (0.160 bpp). Ratio: 72.5.
-  ```
-
-</details>
 
 A             |  B
 :-------------------------:|:-------------------------:
