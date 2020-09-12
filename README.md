@@ -77,7 +77,7 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --reconstru
 
 ### Pretrained Models
 
-* Pretrained model weights using the OpenImages dataset can be found below (~2 GB). The examples at the end of this readme were produced using the `HIFIC-med` model. For usage instructions see the [user's guide](assets/USAGE_GUIDE.md).
+* Pretrained model weights using the OpenImages dataset can be found below (~2 GB). The examples at the end of this readme were produced using the `HIFIC-med` model. For usage instructions see the [user's guide](assets/USAGE_GUIDE.md). The same models are also hosted in the following Zenodo repository: https://zenodo.org/record/4026003 .
 
 | Target bitrate (bpp) | Weights | Training Instructions |
 | ----------- | -------------------------------- | ---------------------- |
