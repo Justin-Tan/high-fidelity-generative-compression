@@ -14,15 +14,15 @@ You can play with a [demonstration of the model in Colab](https://colab.research
 
 ## Example
 
-Original | Reconstruction
+Original | HiFIC
 :-------------------------:|:-------------------------:
 ![guess](assets/originals/CLIC2020_5.png) | ![guess](assets/hific/CLIC2020_5_RECON_0.160bpp.png)
 
 ```python
-Original: (6.01 bpp - 2100 kB) | HIFIC: A (0.160 bpp - 56 kB). Ratio: 37.5.
+Original: (6.01 bpp - 2100 kB) | HiFIC: (0.160 bpp - 56 kB). Ratio: 37.5.
 ```
 
-The image shown is an out-of-sample instance from the CLIC-2020 dataset. The HIFIC image is obtained by reconstruction via a learned model provided below.
+The image shown is an out-of-sample instance from the CLIC-2020 dataset. The HiFIC image is obtained by reconstruction via a learned model provided below.
 
 Note that the learned model was not adapted in any way for evaluation on this image. More sample outputs from this model can be found at the end of the README and in [EXAMPLES.md](assets/EXAMPLES.md).
 
