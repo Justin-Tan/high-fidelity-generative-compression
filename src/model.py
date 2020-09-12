@@ -335,6 +335,12 @@ class Model(nn.Module):
         image_dims = compression_output.spatial_shape
         reconstruction = reconstruction[:, :, :image_dims[0], :image_dims[1]]
 
+        if self.args.normalize_input_image is True:
+            # [-1.,1.] -> [0.,1.]
+            reconstruction = (reconstruction + 1.) / 2.
+
+        reconstruction = torch.clamp(reconstruction, min=0., max=1.)
+
         return reconstruction
 
     def forward(self, x, train_generator=False, return_intermediates=False, writeout=True):
@@ -355,9 +361,7 @@ class Model(nn.Module):
             if self.args.normalize_input_image is True:
                 # [-1.,1.] -> [0.,1.]
                 reconstruction = (reconstruction + 1.) / 2.
-
-            # reconstruction = torch.mul(reconstruction, 255.)
-            # reconstruction = torch.clamp(reconstruction, min=0., max=255.)
+                
             reconstruction = torch.clamp(reconstruction, min=0., max=1.)
             return reconstruction, intermediates.q_bpp
 
