@@ -73,7 +73,6 @@ def push(x, starts, freqs, precisions):
         tail = stack_extend(tail, np.uint32(head[idxs]))  # Can also modulo with bitand
         head = np.copy(head)  # Ensure no side-effects
         head[idxs] >>= 32
-
     head_div_freqs, head_mod_freqs = np.divmod(head, freqs)
     return (head_div_freqs << np.uint(precisions)) + head_mod_freqs + starts, tail
 

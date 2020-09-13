@@ -3,7 +3,10 @@ import math
 import numpy as np
 import functools
 import os
+import autograd.numpy as np
 
+from autograd import make_vjp
+from autograd.extend import vspace, VSpace
 from collections import namedtuple
 
 from src.helpers import utils
@@ -75,6 +78,17 @@ def estimate_tails(cdf, target, shape, dtype=torch.float32, extra_counts=24):
         tails.grad.zero_()
 
     return tails
+
+def view_update(data, view_fun):
+    view_vjp, item = make_vjp(view_fun)(data)
+    item_vs = vspace(item)
+    def update(new_item):
+        assert item_vs == vspace(new_item), \
+            "Please ensure new_item shape and dtype match the data view."
+        diff = view_vjp(item_vs.add(new_item,
+                                    item_vs.scalar_mul(item, -np.uint64(1))))
+        return vspace(data).add(data, diff)
+    return item, update
 
 def decompose(x, n_channels, patch_size=PATCH_SIZE):
     # Decompose input x into spatial patches
