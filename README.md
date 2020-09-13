@@ -4,13 +4,13 @@ Pytorch implementation of the paper ["High-Fidelity Generative Image Compression
 
 ## About
 
-This repository defines a model for learnable image compression based on the paper ["High-Fidelity Generative Image Compression" (HIFIC) by Mentzer et. al.](https://hific.github.io/). The model is capable of compressing images of arbitrary size and resolution while maintaining perceptually similar reconstructions that tend to be more visually pleasing than standard image codecs operating at higher bitrates.
+This repository defines a model for learnable image compression based on the paper ["High-Fidelity Generative Image Compression" (HIFIC) by Mentzer et. al.](https://hific.github.io/). The model is capable of compressing images of arbitrary spatial dimension and resolution up to two orders of magnitude in size, while maintaining perceptually similar reconstructions that tend to be more visually pleasing than standard image codecs operating at higher bitrates.
 
 This repository also includes a partial port of the [Tensorflow Compression library](https://github.com/tensorflow/compression) which provides general tools for neural image compression in Pytorch.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Justin-Tan/high-fidelity-generative-compression/blob/master/assets/HiFIC_torch_colab_demo.ipynb)
 
-You can play with a [demonstration of the model in Colab](https://colab.research.google.com/github/Justin-Tan/high-fidelity-generative-compression/blob/master/assets/HiFIC_torch_colab_demo.ipynb), where you can compress your own images.
+You can play with a [demonstration of the model in Colab](https://colab.research.google.com/github/Justin-Tan/high-fidelity-generative-compression/blob/master/assets/HiFIC_torch_colab_demo.ipynb), where you can upload and compress your own images.
 
 ## Example
 
@@ -77,7 +77,7 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --reconstru
 
 ### Pretrained Models
 
-* Pretrained model weights using the OpenImages dataset can be found below (~2 GB). The examples at the end of this readme were produced using the `HIFIC-med` model. For usage instructions see the [user's guide](assets/USAGE_GUIDE.md). The same models are also hosted in the following Zenodo repository: https://zenodo.org/record/4026003 .
+* Pretrained model weights using the OpenImages dataset can be found below (~2 GB). The examples at the end of this readme were produced using the `HIFIC-med` model. For usage instructions see the [user's guide](assets/USAGE_GUIDE.md). The same models are also hosted in the following Zenodo repository: https://zenodo.org/record/4026003.
 
 | Target bitrate (bpp) | Weights | Training Instructions |
 | ----------- | -------------------------------- | ---------------------- |
@@ -141,13 +141,14 @@ The last two show interesting failure modes: small figures in the distance are a
 * Justin Tan
 
 ### Acknowledgements
+
 * The compression routines under `src/compression/` are derived from the [Tensorflow Compression library](https://github.com/tensorflow/compression).
-* The rANS encoder implementation under is based on the [Craystack repository](https://github.com/j-towns/craystack).
+* The vectorized rANS encoder implementation under is based on the [Craystack repository](https://github.com/j-towns/craystack).
 * The code under `src/loss/perceptual_similarity/` implementing the perceptual distortion loss is based on the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
 
 ### Contributing
 
-All content in this repository is licensed under the Apache-2.0 license. Feel free to submit any corrections or suggestions as issues.
+All content in this repository is licensed under the Apache-2.0 license. Please open an issue if you encounter unexpected behaviour, or have corrections/suggestions to contribute.
 
 ## Citation
 

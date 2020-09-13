@@ -10,6 +10,8 @@ This repository defines a model for learnable image compression capable of compr
 
 The model is then trained end-to-end by optimization of a modified rate-distortion Lagrangian. Loosely, the model can be thought of as 'amortizing' the storage requirements for an generic input image through training a learnable compression/decompression scheme. The method is further described in the original paper [[0](https://arxiv.org/abs/2006.09965)]. The model is capable of yielding perceptually similar reconstructions to the input that tend to be more visually pleasing than standard image codecs which operate at comparable or higher bitrates.
 
+The model weights range between 1.5-2GB on disk, making transmission of the model itself impractical. The idea is that the same model is instantiated and made available to a sender and receiver. The sender encodes messages into the compressed format, which is transmitted via some channel to the receiver, who then decodes the compressed representation into a lossy reconstruction of the original data.
+
 This repository also includes a partial port of the [Tensorflow Compression library](https://github.com/tensorflow/compression) for general tools for neural image compression.
 
 ## Training
@@ -99,7 +101,7 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --save
 
 * Network architectures can be modified by changing the respective files under `src/network`.
 * The entropy model for both latents and hyperlatents can be changed by modifying `src/network/hyperprior`. For reference, there is an implementation of a discrete-logistic latent mixture model instead of the default latent mean-scale Gaussian model.
-* The exact compression algorithm used can be replaced with any entropy coder that makes use of indexed probability tables.
+* The exact compression algorithm used can be replaced with any entropy coder that makes use of indexed probability tables. The default is a vectorized rANS coder which encodes overflow values using a variable-length code, but this behaviour is costly.
 
 ## Notes
 
@@ -117,7 +119,6 @@ Feel free to submit any questions/corrections/suggestions/bugs as issues. Pull r
 
 To take a look under the hood, you can play with the [demonstration of the model in Colab](https://colab.research.google.com/github/Justin-Tan/high-fidelity-generative-compression/blob/master/assets/HiFIC_torch_colab_demo.ipynb), and compress your own images.
 
-
 ### References
 
 The following additional papers were useful to understand implementation details.
@@ -132,5 +133,4 @@ The following additional papers were useful to understand implementation details
 
 * Investigate bit overhead in vectorized rANS implementation.
 * Include `torchac` support for entropy coding.
-* Implement universal code for overflow values.
 * Rewrite rANS implementation for speed.

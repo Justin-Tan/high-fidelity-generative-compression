@@ -3,10 +3,6 @@
 Based on https://arxiv.org/abs/1402.3392
 
 x: compressed message, represented by current state of the encoder/decoder.
-x = (s, t)
-s: int in range [2**(s_prec -t_prec), 2**t_prec)
-t: Immutable stack containing ints in range [0, 2**t_prec)
-Precisions satsify t_prec < s_prec
 
 precision: the natural numbers are divided into ranges of size 2^precision.
 start & freq: start indicates the beginning of the range in [0, 2^precision-1]
