@@ -143,7 +143,7 @@ The last two show interesting failure modes: small figures in the distance are a
 ### Acknowledgements
 
 * The compression routines under `src/compression/` are derived from the [Tensorflow Compression library](https://github.com/tensorflow/compression).
-* The vectorized rANS encoder implementation under is based on the [Craystack repository](https://github.com/j-towns/craystack).
+* The vectorized rANS implementation used for entropy coding is based on the [Craystack repository](https://github.com/j-towns/craystack).
 * The code under `src/loss/perceptual_similarity/` implementing the perceptual distortion loss is based on the [Perceptual Similarity repository](https://github.com/richzhang/PerceptualSimilarity).
 
 ### Contributing
