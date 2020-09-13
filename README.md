@@ -89,7 +89,21 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --reconstru
 
 The samples below are taken from the CLIC2020 dataset, external to the training set. The bitrate is reported in bits-per-pixel (`bpp`). The reconstructions are produced using the above `HIFIC-med` model (target bitrate `0.3 bpp`). It's interesting to try to guess which image is the original (images are saved as PNG for viewing - best viewed widescreen). You can expand the spoiler tags below each image to reveal the answer.
 
-For more examples see [EXAMPLES.md](assets/EXAMPLES.md). For even more examples see [this shared folder](https://drive.google.com/drive/folders/1lH1pTmekC1jL-gPi1fhEDuyjhfe5x6WG) (generated using the `HIFIC-low` model).
+For more examples see [EXAMPLES.md](assets/EXAMPLES.md). For even more examples see [this shared folder](https://drive.google.com/drive/folders/1lH1pTmekC1jL-gPi1fhEDuyjhfe5x6WG) (images within generated using the `HIFIC-low` model).
+
+A             |  B
+:-------------------------:|:-------------------------:
+![guess](assets/originals/CLIC2020_3.png) | ![guess](assets/hific/CLIC2020_3_RECON_0.269bpp.png)
+
+<details>
+
+  <summary>Image 1</summary>
+
+  ```python
+  Original: A (11.8 bpp) | HIFIC: B (0.269 bpp). Ratio: 43.8
+  ```
+
+</details>
 
 A             |  B
 :-------------------------:|:-------------------------:
