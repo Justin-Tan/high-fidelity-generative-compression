@@ -4,9 +4,9 @@ Pytorch implementation of the paper ["High-Fidelity Generative Image Compression
 
 ## About
 
-This repository defines a model for learnable image compression based on the paper ["High-Fidelity Generative Image Compression" (HIFIC) by Mentzer et. al.](https://hific.github.io/). The model is capable of compressing images of arbitrary spatial dimension and resolution up to two orders of magnitude in size, while maintaining perceptually similar reconstructions that tend to be more visually pleasing than standard image codecs operating at higher bitrates.
+This repository defines a model for learnable image compression based on the paper ["High-Fidelity Generative Image Compression" (HIFIC) by Mentzer et. al.](https://hific.github.io/). The model is capable of compressing images of arbitrary spatial dimension and resolution up to two orders of magnitude in size, while maintaining perceptually similar reconstructions. Outputs tend to be more visually pleasing than standard image codecs operating at higher bitrates.
 
-This repository also includes a partial port of the [Tensorflow Compression library](https://github.com/tensorflow/compression) which provides general tools for neural image compression in Pytorch.
+This repository also includes a partial port of the [Tensorflow Compression library](https://github.com/tensorflow/compression) - which provides general tools for neural image compression in Pytorch.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Justin-Tan/high-fidelity-generative-compression/blob/master/assets/HiFIC_torch_colab_demo.ipynb)
 
@@ -166,7 +166,7 @@ All content in this repository is licensed under the Apache-2.0 license. Please 
 
 ## Citation
 
-This is not the official implementation. Please cite the [original paper](https://arxiv.org/abs/2006.09965) if you use their work.
+This is a PyTorch port of the original implementation. Please cite the [original paper](https://arxiv.org/abs/2006.09965) if you use their work.
 
 ```bash
 @article{mentzer2020high,
