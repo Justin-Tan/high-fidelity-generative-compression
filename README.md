@@ -47,7 +47,7 @@ git clone https://github.com/Justin-Tan/high-fidelity-generative-compression.git
 cd high-fidelity-generative-compression
 ```
 
-To check if your setup is working, run `python3 -m src.model` in root. Usage instructions can be found in the [user's guide](assets/USAGE_GUIDE.md).
+To check if your setup is working, run `python3 -m src.model` in root. Usage instructions can be found in the [user's guide](src/README.md).
 
 ### Training
 
@@ -60,7 +60,7 @@ To check if your setup is working, run `python3 -m src.model` in root. Usage ins
 python3 train.py --model_type compression --regime low --n_steps 1e6
 ```
 
-* Then use the checkpoint of the trained base model to 'warmstart' the GAN architecture. Please see the [user's guide](assets/USAGE_GUIDE.md) for more detailed instructions.
+* Then use the checkpoint of the trained base model to 'warmstart' the GAN architecture. Please see the [user's guide](src/README.md) for more detailed instructions.
 
 ```bash
 # Train using full generator-discriminator loss
@@ -77,7 +77,7 @@ python3 compress.py -i path/to/image/dir -ckpt path/to/trained/model --reconstru
 
 ### Pretrained Models
 
-* Pretrained model weights using the OpenImages dataset can be found below (~2 GB). The examples at the end of this readme were produced using the `HIFIC-med` model. For usage instructions see the [user's guide](assets/USAGE_GUIDE.md). The same models are also hosted in the following Zenodo repository: https://zenodo.org/record/4026003.
+* Pretrained model weights using the OpenImages dataset can be found below (~2 GB). The examples at the end of this readme were produced using the `HIFIC-med` model. The same models are also hosted in the following Zenodo repository: https://zenodo.org/record/4026003.
 
 | Target bitrate (bpp) | Weights | Training Instructions |
 | ----------- | -------------------------------- | ---------------------- |

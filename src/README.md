@@ -44,8 +44,11 @@ python3 train.py --model_type compression_gan --regime low --n_steps 1e6 --warms
 * If you get out-of-memory errors, try, in decreasing order of priority:
   * Decreasing the batch size (default 16).
   * Decreasing the number of channels of the latent representation (`latent_channels`, default 220). You may be able to reduce this quite aggressively as the network is highly over-parameterized - many values of the latent representation are near-deterministic.
+  * Decreasing the number of channels used in the hyperprior.
   * Reducing the number of residual blocks in the generator (`n_residual_blocks`, default 7, the original paper used 9).
   * Training on smaller crops (`crop_size`, default `256 x 256`).
+
+These options can be accessed through `/default_config.py`. While a larger architecture does not hurt performance, as the network can allow certain representations to be deterministic at near-zero entropy rates, decreasing the architecture size will allow for faster encoding/decoding.
 
 * Logs for each experiment, including image reconstructions, are automatically created and periodically saved under `experiments/` with the appropriate name/timestamp. Metrics can be visualized via `tensorboard`:
 
