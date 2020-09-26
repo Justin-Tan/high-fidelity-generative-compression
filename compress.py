@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # Custom modules
-from src.helpers import utils, datasets
+from src.helpers import utils, datasets, metrics
 from src.compression import compression_utils
 from src.loss.perceptual_similarity import perceptual_loss as ps
 from default_config import hific_args, mse_lpips_args, directories, ModelModes, ModelTypes
@@ -130,8 +130,11 @@ def compress_and_decompress(args):
     input_filenames_total = list()
     output_filenames_total = list()
     bpp_total, q_bpp_total, LPIPS_total = torch.Tensor(N), torch.Tensor(N), torch.Tensor(N)
-    utils.makedirs(args.output_dir)
-    
+    MS_SSIM_total, PSNR_total = torch.Tensor(N), torch.Tensor(N)
+    max_value = 255.
+    MS_SSIM_func = metrics.MS_SSIM(data_range=max_value)
+    utils.makedirs(args.output_dir) 
+
     logger.info('Starting compression...')
     start_time = time.time()
 
@@ -163,6 +166,12 @@ def compress_and_decompress(args):
 
             perceptual_loss = perceptual_loss_fn.forward(reconstruction, data, normalize=True)
 
+            if args.metrics is True:
+                # [0., 1.] -> [0., 255.]
+                psnr = metrics.psnr(reconstruction.cpu().numpy() * max_value, data.cpu().numpy() * max_value, max_value)
+                ms_ssim = MS_SSIM_func(reconstruction * max_value, data * max_value)
+                PSNR_total[n:n + B] = torch.Tensor(psnr)
+                MS_SSIM_total[n:n + B] = ms_ssim.data
 
             for subidx in range(reconstruction.shape[0]):
                 if B > 1:
@@ -184,6 +193,10 @@ def compress_and_decompress(args):
     df['bpp_original'] = bpp_total.cpu().numpy()
     df['q_bpp'] = q_bpp_total.cpu().numpy()
     df['LPIPS'] = LPIPS_total.cpu().numpy()
+
+    if args.metrics is True:
+        df['PSNR'] = PSNR_total.cpu().numpy()
+        df['MS_SSIM'] = MS_SSIM_total.cpu().numpy()
 
     df_path = os.path.join(args.output_dir, 'compression_metrics.h5')
     df.to_hdf(df_path, key='df')
@@ -210,6 +223,7 @@ def main(**kwargs):
         help="Loader batch size. Set to 1 if images in directory are different sizes.")
     parser.add_argument("-rc", "--reconstruct", help="Reconstruct input image without compression.", action="store_true")
     parser.add_argument("-save", "--save", help="Save compressed format to disk.", action="store_true")
+    parser.add_argument("-metrics", "--metrics", help="Evaluate compression metrics.", action="store_true")
     args = parser.parse_args()
 
     input_images = glob.glob(os.path.join(args.image_dir, '*.jpg'))
