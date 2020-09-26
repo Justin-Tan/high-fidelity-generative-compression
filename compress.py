@@ -168,8 +168,10 @@ def compress_and_decompress(args):
 
             if args.metrics is True:
                 # [0., 1.] -> [0., 255.]
-                psnr = metrics.psnr(reconstruction * max_value, data * max_value, max_value)
-                ms_ssim = ms_ssim_func(reconstruction * max_value, data * max_value)
+                psnr = metrics.psnr(reconstruction.cpu().numpy() * max_value, data.cpu().numpy() * max_value, max_value)
+                ms_ssim = MS_SSIM_func(reconstruction * max_value, data * max_value)
+                PSNR_total[n:n + B] = torch.Tensor(psnr)
+                MS_SSIM_total[n:n + B] = ms_ssim.data
 
             for subidx in range(reconstruction.shape[0]):
                 if B > 1:
@@ -184,8 +186,6 @@ def compress_and_decompress(args):
             bpp_total[n:n + B] = bpp.data
             q_bpp_total[n:n + B] = q_bpp.data if type(q_bpp) == torch.Tensor else q_bpp
             LPIPS_total[n:n + B] = perceptual_loss.data
-            PSNR_total[n:n + B] = psnr.data
-            MS_SSIM_total[n:n + B] = ms_ssim.data
             n += B
 
     df = pd.DataFrame([input_filenames_total, output_filenames_total]).T
@@ -193,8 +193,10 @@ def compress_and_decompress(args):
     df['bpp_original'] = bpp_total.cpu().numpy()
     df['q_bpp'] = q_bpp_total.cpu().numpy()
     df['LPIPS'] = LPIPS_total.cpu().numpy()
-    df['PSNR'] = PSNR_total.cpu().numpy()
-    df['MS_SSIM'] = MS_SSIM_total.cpu().numpy()
+
+    if args.metrics is True:
+        df['PSNR'] = PSNR_total.cpu().numpy()
+        df['MS_SSIM'] = MS_SSIM_total.cpu().numpy()
 
     df_path = os.path.join(args.output_dir, 'compression_metrics.h5')
     df.to_hdf(df_path, key='df')
