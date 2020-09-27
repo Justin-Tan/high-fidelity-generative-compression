@@ -13,8 +13,9 @@ def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_sche
     lambda_A = get_scheduled_params(config.lambda_A, config.lambda_schedule, step_counter, ignore_schedule)
     lambda_B = get_scheduled_params(config.lambda_B, config.lambda_schedule, step_counter, ignore_schedule)
 
-    assert lambda_A > lambda_B, "Expected lambda_A > lambda_B, got (A) {} <= (B) {}".format(
-        lambda_A, lambda_B)
+    if bypass_rate is False:
+        assert lambda_A > lambda_B, "Expected lambda_A > lambda_B, got (A) {} <= (B) {}".format(
+            lambda_A, lambda_B)
 
     target_bpp = get_scheduled_params(config.target_rate, config.target_schedule, step_counter, ignore_schedule)
 
