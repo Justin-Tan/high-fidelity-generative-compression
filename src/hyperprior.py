@@ -166,11 +166,8 @@ class Hyperprior(CodingModel):
 
         self.analysis_net = analysis_net(C=bottleneck_capacity, N=hyperlatent_filters)
 
-        self.synthesis_params = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters,
-            num_params=2)
-        # self.synthesis_mu = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
-        # self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
-        
+        self.synthesis_mu = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
+        self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
         self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
         self.hyperlatent_likelihood = hyperprior_model.HyperpriorDensity(n_channels=hyperlatent_filters)
@@ -215,9 +212,10 @@ class Hyperprior(CodingModel):
         hyperlatents_decoded = hyperlatents_decoded.to(latents)
 
         # Recover latent statistics from compressed hyperlatents
-        latent_means, latent_scales = self.synthesis_params(hyperlatents_decoded)
-        # latent_means = self.synthesis_mu(hyperlatents_decoded)
-        # latent_scales = self.synthesis_std(hyperlatents_decoded)
+        latent_means = self.synthesis_mu(hyperlatents_decoded)
+        latent_scales = self.synthesis_std(hyperlatents_decoded)
+        # latent_means, latent_scales = self.synthesis_params(hyperlatents_decoded)
+        latent_scales = F.softplus(latent_scales)
         latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
 
         # Use latent statistics to build indexed probability tables, and compress latents
@@ -265,6 +263,8 @@ class Hyperprior(CodingModel):
         # Recover latent statistics from compressed hyperlatents
         latent_means = self.synthesis_mu(hyperlatents_decoded)
         latent_scales = self.synthesis_std(hyperlatents_decoded)
+        # latent_means, latent_scales = self.synthesis_params(hyperlatents_decoded)
+        latent_scales = F.softplus(latent_scales)
         latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
         latent_spatial_shape = latent_scales.size()[2:]
 
@@ -301,6 +301,7 @@ class Hyperprior(CodingModel):
 
         latent_means = self.synthesis_mu(hyperlatents_decoded)
         latent_scales = self.synthesis_std(hyperlatents_decoded)
+        # latent_means, latent_scales = self.synthesis_params(hyperlatents_decoded)
         latent_scales = F.softplus(latent_scales)
         latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
 

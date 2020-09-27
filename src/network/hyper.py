@@ -80,6 +80,7 @@ class HyperpriorSynthesis(nn.Module):
         C_out = C * num_params
         cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, output_padding=1)
         self.C = C
+        self.num_params = num_params
         self.activation = getattr(F, activation)
         self.final_activation = final_activation
 
@@ -98,7 +99,7 @@ class HyperpriorSynthesis(nn.Module):
         if self.final_activation is not None:
             x = self.final_activation(x)
 
-        if num_params > 1:
+        if self.num_params > 1:
             x = torch.split(x, self.C, dim=1)
             
         return x
