@@ -73,16 +73,19 @@ class HyperpriorSynthesis(nn.Module):
 
     C:  Number of output channels
     """
-    def __init__(self, C=220, N=320, activation='relu', final_activation=None):
+    def __init__(self, C=220, N=320, activation='relu', final_activation=None,
+        num_params=1):
         super(HyperpriorSynthesis, self).__init__()
-
+        
+        C_out = C * num_params
         cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, output_padding=1)
+        self.C = C
         self.activation = getattr(F, activation)
         self.final_activation = final_activation
 
         self.conv1 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
         self.conv2 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
-        self.conv3 = nn.ConvTranspose2d(N, C, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.ConvTranspose2d(N, C_out, kernel_size=3, stride=1, padding=1)
 
         if self.final_activation is not None:
             self.final_activation = getattr(F, final_activation)
@@ -94,6 +97,10 @@ class HyperpriorSynthesis(nn.Module):
 
         if self.final_activation is not None:
             x = self.final_activation(x)
+
+        if num_params > 1:
+            x = torch.split(x, self.C, dim=1)
+            
         return x
 
 
