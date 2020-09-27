@@ -5,7 +5,7 @@ import numpy as np
 
 from src.helpers.utils import get_scheduled_params
 
-def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_schedule=False):
+def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_schedule=False, bypass_rate=False):
     """
     Heavily penalize the rate with weight lambda_A >> lambda_B if it exceeds 
     some target r_t, otherwise penalize with lambda_B
@@ -23,7 +23,13 @@ def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_sche
         rate_penalty = lambda_A
     else:
         rate_penalty = lambda_B
-    weighted_rate = rate_penalty * total_nbpp
+
+    if bypass_rate is True:
+        # Loose rate
+        weighted_rate = config.lambda_B * total_nbpp
+        rate_penalty = config.lambda_B
+    else:
+        weighted_rate = rate_penalty * total_nbpp
 
     return weighted_rate, float(rate_penalty)
 
