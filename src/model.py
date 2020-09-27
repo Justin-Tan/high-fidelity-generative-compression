@@ -77,7 +77,7 @@ class Model(nn.Module):
                 likelihood_type=self.args.likelihood_type, mixture_components=self.args.mixture_components, entropy_code=self.entropy_code)
         else:
             self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.args.latent_channels,
-                likelihood_type=self.args.likelihood_type, entropy_code=self.entropy_code)
+                hyperlatent_filters=args.hyperlatent_filters, likelihood_type=self.args.likelihood_type, entropy_code=self.entropy_code)
 
         self.amortization_models = [self.Encoder, self.Generator]
         self.amortization_models.extend(self.Hyperprior.amortization_models)

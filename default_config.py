@@ -53,8 +53,9 @@ class args(object):
     noise_dim = 32
 
     # Architecture params - Table 3a) of [1]
-    latent_channels = 220
-    n_residual_blocks = 9           # Authors use 9 blocks, performance saturates at 5
+    latent_channels = 128  #220
+    n_residual_blocks = 0  #9           # Authors use 9 blocks, performance saturates at 5
+    hyperlatent_filters = 128  #320
     lambda_B = 2**(-4)              # Loose rate
     k_M = 0.075 * 2**(-5)           # Distortion
     k_P = 1.                        # Perceptual loss

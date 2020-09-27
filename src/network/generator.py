@@ -44,8 +44,8 @@ class ResidualBlock(nn.Module):
         return torch.add(res, identity_map)
 
 class Generator(nn.Module):
-    def __init__(self, input_dims, batch_size, C=16, activation='relu',
-                 n_residual_blocks=8, channel_norm=True, sample_noise=False,
+    def __init__(self, input_dims, batch_size, C, activation='relu',
+                 n_residual_blocks=8, channel_norm =True, sample_noise=False,
                  noise_dim=32):
 
         """ 
@@ -66,7 +66,8 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
         
         kernel_dim = 3
-        filters = [960, 480, 240, 120, 60]
+        # filters = [960, 480, 240, 120, 60]
+        filters = [480, 240, 120, 60, 30]
         self.n_residual_blocks = n_residual_blocks
         self.sample_noise = sample_noise
         self.noise_dim = noise_dim
