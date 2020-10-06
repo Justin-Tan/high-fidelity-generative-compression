@@ -238,7 +238,7 @@ if __name__ == '__main__':
 
     # Architecture-related options
     arch_args = parser.add_argument_group("Architecture-related options")
-    arch_args.add_argument('-nrb', '--n_residual_blocks', type=int, default=7,
+    arch_args.add_argument('-nrb', '--n_residual_blocks', type=int, default=1,
         help="Number of residual blocks to use in Generator.")
 
     # Warmstart adversarial training from autoencoder/hyperprior
