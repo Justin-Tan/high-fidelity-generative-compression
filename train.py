@@ -99,7 +99,8 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
     amortization_opt, hyperlatent_likelihood_opt = optimizers['amort'], optimizers['hyper']
     if model.use_discriminator is True:
         disc_opt = optimizers['disc']
-
+    if model.penalize_TC is True:
+        tc_opt = optimizers['tc_disc']
 
     for epoch in trange(args.n_epochs, desc='Epoch'):
 
@@ -139,6 +140,10 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                     losses = model(data, train_generator=True)
                     compression_loss = losses['compression']
                     optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
+
+                    if model.penalize_TC is True:
+                        tc_disc_loss = losses['TC_disc']
+                        optimize_loss(tc_disc_loss, tc_opt)
 
             except KeyboardInterrupt:
                 # Note: saving not guaranteed!
@@ -212,8 +217,8 @@ if __name__ == '__main__':
     # General options - see `default_config.py` for full options
     general = parser.add_argument_group('General options')
     general.add_argument("-n", "--name", default=None, help="Identifier for checkpoints and metrics.")
-    general.add_argument("-mt", "--model_type", required=True, choices=(ModelTypes.COMPRESSION, ModelTypes.COMPRESSION_GAN), 
-        help="Type of model - with or without GAN component")
+    general.add_argument("-mt", "--model_type", required=True, choices=(ModelTypes.COMPRESSION, ModelTypes.COMPRESSION_VAE, ModelTypes.COMPRESSION_GAN), 
+        help="Type of model.")
     general.add_argument("-regime", "--regime", choices=('low','med','high'), default='low', help="Set target bit rate - Low (0.14), Med (0.30), High (0.45)")
     general.add_argument("-gpu", "--gpu", type=int, default=0, help="GPU ID.")
     general.add_argument("-log_intv", "--log_interval", type=int, default=2500, help="Number of steps between logs.")
@@ -299,6 +304,11 @@ if __name__ == '__main__':
             discriminator_parameters = model.Discriminator.parameters()
             disc_opt = torch.optim.Adam(discriminator_parameters, lr=args.learning_rate)
             optimizers['disc'] = disc_opt
+
+        if model.penalize_TC is True:
+            tc_discriminator_parameters = model.TC_Discriminator.parameters()
+            tc_disc_opt = torch.optim.Adam(tc_discriminator_parameters, lr=args.learning_rate)
+            optimizers['tc_disc'] = tc_disc_opt
 
     n_gpus = torch.cuda.device_count()
     if n_gpus > 1 and args.multigpu is True:

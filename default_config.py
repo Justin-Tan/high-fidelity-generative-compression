@@ -9,6 +9,7 @@ command line arguments in `train.py`.
 
 class ModelTypes(object):
     COMPRESSION = 'compression'
+    COMPRESSION_VAE = 'compression_vae'
     COMPRESSION_GAN = 'compression_gan'
 
 class ModelModes(object):
@@ -63,7 +64,11 @@ class args(object):
     use_channel_norm = True
     likelihood_type = 'gaussian'    # Latent likelihood model
     normalize_input_image = False   # Normalize inputs to range [-1,1]
-    
+
+    # TC loss
+    penalize_TC = True
+    gamma = 10.
+
     # Shapes
     crop_size = 256
     image_dims = (3,256,256)

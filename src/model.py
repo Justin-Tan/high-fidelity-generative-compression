@@ -13,13 +13,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # Custom modules
-from src import hyperprior
+from src import hyperprior, iw_vae
 from src.loss import losses
 from src.helpers import maths, datasets, utils
 from src.network import encoder, generator, discriminator, hyper
 from src.loss.perceptual_similarity import perceptual_loss as ps 
 
-from default_config import ModelModes, ModelTypes, hific_args, directories
+from default_config import ModelModes, ModelTypes, hific_args, directories, args
 
 Intermediates = namedtuple("Intermediates",
     ["input_image",             # [0, 1] (after scaling from [0, 255])
@@ -31,6 +31,7 @@ Intermediates = namedtuple("Intermediates",
 Disc_out= namedtuple("disc_out",
     ["D_real", "D_gen", "D_real_logits", "D_gen_logits"])
 
+lower_bound_toward = maths.LowerBoundToward.apply
 
 class Model(nn.Module):
 
@@ -65,19 +66,22 @@ class Model(nn.Module):
         if model_mode == ModelModes.EVALUATION:
             self.entropy_code = True
 
-        self.Encoder = encoder.Encoder(self.image_dims, self.batch_size, C=self.args.latent_channels,
-            channel_norm=self.args.use_channel_norm)
+        gaussian_inference_net = False
 
+        self.Encoder = encoder.Encoder(self.image_dims, self.batch_size, C=self.args.latent_channels,
+            channel_norm=self.args.use_channel_norm, gaussian_inference_net=gaussian_inference_net)
         self.Generator = generator.Generator(self.image_dims, self.batch_size, C=self.args.latent_channels,
-            n_residual_blocks=self.args.n_residual_blocks, channel_norm=self.args.use_channel_norm, sample_noise=
-            self.args.sample_noise, noise_dim=self.args.noise_dim)
+            n_residual_blocks=self.args.n_residual_blocks, channel_norm=self.args.use_channel_norm, 
+            sample_noise=self.args.sample_noise, noise_dim=self.args.noise_dim)
 
         if self.args.use_latent_mixture_model is True:
             self.Hyperprior = hyperprior.HyperpriorDLMM(bottleneck_capacity=self.args.latent_channels,
-                likelihood_type=self.args.likelihood_type, mixture_components=self.args.mixture_components, entropy_code=self.entropy_code)
+                likelihood_type=self.args.likelihood_type, mixture_components=self.args.mixture_components, 
+                entropy_code=self.entropy_code)
         else:
             self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.args.latent_channels,
-                hyperlatent_filters=args.hyperlatent_filters, likelihood_type=self.args.likelihood_type, entropy_code=self.entropy_code)
+                hyperlatent_filters=args.hyperlatent_filters, likelihood_type=self.args.likelihood_type, 
+                entropy_code=self.entropy_code, model_type=self.model_type)
 
         self.amortization_models = [self.Encoder, self.Generator]
         self.amortization_models.extend(self.Hyperprior.amortization_models)
@@ -103,7 +107,15 @@ class Model(nn.Module):
         self.squared_difference = torch.nn.MSELoss(reduction='none')
         # Expects [-1,1] images or [0,1] with normalize=True flag
         self.perceptual_loss = ps.PerceptualLoss(model='net-lin', net='alex', use_gpu=torch.cuda.is_available(), gpu_ids=[args.gpu])
-        
+
+        self.penalize_TC = (
+            self.args.penalize_TC is True
+            and (self.model_mode != ModelModes.EVALUATION)
+        )
+ 
+        if self.penalize_TC is True:
+            self.TC_Discriminator = discriminator.TC_Discriminator(latent_dims=self.args.latent_dims)
+
     def store_loss(self, key, loss):
         assert type(loss) == float, 'Call .item() on loss before storage'
 
@@ -129,13 +141,13 @@ class Model(nn.Module):
         intermediates: NamedTuple of intermediate values
         """
         image_dims = tuple(x.size()[1:])  # (C,H,W)
+        image_spatial_shape = x.size()[2:]
 
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_encoder_downsamples = self.Encoder.n_downsampling_layers
             factor = 2 ** n_encoder_downsamples
             x = utils.pad_factor(x, x.size()[2:], factor)
 
-        # Encoder forward pass
         y = self.Encoder(x)
 
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
@@ -143,7 +155,7 @@ class Model(nn.Module):
             factor = 2 ** n_hyperencoder_downsamples
             y = utils.pad_factor(y, y.size()[2:], factor)
 
-        hyperinfo = self.Hyperprior(y, spatial_shape=x.size()[2:])
+        hyperinfo = self.Hyperprior(y, spatial_shape=image_spatial_shape)
 
         latents_quantized = hyperinfo.decoded
         total_nbpp = hyperinfo.total_nbpp
@@ -163,6 +175,7 @@ class Model(nn.Module):
             total_nbpp, total_qbpp)
 
         return intermediates, hyperinfo
+
 
     def discriminator_forward(self, intermediates, train_generator):
         """ Train on gen/real batches simultaneously. """
@@ -192,6 +205,7 @@ class Model(nn.Module):
         # - Delegate scaling to weighting
         sq_err = self.squared_difference(x_gen*255., x_real*255.) # / 255.
         return torch.mean(sq_err)
+
 
     def perceptual_loss_wrapper(self, x_gen, x_real, normalize=True):
         """ Assumes inputs are in [0, 1] if normalize=True, else [-1, 1] """
@@ -260,6 +274,17 @@ class Model(nn.Module):
 
         return D_loss, G_loss
 
+    def TC_loss(self, latents):
+        # Estimate total correlation via the density-ratio trick
+        tc_loss, tc_disc_loss = losses.TC_loss(latents, self.TC_Discriminator, self.step_counter, self.training)
+        
+        # Bookkeeping 
+        if (self.step_counter % self.log_interval == 1):
+            self.store_loss('latent_TC', torch.mean(tc_loss).item())
+            self.store_loss('TC_disc_loss', torch.mean(tc_disc_loss).item())
+
+        return tc_loss, tc_disc_loss
+
     def compress(self, x, silent=False):
 
         """
@@ -283,7 +308,11 @@ class Model(nn.Module):
             x = utils.pad_factor(x, x.size()[2:], factor)
 
         # Encoder forward pass
-        y = self.Encoder(x)
+        if self.model_type == ModelTypes.COMPRESSION_VAE:
+            mean, logvar = self.Encoder(x)
+            y = iw_vae.reparameterize_continuous(mean, logvar)
+        else:
+            y = self.Encoder(x)
 
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_hyperencoder_downsamples = self.Hyperprior.analysis_net.n_downsampling_layers
@@ -376,6 +405,13 @@ class Model(nn.Module):
             compression_model_loss += weighted_G_loss
             losses['disc'] = D_loss
         
+        if self.penalize_TC is True:
+            
+            tc_loss, tc_disc_loss = self.TC_loss(latents=hyperinfo.noisy_latents)
+            weighted_TC_loss = self.args.gamma * tc_loss
+            compression_model_loss += weighted_TC_loss
+            losses['TC_disc'] = tc_disc_loss
+
         losses['compression'] = compression_model_loss
 
         # Bookkeeping 
