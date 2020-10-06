@@ -69,6 +69,8 @@ class Generator(nn.Module):
         # filters = [960, 480, 240, 120, 60]
         filters = [480, 240, 120, 60, 30]
         self.n_residual_blocks = n_residual_blocks
+        if self.n_residual_blocks == 0:
+            self.n_residual_blocks += 1
         self.sample_noise = sample_noise
         self.noise_dim = noise_dim
 
@@ -107,7 +109,7 @@ class Generator(nn.Module):
             # Concat noise with latent representation
             filters[0] += self.noise_dim
 
-        for m in range(n_residual_blocks):
+        for m in range(self.n_residual_blocks):
             resblock_m = ResidualBlock(input_dims=(batch_size, filters[0], H0, W0), 
                 channel_norm=channel_norm, activation=activation)
             self.add_module(f'resblock_{str(m)}', resblock_m)

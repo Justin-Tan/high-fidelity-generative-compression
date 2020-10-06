@@ -8,6 +8,7 @@ from collections import namedtuple
 from src.network import hyper
 from src.helpers import maths, utils
 from src.compression import hyperprior_model, prior_model
+from default_config import ModelTypes
 
 MIN_SCALE = 0.11
 LOG_SCALES_MIN = -3.
@@ -18,7 +19,7 @@ LARGE_HYPERLATENT_FILTERS = 320
 
 HyperInfo = namedtuple(
     "HyperInfo",
-    "decoded "
+    "decoded noisy_latents "
     "latent_nbpp hyperlatent_nbpp total_nbpp latent_qbpp hyperlatent_qbpp total_qbpp",
 )
 
@@ -122,7 +123,7 @@ class CodingModel(nn.Module):
         return values
 
     def latent_likelihood(self, x, mean, scale):
-
+        # Prior density
         # Assumes 1 - CDF(x) = CDF(-x)
         x = x - mean
         x = torch.abs(x)
@@ -143,7 +144,7 @@ class Hyperprior(CodingModel):
     
     def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, 
         mode='large', likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, entropy_code=False,
-        vectorize_encoding=True, block_encode=True):
+        vectorize_encoding=True, block_encode=True, model_type=ModelTypes.COMPRESSION):
 
         """
         Introduces probabilistic model over latents of 
@@ -157,6 +158,7 @@ class Hyperprior(CodingModel):
         
         self.bottleneck_capacity = bottleneck_capacity
         self.scale_lower_bound = scale_lower_bound
+        self.model_type = model_type
 
         analysis_net = hyper.HyperpriorAnalysis
         synthesis_net = hyper.HyperpriorSynthesis
@@ -276,9 +278,40 @@ class Hyperprior(CodingModel):
 
         return latents_decoded.to(device)
 
+    def nonparameteric_prior_forward(self, latents, spatial_shape, **kwargs):
+        """
+        Uses a nonparametric model for the prior
+        """
+        noisy_latents = self._quantize(latents, mode='noise')
+        noisy_latent_likelihood = self.hyperlatent_likelihood(noisy_latents)
+        noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(
+            noisy_latent_likelihood, spatial_shape)
 
-    def forward(self, latents, spatial_shape, **kwargs):
+        quantized_latents = self._quantize(latents, mode='quantize')
+        quantized_latent_likelihood = self.hyperlatent_likelihood(quantized_latents)
+        quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(
+            quantized_latent_likelihood, spatial_shape) 
 
+        latents_decoded = self.quantize_latents_st(latents)
+
+        info = HyperInfo(
+            decoded=latents_decoded,
+            noisy_latents=noisy_latents,
+            latent_nbpp=noisy_latent_bpp,
+            hyperlatent_nbpp=None,
+            total_nbpp=noisy_latent_bpp,
+            latent_qbpp=quantized_latent_bpp,
+            hyperlatent_qbpp=None,
+            total_qbpp=quantized_latent_bpp,
+        )
+
+        return info
+
+
+    def nonparameteric_hyperprior_forward(self, latents, spatial_shape, **kwargs):
+        """
+        Hierachical model which uses a nonparametric model for the hyperprior
+        """
         hyperlatents = self.analysis_net(latents)
         
         # Mismatch b/w continuous and discrete cases?
@@ -307,22 +340,23 @@ class Hyperprior(CodingModel):
 
         # Differential entropy, latents
         noisy_latents = self._quantize(latents, mode='noise', means=latent_means)
-        noisy_latent_likelihood = self.latent_likelihood(noisy_latents, mean=latent_means,
+        noisy_latent_prior = self.latent_likelihood(noisy_latents, mean=latent_means,
             scale=latent_scales)
         noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(
-            noisy_latent_likelihood, spatial_shape)     
+            noisy_latent_prior, spatial_shape)     
 
         # Discrete entropy, latents
         quantized_latents = self._quantize(latents, mode='quantize', means=latent_means)
-        quantized_latent_likelihood = self.latent_likelihood(quantized_latents, mean=latent_means,
+        quantized_latent_prior = self.latent_likelihood(quantized_latents, mean=latent_means,
             scale=latent_scales)
         quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(
-            quantized_latent_likelihood, spatial_shape)
+            quantized_latent_prior, spatial_shape)
 
         latents_decoded = self.quantize_latents_st(latents, latent_means)
 
         info = HyperInfo(
             decoded=latents_decoded,
+            noisy_latents=noisy_latents,
             latent_nbpp=noisy_latent_bpp,
             hyperlatent_nbpp=noisy_hyperlatent_bpp,
             total_nbpp=noisy_latent_bpp + noisy_hyperlatent_bpp,
@@ -333,6 +367,11 @@ class Hyperprior(CodingModel):
 
         return info
 
+    def forward(self, latents, spatial_shape, **kwargs):
+        if self.model_type in [ModelTypes.COMPRESSION, ModelTypes.COMPRESSION_GAN]:
+            return self.nonparameteric_hyperprior_forward(latents, spatial_shape)
+        elif self.model_type == ModelTypes.COMPRESSION_VAE:
+            return self.nonparameteric_prior_forward(latents, spatial_shape)
 
 """
 ========
@@ -451,6 +490,7 @@ class HyperpriorDLMM(CodingModel):
 
         info = HyperInfo(
             decoded=latents_decoded,
+            noisy_latents=noisy_latents,
             latent_nbpp=noisy_latent_bpp,
             hyperlatent_nbpp=noisy_hyperlatent_bpp,
             total_nbpp=noisy_latent_bpp + noisy_hyperlatent_bpp,

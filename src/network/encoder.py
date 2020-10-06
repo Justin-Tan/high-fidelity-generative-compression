@@ -7,7 +7,7 @@ from src.normalisation import channel, instance
 
 class Encoder(nn.Module):
     def __init__(self, image_dims, batch_size, activation='relu', C=220,
-                 channel_norm=True):
+                 channel_norm=True, gaussian_inference_net=False):
         """ 
         Encoder with convolutional architecture proposed in [1].
         Projects image x ([C_in,256,256]) into a feature map of size C x W/16 x H/16
@@ -38,6 +38,7 @@ class Encoder(nn.Module):
         activation_d = dict(relu='ReLU', elu='ELU', leaky_relu='LeakyReLU')
         self.activation = getattr(nn, activation_d[activation])  # (leaky_relu, relu, elu)
         self.n_downsampling_layers = 4
+        self.C = C
 
         if channel_norm is True:
             self.interlayer_norm = channel.ChannelNorm2D_wrap
@@ -52,6 +53,11 @@ class Encoder(nn.Module):
         widths = heights
         H1, H2, H3, H4, H5 = heights
         W1, W2, W3, W4, W5 = widths 
+
+        self.gaussian_inference_net = gaussian_inference_net
+        C_out = C
+        if gaussian_inference_net is True:
+            C_out = int(C * 2)
 
         # (256,256) -> (256,256), with implicit padding
         self.conv_block1 = nn.Sequential(
@@ -98,7 +104,7 @@ class Encoder(nn.Module):
         # (16,16) -> (16,16)
         self.conv_block_out = nn.Sequential(
             self.post_pad,
-            nn.Conv2d(filters[4], C, kernel_dim, stride=1),
+            nn.Conv2d(filters[4], C_out, kernel_dim, stride=1),
         )
         
                 
@@ -109,6 +115,10 @@ class Encoder(nn.Module):
         x = self.conv_block4(x)
         x = self.conv_block5(x)
         out = self.conv_block_out(x)
+
+        if self.gaussian_inference_net is True:
+            out = torch.split(out, self.C, dim=1)
+
         return out
 
 

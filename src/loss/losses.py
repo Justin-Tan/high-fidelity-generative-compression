@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+from src.helpers import maths
+from src.network import discriminator
 from src.helpers.utils import get_scheduled_params
 
 def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_schedule=False, bypass_rate=False):
@@ -71,3 +73,38 @@ def gan_loss(gan_loss_type, disc_out, mode='generator_loss'):
     loss = G_loss if mode == 'generator_loss' else D_loss
     
     return loss
+
+def _linear_annealing(init, fin, step, annealing_steps):
+    """
+    Linear annealing of a parameter. Linearly increase parameter from
+    value 'init' to 'fin' over number of iterations specified by
+    'annealing_steps'
+    """
+    if annealing_steps == 0:
+        return fin
+    assert fin > init, 'Final value should be larger than initial'
+    delta = fin - init
+    annealed = min(init + delta * step / annealing_steps, fin)
+    return annealed
+
+def TC_loss(latents, tc_discriminator, step_counter, model_training):
+
+    batch_size = latents.size(0)
+    annealing_steps = 1e3
+    anneal_reg = (_linear_annealing(0, 1, step_counter, annealing_steps) 
+            if model_training else 1)
+
+    tc_disc_logits = tc_discriminator(latents)
+    TC_term = (tc_disc_logits[:,0] - tc_disc_logits[:,1]).flatten().mean()
+    tc_loss = anneal_reg * TC_term
+
+    latents_perm = maths._permute_dims_2D(latents)
+    tc_disc_logits_perm = tc_discriminator(latents_perm)
+
+    tc_loss_marginal = F.cross_entropy(input=tc_disc_logits, 
+        target=torch.zeros(batch_size, dtype=torch.long, device=latents.device))
+    tc_loss_perm = F.cross_entropy(input=tc_disc_logits_perm,
+        target=torch.ones(batch_size, dtype=torch.long, device=latents.device))
+    tc_disc_loss = 0.5 * (tc_loss_marginal + tc_loss_perm)
+
+    return tc_loss, tc_disc_loss

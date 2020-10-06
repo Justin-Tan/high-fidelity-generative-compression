@@ -99,6 +99,7 @@ class LowerBoundToward(torch.autograd.Function):
         gate = torch.logical_or(ctx.mask, grad_output.lt(0.)).type(grad_output.dtype)
         return grad_output * gate, None
 
+
 def standardized_CDF_gaussian(value):
     # Gaussian
     # return 0.5 * (1. + torch.erf(value/ np.sqrt(2)))
@@ -192,6 +193,76 @@ def kl_divergence_q_prior_normal(mu, logvar):
     latent_kl = 0.5 * (-1 - logvar + mu.pow(2) + logvar.exp()).sum(dim=1)
     return latent_kl
 
+def _permute_dims(latent_sample):
+    """
+    Randomly permutes the sample from
+    q(z) (latent_dist) across the batch for each of the latent dimensions (mean
+    and log_var).
+    Parameters
+    ----------
+    latent_sample: torch.Tensor
+        sample from the latent dimension using the reparameterisation trick
+        shape : (batch_size, latent_dim).
+    """
+    perm = torch.zeros_like(latent_sample)
+    batch_size, dim_z = perm.size()
+
+    for z in range(dim_z):
+        pi = torch.randperm(batch_size).to(latent_sample.device)
+        perm[:, z] = latent_sample[pi, z]
+
+    return perm
+
+def _permute_dims_2D(z):
+    """
+    Randomly permutes the sample from q(z) (latent_dist) across the batch 
+    for each of the spatial dimensions for latent z.    
+    """
+    perm = torch.zeros_like(z)
+    batch_size, C, H, W = perm.size()
+
+    for i in range(H):
+        for j in range(W): 
+            pi = torch.randperm(batch_size).to(z.device) 
+            perm[:, :, i, j] = z[pi, :, i, j] 
+
+    return perm
+
+def _permute_dims_3D(z):
+    """
+    Randomly permutes the sample from q(z) (latent_dist) across the batch 
+    for each of the spatial and channel dimensions for latent z.    
+    """
+    perm = torch.zeros_like(z)
+    batch_size, C, H, W = perm.size()
+
+    for i in range(C):
+        for j in range(H):
+            for k in range(W): 
+                pi = torch.randperm(batch_size).to(z.device) 
+                perm[:, i, j, k] = z[pi, i, j, k] 
+
+    return perm
+
+def _permute_spatial_dims(z):
+    """
+    Randomly permutes the sample from q(z) (latent_dist) across
+    spatial dimensions
+    """
+    batch_size, C, H, W = z.size()
+    pi_size = H * W
+    
+    y = torch.reshape(z, (batch_size, C, H*W))
+    perm = torch.zeros_like(y)
+
+    for n in range(batch_size):
+        for c in range(C):
+            pi = torch.randperm(H*W).to(y.device)
+            perm[n,c,:] = y[n,c,pi]
+    
+    perm = torch.reshape(perm, (batch_size, C, H, W))
+
+    return perm
 
 def matrix_log_density_gaussian(x, mu, logvar):
     """

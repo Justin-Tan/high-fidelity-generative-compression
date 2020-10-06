@@ -4,6 +4,63 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+
+class TC_Discriminator(nn.Module):
+    def __init__(self, latent_dims, spectral_norm=True):
+        """ 
+        Convolutional discriminator.
+        Accepts as input original latent z or dimension-permuted z
+        ========
+        Arguments:
+        latent_dims:     Dimensions of input image, (C_in,H,W)
+        """
+        super(TC_Discriminator, self).__init__()
+        
+        self.latent_dims = latent_dims
+        im_channels = self.latent_dims[0]
+        kernel_dim = 4
+        filters = (64, 128, 256, 512)
+
+        # Layer / normalization options
+        # TODO: calculate padding properly
+        cnn_kwargs = dict(stride=2, padding=1, padding_mode='reflect')
+        self.activation = nn.LeakyReLU(negative_slope=0.2)
+        
+        if spectral_norm is True:
+            norm = nn.utils.spectral_norm
+        else:
+            norm = nn.utils.weight_norm
+
+        # (C_in, 16,16) -> (64,8,8), with implicit padding
+        self.conv1 = norm(nn.Conv2d(im_channels, filters[0], kernel_dim, **cnn_kwargs))
+
+        # (8,8) -> (4,4)
+        self.conv2 = norm(nn.Conv2d(filters[0], filters[1], kernel_dim, **cnn_kwargs))
+
+        # (4,4) -> (2,2)
+        self.conv3 = norm(nn.Conv2d(filters[1], filters[2], kernel_dim, **cnn_kwargs))
+
+        # (2,2) -> (1,1)
+        self.conv4 = norm(nn.Conv2d(filters[2], filters[3], kernel_dim, **cnn_kwargs))
+
+        # theoretically 1 with sigmoid but apparently bad results 
+        # => use 2 and softmax
+        self.out_units = 2
+        self.conv_out = nn.Conv2d(filters[3], self.out_units, kernel_size=1, stride=1)
+
+    def forward(self, x):
+        """
+        x:  Input latents
+        """
+        x = self.activation(self.conv1(x))
+        x = self.activation(self.conv2(x))
+        x = self.activation(self.conv3(x))
+        x = self.activation(self.conv4(x))
+        out_logits = self.conv_out(x).view(-1, self.out_units)
+    
+        return out_logits
+        
+
 class Discriminator(nn.Module):
     def __init__(self, image_dims, context_dims, C, spectral_norm=True):
         """ 
