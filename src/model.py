@@ -308,11 +308,11 @@ class Model(nn.Module):
             x = utils.pad_factor(x, x.size()[2:], factor)
 
         # Encoder forward pass
-        if self.model_type == ModelTypes.COMPRESSION_VAE:
-            mean, logvar = self.Encoder(x)
-            y = iw_vae.reparameterize_continuous(mean, logvar)
-        else:
-            y = self.Encoder(x)
+        # if self.model_type == ModelTypes.COMPRESSION_VAE:
+        #     mean, logvar = self.Encoder(x)
+        #     y = iw_vae.reparameterize_continuous(mean, logvar)
+        # else:
+        y = self.Encoder(x)
 
         if self.model_mode == ModelModes.EVALUATION and (self.training is False):
             n_hyperencoder_downsamples = self.Hyperprior.analysis_net.n_downsampling_layers

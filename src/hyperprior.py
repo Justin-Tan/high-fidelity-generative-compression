@@ -166,11 +166,13 @@ class Hyperprior(CodingModel):
         if mode == 'small':
             hyperlatent_filters = SMALL_HYPERLATENT_FILTERS
 
-        self.analysis_net = analysis_net(C=bottleneck_capacity, N=hyperlatent_filters)
+        self.amortization_models = []
+        if self.model_type != ModelTypes.COMPRESSION_VAE:
+            self.analysis_net = analysis_net(C=bottleneck_capacity, N=hyperlatent_filters)
 
-        self.synthesis_mu = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
-        self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
-        self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
+            self.synthesis_mu = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
+            self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
+            self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
         self.hyperlatent_likelihood = hyperprior_model.HyperpriorDensity(n_channels=hyperlatent_filters)
 
