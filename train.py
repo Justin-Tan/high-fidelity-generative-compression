@@ -279,7 +279,7 @@ if __name__ == '__main__':
     if (cmd_args.gpu != 0) or (cmd_args.force_set_gpu is True):
         torch.cuda.set_device(cmd_args.gpu)
 
-    if cmd_args.model_type == ModelTypes.COMPRESSION:
+    if cmd_args.model_type in [ModelTypes.COMPRESSION, ModelTypes.COMPRESSION_VAE]:
         args = mse_lpips_args
     elif cmd_args.model_type == ModelTypes.COMPRESSION_GAN:
         args = hific_args

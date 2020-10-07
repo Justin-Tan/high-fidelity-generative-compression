@@ -405,7 +405,8 @@ class Model(nn.Module):
             compression_model_loss += weighted_G_loss
             losses['disc'] = D_loss
         
-        if self.penalize_TC is True and (self.step_counter > 5e3):
+        warmup_steps = 1e4
+        if self.penalize_TC is True and (self.step_counter > warmup_steps):
             
             tc_loss, tc_disc_loss = self.TC_loss(latents=hyperinfo.noisy_latents)
             weighted_TC_loss = self.args.gamma * tc_loss

@@ -67,7 +67,7 @@ class args(object):
 
     # TC loss
     penalize_TC = True #False
-    gamma = 0.05
+    gamma = 0.1
 
     # Shapes
     crop_size = 256

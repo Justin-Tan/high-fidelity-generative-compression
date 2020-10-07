@@ -300,10 +300,10 @@ class Hyperprior(CodingModel):
             decoded=latents_decoded,
             noisy_latents=noisy_latents,
             latent_nbpp=noisy_latent_bpp,
-            hyperlatent_nbpp=None,
+            hyperlatent_nbpp=torch.zeros_like(noisy_latent_bpp).mean(),
             total_nbpp=noisy_latent_bpp,
             latent_qbpp=quantized_latent_bpp,
-            hyperlatent_qbpp=None,
+            hyperlatent_qbpp=torch.zeros_like(quantized_latent_bpp).mean(),
             total_qbpp=quantized_latent_bpp,
         )
 

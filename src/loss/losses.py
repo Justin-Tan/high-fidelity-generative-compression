@@ -97,15 +97,16 @@ def TC_loss(latents, tc_discriminator, step_counter, model_training):
     except ValueError:
         latents, latents_D, *_ = torch.split(latents, half_batch_size, dim=0)
 
+    warmup_steps = 1e4
     annealing_steps = 1e4
-    anneal_reg = (_linear_annealing(0, 1, min(0, step_counter - 1e4), annealing_steps) 
+    anneal_reg = (_linear_annealing(0, 1, max(0, step_counter - warmup_steps), annealing_steps) 
             if model_training else 1)
 
     print('anneal_reg', anneal_reg)
     tc_disc_logits = tc_discriminator(latents)
     TC_term = tc_disc_logits.mean()
     # TC_term = (tc_disc_logits[:,0] - tc_disc_logits[:,1]).flatten().mean()
-    TC_term = lower_bound_toward(TC_term, 0.)
+    # TC_term = lower_bound_toward(TC_term, 0.)
     print('TC_term', TC_term.item())
     tc_loss = anneal_reg * TC_term
     print('tcL', tc_loss.item())
