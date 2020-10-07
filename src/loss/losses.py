@@ -92,20 +92,25 @@ def _linear_annealing(init, fin, step, annealing_steps):
 def TC_loss(latents, tc_discriminator, step_counter, model_training):
 
     half_batch_size = latents.size(0) // 2
-    latents, latents_D = torch.split(latents, half_batch_size, dim=0)
+    try:
+        latents, latents_D = torch.split(latents, half_batch_size, dim=0)
+    except ValueError:
+        latents, latents_D, *_ = torch.split(latents, half_batch_size, dim=0)
+
     annealing_steps = 1e4
-    anneal_reg = (_linear_annealing(0, 1, step_counter, annealing_steps) 
+    anneal_reg = (_linear_annealing(0, 1, min(0, step_counter - 1e4), annealing_steps) 
             if model_training else 1)
 
+    print('anneal_reg', anneal_reg)
     tc_disc_logits = tc_discriminator(latents)
     TC_term = tc_disc_logits.mean()
     # TC_term = (tc_disc_logits[:,0] - tc_disc_logits[:,1]).flatten().mean()
-    # TC_term = lower_bound_toward(TC_term, 0.)
+    TC_term = lower_bound_toward(TC_term, 0.)
     print('TC_term', TC_term.item())
     tc_loss = anneal_reg * TC_term
     print('tcL', tc_loss.item())
 
-    latents_perm_D = maths._permute_dims_2D(latents_D).detach()
+    latents_perm_D = maths._permute_dims_2D(latents_D.detach())
     tc_disc_logits_perm = tc_discriminator(latents_perm_D)
 
     #tc_loss_marginal = F.cross_entropy(input=tc_disc_logits, 
