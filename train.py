@@ -152,16 +152,16 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                     compression_loss = losses['compression']
 
                     if (model.penalize_TC is True) and (model.step_counter > 1e4):
-                        if train_generator is True:
-                            optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
-                            train_generator = False
-                        else:
-                            optimize_loss(losses['TC_disc'], tc_opt)
-                            train_generator = True
+                        # if train_generator is True:
+                        #     optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
+                        #     train_generator = False
+                        # else:
+                        #     optimize_loss(losses['TC_disc'], tc_opt)
+                        #     train_generator = True
 
-                        # tc_disc_loss = losses['TC_disc']
-                        # optimize_compression_TC_loss(compression_loss, tc_disc_loss, 
-                        #         amortization_opt, hyperlatent_likelihood_opt, tc_opt)
+                        tc_disc_loss = losses['TC_disc']
+                        optimize_compression_TC_loss(compression_loss, tc_disc_loss, 
+                                amortization_opt, hyperlatent_likelihood_opt, tc_opt)
 
                     else:
                         optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
