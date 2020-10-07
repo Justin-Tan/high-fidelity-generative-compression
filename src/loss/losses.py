@@ -91,9 +91,9 @@ def _linear_annealing(init, fin, step, annealing_steps):
 
 def TC_loss(latents, tc_discriminator, step_counter, model_training):
 
-    batch_size = latents.size(0) // 2
+    half_batch_size = latents.size(0) // 2
     latents, latents_D = torch.split(latents, half_batch_size, dim=0)
-    annealing_steps = 1
+    annealing_steps = 1e4
     anneal_reg = (_linear_annealing(0, 1, step_counter, annealing_steps) 
             if model_training else 1)
 

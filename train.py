@@ -152,16 +152,16 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                     compression_loss = losses['compression']
 
                     if model.penalize_TC is True:
-                        if train_generator is True:
-                            optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
-                            train_generator = False
-                        else:
-                            optimize_loss(losses['TC_disc'], tc_opt)
-                            train_generator = True
+                        # if train_generator is True:
+                        #     optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
+                        #     train_generator = False
+                        # else:
+                        #     optimize_loss(losses['TC_disc'], tc_opt)
+                        #     train_generator = True
 
-                        # tc_disc_loss = losses['TC_disc']
-                        # optimize_compression_TC_loss(compression_loss, tc_disc_loss, 
-                        #         amortization_opt, hyperlatent_likelihood_opt, tc_opt)
+                        tc_disc_loss = losses['TC_disc']
+                        optimize_compression_TC_loss(compression_loss, tc_disc_loss, 
+                                amortization_opt, hyperlatent_likelihood_opt, tc_opt)
 
                     else:
                         optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
@@ -329,6 +329,7 @@ if __name__ == '__main__':
         if model.penalize_TC is True:
             tc_discriminator_parameters = model.TC_Discriminator.parameters()
             tc_disc_opt = torch.optim.Adam(tc_discriminator_parameters, lr=1e-4)
+            print(tc_disc_opt.parameters())
             optimizers['tc_disc'] = tc_disc_opt
 
     n_gpus = torch.cuda.device_count()
