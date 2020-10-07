@@ -98,7 +98,7 @@ def TC_loss(latents, tc_discriminator, step_counter, model_training):
         latents, latents_D, *_ = torch.split(latents, half_batch_size, dim=0)
 
     warmup_steps = 1e4
-    annealing_steps = 1e4
+    annealing_steps = 1e3
     anneal_reg = (_linear_annealing(0, 1, max(0, step_counter - warmup_steps), annealing_steps) 
             if model_training else 1)
 
@@ -111,7 +111,10 @@ def TC_loss(latents, tc_discriminator, step_counter, model_training):
     tc_loss = anneal_reg * TC_term
     print('tcL', tc_loss.item())
 
-    latents_perm_D = maths._permute_dims_2D(latents_D.detach())
+    # latents_perm_D = maths._permute_dims_2D(latents_D.detach())
+
+    latents_perm_D = maths._permute_dims_channel_dim(latents_D.detach())
+
     tc_disc_logits_perm = tc_discriminator(latents_perm_D)
 
     #tc_loss_marginal = F.cross_entropy(input=tc_disc_logits, 

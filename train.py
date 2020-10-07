@@ -151,7 +151,7 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                     losses = model(data, train_generator=True)
                     compression_loss = losses['compression']
 
-                    if (model.penalize_TC is True) and (model.step_counter > 1e4):
+                    if (model.penalize_TC is True) and (model.step_counter > 1e3):
                         # if train_generator is True:
                         #     optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
                         #     train_generator = False

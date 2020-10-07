@@ -213,6 +213,20 @@ def _permute_dims(latent_sample):
 
     return perm
 
+def _permute_dims_channel_dim(z):
+    """
+    Randomly permutes the sample from q(z) (latent_dist) across the batch 
+    for the channel dimension  
+    """
+    perm = torch.zeros_like(z)
+    batch_size, C, H, W = perm.size()
+
+    for c in range(C):
+        pi = torch.randperm(batch_size).to(z.device) 
+        perm[:, c, :, :] = z[pi, c, :, :] 
+
+    return perm
+
 def _permute_dims_2D(z):
     """
     Randomly permutes the sample from q(z) (latent_dist) across the batch 
