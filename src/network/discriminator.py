@@ -19,7 +19,7 @@ class TC_Discriminator(nn.Module):
         self.latent_dims = latent_dims
         im_channels = self.latent_dims[0]
         kernel_dim = 4
-        filters = (64, 128, 256, 512)
+        filters = (128, 128, 128, 128)
 
         # Layer / normalization options
         # TODO: calculate padding properly
@@ -45,7 +45,7 @@ class TC_Discriminator(nn.Module):
 
         # theoretically 1 with sigmoid but apparently bad results 
         # => use 2 and softmax
-        self.out_units = 2
+        self.out_units = 1
         self.conv_out = nn.Conv2d(filters[3], self.out_units, kernel_size=1, stride=1)
 
     def forward(self, x):
@@ -57,6 +57,7 @@ class TC_Discriminator(nn.Module):
         x = self.activation(self.conv3(x))
         x = self.activation(self.conv4(x))
         out_logits = self.conv_out(x).view(-1, self.out_units)
+        print(out_logits)
     
         return out_logits
         

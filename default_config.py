@@ -66,8 +66,8 @@ class args(object):
     normalize_input_image = False   # Normalize inputs to range [-1,1]
 
     # TC loss
-    penalize_TC = True
-    gamma = 10.
+    penalize_TC = True #False
+    gamma = 1.
 
     # Shapes
     crop_size = 256

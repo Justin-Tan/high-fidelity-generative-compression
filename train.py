@@ -58,6 +58,17 @@ def optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_li
     amortization_opt.zero_grad()
     hyperlatent_likelihood_opt.zero_grad()
 
+def optimize_compression_TC_loss(compression_loss, tc_loss, amortization_opt, hyperlatent_likelihood_opt, tc_opt):
+    # compression_loss.backward()
+    compression_loss.backward(retain_graph=True)
+    tc_loss.backward()
+    amortization_opt.step()
+    hyperlatent_likelihood_opt.step()
+    tc_opt.step()
+    amortization_opt.zero_grad()
+    hyperlatent_likelihood_opt.zero_grad()
+    tc_opt.zero_grad()
+
 def test(args, model, epoch, idx, data, test_data, test_bpp, device, epoch_test_loss, storage, best_test_loss, 
          start_time, epoch_start_time, logger, train_writer, test_writer):
 
@@ -139,11 +150,21 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                     # Rate, distortion, perceptual only
                     losses = model(data, train_generator=True)
                     compression_loss = losses['compression']
-                    optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
 
                     if model.penalize_TC is True:
-                        tc_disc_loss = losses['TC_disc']
-                        optimize_loss(tc_disc_loss, tc_opt)
+                        if train_generator is True:
+                            optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
+                            train_generator = False
+                        else:
+                            optimize_loss(losses['TC_disc'], tc_opt)
+                            train_generator = True
+
+                        # tc_disc_loss = losses['TC_disc']
+                        # optimize_compression_TC_loss(compression_loss, tc_disc_loss, 
+                        #         amortization_opt, hyperlatent_likelihood_opt, tc_opt)
+
+                    else:
+                        optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
 
             except KeyboardInterrupt:
                 # Note: saving not guaranteed!
@@ -221,7 +242,7 @@ if __name__ == '__main__':
         help="Type of model.")
     general.add_argument("-regime", "--regime", choices=('low','med','high'), default='low', help="Set target bit rate - Low (0.14), Med (0.30), High (0.45)")
     general.add_argument("-gpu", "--gpu", type=int, default=0, help="GPU ID.")
-    general.add_argument("-log_intv", "--log_interval", type=int, default=2500, help="Number of steps between logs.")
+    general.add_argument("-log_intv", "--log_interval", type=int, default=100, help="Number of steps between logs.")
     general.add_argument("-save_intv", "--save_interval", type=int, default=50000, help="Number of steps between checkpoints.")
     general.add_argument("-multigpu", "--multigpu", help="Toggle data parallel capability using torch DataParallel", action="store_true")
     general.add_argument("-norm", "--normalize_input_image", help="Normalize input images to [-1,1]", action="store_true")
@@ -307,7 +328,7 @@ if __name__ == '__main__':
 
         if model.penalize_TC is True:
             tc_discriminator_parameters = model.TC_Discriminator.parameters()
-            tc_disc_opt = torch.optim.Adam(tc_discriminator_parameters, lr=args.learning_rate)
+            tc_disc_opt = torch.optim.Adam(tc_discriminator_parameters, lr=1e-4)
             optimizers['tc_disc'] = tc_disc_opt
 
     n_gpus = torch.cuda.device_count()

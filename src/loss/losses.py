@@ -7,6 +7,8 @@ from src.helpers import maths
 from src.network import discriminator
 from src.helpers.utils import get_scheduled_params
 
+lower_bound_toward = maths.LowerBoundToward.apply
+
 def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_schedule=False, bypass_rate=False):
     """
     Heavily penalize the rate with weight lambda_A >> lambda_B if it exceeds 
@@ -90,21 +92,30 @@ def _linear_annealing(init, fin, step, annealing_steps):
 def TC_loss(latents, tc_discriminator, step_counter, model_training):
 
     batch_size = latents.size(0)
-    annealing_steps = 1e3
+    annealing_steps = 1
     anneal_reg = (_linear_annealing(0, 1, step_counter, annealing_steps) 
             if model_training else 1)
 
     tc_disc_logits = tc_discriminator(latents)
-    TC_term = (tc_disc_logits[:,0] - tc_disc_logits[:,1]).flatten().mean()
+    TC_term = tc_disc_logits.mean()
+    # TC_term = (tc_disc_logits[:,0] - tc_disc_logits[:,1]).flatten().mean()
+    # TC_term = lower_bound_toward(TC_term, 0.)
+    print('TC_term', TC_term.item())
     tc_loss = anneal_reg * TC_term
+    print('tcL', tc_loss.item())
 
-    latents_perm = maths._permute_dims_2D(latents)
+    latents_perm = maths._permute_dims_2D(latents).detach()
     tc_disc_logits_perm = tc_discriminator(latents_perm)
 
-    tc_loss_marginal = F.cross_entropy(input=tc_disc_logits, 
-        target=torch.zeros(batch_size, dtype=torch.long, device=latents.device))
-    tc_loss_perm = F.cross_entropy(input=tc_disc_logits_perm,
-        target=torch.ones(batch_size, dtype=torch.long, device=latents.device))
+    #tc_loss_marginal = F.cross_entropy(input=tc_disc_logits, 
+    #    target=torch.zeros(batch_size, dtype=torch.long, device=latents.device))
+    #tc_loss_perm = F.cross_entropy(input=tc_disc_logits_perm,
+    #    target=torch.ones(batch_size, dtype=torch.long, device=latents.device))
+    tc_loss_marginal = F.binary_cross_entropy_with_logits(input=tc_disc_logits, 
+        target=torch.zeros_like(tc_disc_logits))
+    tc_loss_perm = F.binary_cross_entropy_with_logits(input=tc_disc_logits_perm,
+        target=torch.ones_like(tc_disc_logits_perm))
     tc_disc_loss = 0.5 * (tc_loss_marginal + tc_loss_perm)
+    print('tc_dL', tc_disc_loss.item())
 
     return tc_loss, tc_disc_loss
