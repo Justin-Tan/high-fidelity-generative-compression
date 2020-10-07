@@ -4,7 +4,6 @@ import torch.nn.functional as F
 import numpy as np
 
 
-
 def reparameterize_continuous(mu, sigma):
     """
     Sample from N(mu(x), Sigma(x)) as 

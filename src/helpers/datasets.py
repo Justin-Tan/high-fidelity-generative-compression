@@ -72,7 +72,8 @@ def get_dataloaders(dataset, mode='train', root=None, shuffle=True, pin_memory=T
                       shuffle=shuffle,
                       num_workers=NUM_DATASET_WORKERS,
                       collate_fn=exception_collate_fn,
-                      pin_memory=pin_memory)
+                      pin_memory=pin_memory,
+                      drop_last=True)
 
 
 class BaseDataset(Dataset, abc.ABC):
