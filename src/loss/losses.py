@@ -5,7 +5,7 @@ import numpy as np
 
 from src.helpers.utils import get_scheduled_params
 
-def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_schedule=False):
+def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_schedule=False, bypass_rate=False):
     """
     Heavily penalize the rate with weight lambda_A >> lambda_B if it exceeds 
     some target r_t, otherwise penalize with lambda_B
@@ -13,8 +13,9 @@ def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_sche
     lambda_A = get_scheduled_params(config.lambda_A, config.lambda_schedule, step_counter, ignore_schedule)
     lambda_B = get_scheduled_params(config.lambda_B, config.lambda_schedule, step_counter, ignore_schedule)
 
-    assert lambda_A > lambda_B, "Expected lambda_A > lambda_B, got (A) {} <= (B) {}".format(
-        lambda_A, lambda_B)
+    if bypass_rate is False:
+        assert lambda_A > lambda_B, "Expected lambda_A > lambda_B, got (A) {} <= (B) {}".format(
+            lambda_A, lambda_B)
 
     target_bpp = get_scheduled_params(config.target_rate, config.target_schedule, step_counter, ignore_schedule)
 
@@ -23,10 +24,16 @@ def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_sche
         rate_penalty = lambda_A
     else:
         rate_penalty = lambda_B
-    weighted_rate = rate_penalty * total_nbpp
+
+    if bypass_rate is True:
+        # Loose rate
+        weighted_rate = config.lambda_B * total_nbpp
+        rate_penalty = config.lambda_B
+    else:
+        weighted_rate = rate_penalty * total_nbpp
 
     return weighted_rate, float(rate_penalty)
-
+    
 def _non_saturating_loss(D_real_logits, D_gen_logits, D_real=None, D_gen=None):
 
     D_loss_real = F.binary_cross_entropy_with_logits(input=D_real_logits,
