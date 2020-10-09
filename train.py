@@ -220,7 +220,7 @@ if __name__ == '__main__':
     general.add_argument("-save_intv", "--save_interval", type=int, default=50000, help="Number of steps between checkpoints.")
     general.add_argument("-multigpu", "--multigpu", help="Toggle data parallel capability using torch DataParallel", action="store_true")
     general.add_argument("-norm", "--normalize_input_image", help="Normalize input images to [-1,1]", action="store_true")
-    general.add_argument('-bs', '--batch_size', type=int, default=28, help='input batch size for training')
+    general.add_argument('-bs', '--batch_size', type=int, default=32, help='input batch size for training')
     general.add_argument('--save', type=str, default='experiments', help='Parent directory for stored information (checkpoints, logs, etc.)')
     general.add_argument("-lt", "--likelihood_type", choices=('gaussian', 'logistic'), default='gaussian', help="Likelihood model for latents.")
     general.add_argument("-force_gpu", "--force_set_gpu", help="Set GPU to given ID", action="store_true")
@@ -232,12 +232,13 @@ if __name__ == '__main__':
         help="Number of gradient steps. Optimization stops at the earlier of n_steps/n_epochs.")
     optim_args.add_argument('-epochs', '--n_epochs', type=int, default=10, 
         help="Number of passes over training dataset. Optimization stops at the earlier of n_steps/n_epochs.")
+    optim_args.add_argument("-lambda_B", "--lambda_B", type=float, default=-4, help="log_2 of Rate prefactor in R-D objective.")
     optim_args.add_argument("-lr", "--learning_rate", type=float, default=1e-4, help="Optimizer learning rate.")
     optim_args.add_argument("-wd", "--weight_decay", type=float, default=1e-6, help="Coefficient of L2 regularization.")
 
     # Architecture-related options
     arch_args = parser.add_argument_group("Architecture-related options")
-    arch_args.add_argument('-nrb', '--n_residual_blocks', type=int, default=7,
+    arch_args.add_argument('-nrb', '--n_residual_blocks', type=int, default=1,
         help="Number of residual blocks to use in Generator.")
 
     # Warmstart adversarial training from autoencoder/hyperprior
@@ -246,6 +247,7 @@ if __name__ == '__main__':
     warmstart_args.add_argument("-ckpt", "--warmstart_ckpt", default=None, help="Path to autoencoder + hyperprior ckpt.")
 
     cmd_args = parser.parse_args()
+    cmd_args.lambda_B = 2**(cmd_args.lambda_B)
 
     if (cmd_args.gpu != 0) or (cmd_args.force_set_gpu is True):
         torch.cuda.set_device(cmd_args.gpu)
