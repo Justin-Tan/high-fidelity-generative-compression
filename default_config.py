@@ -37,7 +37,7 @@ class args(object):
     silent = True
     n_epochs = 8
     n_steps = 1e6
-    batch_size = 8
+    batch_size = 16 
     log_interval = 1000
     save_interval = 50000
     gpu = 0
@@ -53,15 +53,15 @@ class args(object):
     noise_dim = 32
 
     # Architecture params - Table 3a) of [1]
-    latent_channels = 220
-    n_residual_blocks = 9           # Authors use 9 blocks, performance saturates at 5
+    latent_channels = 128
+    n_residual_blocks = 1           # Authors use 9 blocks, performance saturates at 5
     lambda_B = 2**(-4)              # Loose rate
     k_M = 0.075 * 2**(-5)           # Distortion
     k_P = 1.                        # Perceptual loss
     beta = 0.15                     # Generator loss
     use_channel_norm = True
     likelihood_type = 'gaussian'    # Latent likelihood model
-    normalize_input_image = False   # Normalize inputs to range [-1,1]
+    normalize_input_image = True   # Normalize inputs to range [-1,1]
     
     # Shapes
     crop_size = 256

@@ -219,7 +219,7 @@ class Model(nn.Module):
             bypass_rate=True)
 
         weighted_R_D_loss = weighted_rate + weighted_distortion
-        weighted_compression_loss = weighted_R_D_loss + weighted_perceptual
+        weighted_compression_loss = weighted_R_D_loss# + weighted_perceptual
 
         # Bookkeeping 
         if (self.step_counter % self.log_interval == 1):
