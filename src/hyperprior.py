@@ -15,6 +15,7 @@ MIN_LIKELIHOOD = 1e-9
 MAX_LIKELIHOOD = 1e3
 SMALL_HYPERLATENT_FILTERS = 192
 LARGE_HYPERLATENT_FILTERS = 320
+NUM_IMPORTANCE_SAMPLES = 4
 
 HyperInfo = namedtuple(
     "HyperInfo",
@@ -143,7 +144,7 @@ class Hyperprior(CodingModel):
     
     def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, 
         mode='large', likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, entropy_code=False,
-        vectorize_encoding=True, block_encode=True):
+        vectorize_encoding=True, block_encode=True, gaussian_hyperlatent_posterior=False):
 
         """
         Introduces probabilistic model over latents of 
@@ -157,19 +158,25 @@ class Hyperprior(CodingModel):
         
         self.bottleneck_capacity = bottleneck_capacity
         self.scale_lower_bound = scale_lower_bound
+        self.num_i_samples = NUM_IMPORTANCE_SAMPLES
 
         analysis_net = hyper.HyperpriorAnalysis
         synthesis_net = hyper.HyperpriorSynthesis
 
         if mode == 'small':
             hyperlatent_filters = SMALL_HYPERLATENT_FILTERS
+        else:
+            hyperlatent_filters = LARGE_HYPERLATENT_FILTERS
 
-        self.analysis_net = analysis_net(C=bottleneck_capacity, N=hyperlatent_filters)
-
-        self.synthesis_mu = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
-        self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
-        
-        self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
+        self.hyperlatent_filters = hyperlatent_filters
+        self.analysis_net = analysis_net(C=bottleneck_capacity, N=hyperlatent_filters,
+            gaussian_inference_net=gaussian_hyperlatent_posterior)
+        self.synthesis_net = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters,
+            gaussian_inference_net=True)
+        self.amortization_models = [self.analysis_net, self.synthesis_net]
+        # self.synthesis_mu = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
+        # self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
+        # self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
         self.hyperlatent_likelihood = hyperprior_model.HyperpriorDensity(n_channels=hyperlatent_filters)
 
@@ -273,7 +280,78 @@ class Hyperprior(CodingModel):
 
         return latents_decoded.to(device)
 
+    def iwae_forward(self, latents, spatial_shape, **kwargs):
 
+        hyperlatent_params = self.analysis_net(latents)
+        hyperlatent_mu, hyperlatent_logvar = torch.split(hyperlatent_params, self.hyperlatent_filters, dim=1)
+
+        
+        # Mismatch b/w continuous and discrete cases?
+        # Differential entropy, hyperlatents
+        noisy_hyperlatents = self._quantize(hyperlatents_mu, mode='noise')
+        noisy_hyperlatent_likelihood = self.hyperlatent_likelihood(noisy_hyperlatents)
+        noisy_hyperlatent_bits, noisy_hyperlatent_bpp = self._estimate_entropy(
+            noisy_hyperlatent_likelihood, spatial_shape)
+
+        # Discrete entropy, hyperlatents
+        quantized_hyperlatents = self._quantize(hyperlatents_mu, mode='quantize')
+        quantized_hyperlatent_likelihood = self.hyperlatent_likelihood(quantized_hyperlatents)
+        quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy(
+            quantized_hyperlatent_likelihood, spatial_shape)
+
+        if self.training is True:
+            hyperlatents_decoded = noisy_hyperlatents
+        else:
+            hyperlatents_decoded = quantized_hyperlatents
+
+        latent_params = self.synthesis_net(hyperlatents_decoded)
+        latent_means, latent_scales = torch.split(latent_params, self.bottleneck_capacity, dim=1)
+        latent_scales = F.softplus(latent_scales)
+        latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
+    
+        # latent_means = self.synthesis_mu(hyperlatents_decoded)
+        # latent_scales = self.synthesis_std(hyperlatents_decoded)
+        # # latent_scales = F.softplus(latent_scales)
+        # latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
+
+        # Differential entropy, latents
+        noisy_latents = self._quantize(latents, mode='noise', means=latent_means)
+        noisy_latent_likelihood = self.latent_likelihood(noisy_latents, mean=latent_means,
+            scale=latent_scales)
+        noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(
+            noisy_latent_likelihood, spatial_shape)     
+
+        # Discrete entropy, latents
+        quantized_latents = self._quantize(latents, mode='quantize', means=latent_means)
+        quantized_latent_likelihood = self.latent_likelihood(quantized_latents, mean=latent_means,
+            scale=latent_scales)
+        quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(
+            quantized_latent_likelihood, spatial_shape)
+
+        latents_decoded = self.quantize_latents_st(latents, latent_means)
+
+        """
+        Reset hyperlatent parameters, perform reproducible BBVI here
+        """
+
+        # mu_z = torch.repeat_interleave(hyperlatent_mu, self.num_i_samples, dim=0)
+        # logvar_z = torch.repeat_interleave(hyperlatent_logvar, self.num_i_samples, dim=0)
+        # latent_sample = iw_vae.reparameterize_continuous(mu=mu_z, logvar=logvar_z)
+
+
+        info = HyperInfo(
+            decoded=latents_decoded,
+            latent_nbpp=noisy_latent_bpp,
+            hyperlatent_nbpp=noisy_hyperlatent_bpp,
+            total_nbpp=noisy_latent_bpp + noisy_hyperlatent_bpp,
+            latent_qbpp=quantized_latent_bpp,
+            hyperlatent_qbpp=quantized_hyperlatent_bpp,
+            total_qbpp=quantized_latent_bpp + quantized_hyperlatent_bpp,
+        )
+
+        return info
+
+    
     def forward(self, latents, spatial_shape, **kwargs):
 
         hyperlatents = self.analysis_net(latents)
@@ -296,9 +374,9 @@ class Hyperprior(CodingModel):
         else:
             hyperlatents_decoded = quantized_hyperlatents
 
-        latent_means = self.synthesis_mu(hyperlatents_decoded)
-        latent_scales = self.synthesis_std(hyperlatents_decoded)
-        # latent_scales = F.softplus(latent_scales)
+        latent_params = self.synthesis_net(hyperlatents_decoded)
+        latent_means, latent_scales = torch.split(latent_params, self.bottleneck_capacity, dim=1)
+        latent_scales = F.softplus(latent_scales)
         latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
 
         # Differential entropy, latents

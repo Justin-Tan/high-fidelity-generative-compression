@@ -42,16 +42,17 @@ class HyperpriorAnalysis(nn.Module):
 
     C:  Number of input channels
     """
-    def __init__(self, C=220, N=320, activation='relu'):
+    def __init__(self, C=220, N=320, activation='relu', gaussian_inference_net=False):
         super(HyperpriorAnalysis, self).__init__()
 
+        out = N if gaussian_inference_net is False else 2 * N
         cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, padding_mode='reflect')
         self.activation = getattr(F, activation)
         self.n_downsampling_layers = 2
 
         self.conv1 = nn.Conv2d(C, N, kernel_size=3, stride=1, padding=1)
         self.conv2 = nn.Conv2d(N, N, **cnn_kwargs)
-        self.conv3 = nn.Conv2d(N, N, **cnn_kwargs)
+        self.conv3 = nn.Conv2d(N, out, **cnn_kwargs)
 
     def forward(self, x):
         
@@ -73,8 +74,11 @@ class HyperpriorSynthesis(nn.Module):
 
     C:  Number of output channels
     """
-    def __init__(self, C=220, N=320, activation='relu', final_activation=None):
+    def __init__(self, C=220, N=320, activation='relu', final_activation=None,
+        gaussian_inference_net=False):
         super(HyperpriorSynthesis, self).__init__()
+
+        out = C if gaussian_inference_net is False else 2 * C
 
         cnn_kwargs = dict(kernel_size=5, stride=2, padding=2, output_padding=1)
         self.activation = getattr(F, activation)
@@ -82,7 +86,7 @@ class HyperpriorSynthesis(nn.Module):
 
         self.conv1 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
         self.conv2 = nn.ConvTranspose2d(N, N, **cnn_kwargs)
-        self.conv3 = nn.ConvTranspose2d(N, C, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.ConvTranspose2d(N, out, kernel_size=3, stride=1, padding=1)
 
         if self.final_activation is not None:
             self.final_activation = getattr(F, final_activation)

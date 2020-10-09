@@ -268,7 +268,7 @@ class HyperpriorDensity(nn.Module):
         max_likelihood=MAX_LIKELIHOOD, **kwargs):
         """
         init_scale: Scaling factor determining the initial width of the
-                    probability densities.
+      a-              probability densities.
         filters:    Number of filters at each layer < K
                     of the density model. Default K=4 layers.
         """
