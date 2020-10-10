@@ -35,7 +35,7 @@ Disc_out= namedtuple("disc_out",
 class Model(nn.Module):
 
     def __init__(self, args, logger, storage_train=defaultdict(list), storage_test=defaultdict(list), model_mode=ModelModes.TRAINING, 
-            model_type=ModelTypes.COMPRESSION):
+            model_type=ModelTypes.COMPRESSION, iw=False):
         super(Model, self).__init__()
 
         """
@@ -49,6 +49,7 @@ class Model(nn.Module):
         self.storage_train = storage_train
         self.storage_test = storage_test
         self.step_counter = 0
+        self.iw = True
 
         if self.args.use_latent_mixture_model is True:
             self.args.latent_channels = self.args.latent_channels_DLMM
@@ -77,7 +78,8 @@ class Model(nn.Module):
                 likelihood_type=self.args.likelihood_type, mixture_components=self.args.mixture_components, entropy_code=self.entropy_code)
         else:
             self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.args.latent_channels,
-                likelihood_type=self.args.likelihood_type, entropy_code=self.entropy_code)
+                likelihood_type=self.args.likelihood_type, entropy_code=self.entropy_code,
+                gaussian_hyperlatent_posterior=self.iw)
 
         self.amortization_models = [self.Encoder, self.Generator]
         self.amortization_models.extend(self.Hyperprior.amortization_models)
@@ -143,7 +145,11 @@ class Model(nn.Module):
             factor = 2 ** n_hyperencoder_downsamples
             y = utils.pad_factor(y, y.size()[2:], factor)
 
-        hyperinfo = self.Hyperprior(y, spatial_shape=x.size()[2:])
+        import time
+        start_t = time.time()
+        hyperinfo = self.Hyperprior(y, spatial_shape=x.size()[2:], iw=self.iw,
+            evaluate_qbpp=(self.step_counter % self.log_interval == 1))
+        print('delta t', time.time() - start_t)
 
         latents_quantized = hyperinfo.decoded
         total_nbpp = hyperinfo.total_nbpp

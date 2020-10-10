@@ -145,15 +145,18 @@ def log_density_gaussian(x, mu=None, logvar=None):
         Log variance.
 
     Returns:
-    log_density: [B, latent_dim]
+    log_density: [B, *dims]
     """
+    MIN_NEG_LOGVAR_EXPONENT = 5
+
     if mu is None and logvar is None:
         mu = torch.zeros_like(x)
         logvar = torch.zeros_like(x)
         
     normalization = -0.5 * (np.log(2 * np.pi) + logvar)
-    # Logvar should be above exp(-5)
-    inv_var = torch.exp(torch.min(-logvar, torch.ones_like(logvar)*5))
+
+    # Logvar should be above exp(-MIN_NEG_LOGVAR_EXPONENT)
+    inv_var = torch.exp(torch.min(-logvar, torch.ones_like(logvar) * MIN_NEG_LOGVAR_EXPONENT))
     log_density = normalization - 0.5 * ((x - mu)**2 * inv_var)
 
     return log_density

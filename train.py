@@ -74,11 +74,11 @@ def test(args, model, epoch, idx, data, test_data, test_bpp, device, epoch_test_
         utils.save_images(test_writer, model.step_counter, intermediates.input_image, intermediates.reconstruction,
             fname=os.path.join(args.figures_save, 'recon_epoch{}_idx{}_TEST_{:%Y_%m_%d_%H:%M}.jpg'.format(epoch, idx, datetime.datetime.now())))
     
-        compression_loss = losses['compression'] 
-        epoch_test_loss.append(compression_loss.item())
+        compression_loss = losses['compression'].item()
+        epoch_test_loss.append(compression_loss)
         mean_test_loss = np.mean(epoch_test_loss)
         
-        best_test_loss = utils.log(model, storage, epoch, idx, mean_test_loss, compression_loss.item(), 
+        best_test_loss = utils.log(model, storage, epoch, idx, mean_test_loss, compression_loss, 
                                      best_test_loss, start_time, epoch_start_time, 
                                      batch_size=data.shape[0], avg_bpp=test_bpp.mean().item(),header='[TEST]', 
                                      logger=logger, writer=test_writer)
