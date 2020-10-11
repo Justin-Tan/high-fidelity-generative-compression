@@ -10,7 +10,6 @@ def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_sche
     Heavily penalize the rate with weight lambda_A >> lambda_B if it exceeds 
     some target r_t, otherwise penalize with lambda_B
     """
-    print('ignore?', ignore_schedule)
     lambda_A = get_scheduled_params(config.lambda_A, config.lambda_schedule, step_counter, ignore_schedule)
     lambda_B = get_scheduled_params(config.lambda_B, config.lambda_schedule, step_counter, ignore_schedule)
 
