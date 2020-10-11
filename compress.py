@@ -158,6 +158,7 @@ def compress_and_decompress(args):
                         out_path=os.path.join(args.output_dir, f"{filenames[0]}_compressed.hfc"))
 
                 reconstruction = model.decompress(compressed_output)
+                # Actual physical compresssed output bpp
                 q_bpp = compressed_output.total_bpp
 
             if args.normalize_input_image is True:
@@ -180,7 +181,8 @@ def compress_and_decompress(args):
                     q_bpp_per_im = float(q_bpp.item()) if type(q_bpp) == torch.Tensor else float(q_bpp)
 
                 fname = os.path.join(args.output_dir, "{}_RECON_{:.3f}bpp.png".format(filenames[subidx], q_bpp_per_im))
-                torchvision.utils.save_image(reconstruction[subidx], fname, normalize=True)
+                if args.silent is False:
+                    torchvision.utils.save_image(reconstruction[subidx], fname, normalize=True)
                 output_filenames_total.append(fname)
 
             bpp_total[n:n + B] = bpp.data
@@ -198,7 +200,8 @@ def compress_and_decompress(args):
         df['PSNR'] = PSNR_total.cpu().numpy()
         df['MS_SSIM'] = MS_SSIM_total.cpu().numpy()
 
-    df_path = os.path.join(args.output_dir, 'compression_metrics.h5')
+    ckpt_name = os.path.splitext(os.path.basename(args.ckpt_path))[0]
+    df_path = os.path.join(args.output_dir, f'{ckpt_name}_compression_metrics.h5')
     df.to_hdf(df_path, key='df')
 
     pprint(df)
@@ -222,6 +225,7 @@ def main(**kwargs):
     parser.add_argument('-bs', '--batch_size', type=int, default=1,
         help="Loader batch size. Set to 1 if images in directory are different sizes.")
     parser.add_argument("-rc", "--reconstruct", help="Reconstruct input image without compression.", action="store_true")
+    parser.add_argument("-silent", "--silent", help="Don't save reconstructions.", action="store_true")
     parser.add_argument("-save", "--save", help="Save compressed format to disk.", action="store_true")
     parser.add_argument("-metrics", "--metrics", help="Evaluate compression metrics.", action="store_true")
     args = parser.parse_args()
@@ -238,3 +242,4 @@ def main(**kwargs):
 
 if __name__ == '__main__':
     main()
+
