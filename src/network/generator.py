@@ -217,17 +217,17 @@ class SynthesisTransform(nn.Module):
         # (16,16) -> (32,32)
         self.upconv_block1 = nn.Sequential(
             nn.ConvTranspose2d(C, filters[0], kernel_dim, **cnn_kwargs),
-            gdn.GDN(filters[0], inverse=True),
+            gdn.GDN1(filters[0], inverse=True),
         )
 
         self.upconv_block2 = nn.Sequential(
             nn.ConvTranspose2d(filters[0], filters[1], kernel_dim, **cnn_kwargs),
-            gdn.GDN(filters[1], inverse=True),
+            gdn.GDN1(filters[1], inverse=True),
         )
 
         self.upconv_block3 = nn.Sequential(
             nn.ConvTranspose2d(filters[1], filters[2], kernel_dim, **cnn_kwargs),
-            gdn.GDN(filters[2], inverse=True),
+            gdn.GDN1(filters[2], inverse=True),
         )
 
         self.upconv_block4 = nn.Sequential(

@@ -151,19 +151,19 @@ class AnalysisTransform(nn.Module):
         # (256,256) -> (128,128)
         self.conv_block1 = nn.Sequential(
             nn.Conv2d(im_channels, filters[0], kernel_dim, **cnn_kwargs),
-            gdn.GDN(filters[0]),
+            gdn.GDN1(filters[0]),
         )
 
         # (128,128) -> (64,64)
         self.conv_block2 = nn.Sequential(
             nn.Conv2d(filters[0], filters[1], kernel_dim, **cnn_kwargs),
-            gdn.GDN(filters[1]),
+            gdn.GDN1(filters[1]),
         )
 
         # (64,64) -> (32,32)
         self.conv_block3 = nn.Sequential(
             nn.Conv2d(filters[1], filters[2], kernel_dim, **cnn_kwargs),
-            gdn.GDN(filters[2]),
+            gdn.GDN1(filters[2]),
         )
 
         # Project channels onto space w/ dimension C

@@ -64,7 +64,6 @@ class GDN(nn.Module):
         # Expects input dimensions (B,C,H,W)
 
         n_channels = x.size()[1]
-        assert n_channels == self.n_channels, 'Number of channels misspecified!'
 
         # stored variables parameterized as square roots
         beta = LowerBound.apply(self.beta, self.beta_bound)
@@ -75,12 +74,42 @@ class GDN(nn.Module):
         gamma = gamma.view(n_channels, n_channels, 1, 1)
 
         norm_pool = F.conv2d(x**2, gamma, bias=beta)
-        norm_pool = torch.sqrt(norm_pool)
 
         if self.inverse is True:
             # Approximate inverse by one round of fixed-point iteration
             norm_pool = torch.sqrt(norm_pool)
         else:
             norm_pool = torch.rsqrt(norm_pool)
+
+        return x * norm_pool
+
+
+class GDN1(GDN):
+    """
+    Simplified GDN layer.
+    Introduced in `"Computationally Efficient Neural Image Compression"
+    <http://arxiv.org/abs/1912.08771>`_, by Johnston, Nick, Elad Eban, Ariel
+    Gordon, and Johannes Ballé, (2019).
+    .. math::
+        y[i] = \frac{x[i]}{\beta[i] + \sum_j(\gamma[j, i] * |x[j]|}
+    """
+
+    def forward(self, x):
+        # Expects input dimensions (B,C,H,W)
+
+        n_channels = x.size()[1]
+
+        # stored variables parameterized as square roots
+        beta = LowerBound.apply(self.beta, self.beta_bound)
+        beta = beta**2 - self.pedestal
+
+        gamma = LowerBound.apply(self.gamma, self.gamma_bound)
+        gamma = gamma**2 - self.pedestal
+        gamma = gamma.view(n_channels, n_channels, 1, 1)
+
+        norm_pool = F.conv2d(torch.abs(x), gamma, bias=beta)
+
+        if not self.inverse:
+            norm_pool = 1.0 / norm_pool
 
         return x * norm_pool
