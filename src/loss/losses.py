@@ -29,7 +29,7 @@ def weighted_rate_loss(config, total_nbpp, total_qbpp, step_counter, ignore_sche
         rate_penalty = lambda_B
 
     weighted_rate = rate_penalty * total_nbpp
-    
+
     return weighted_rate, float(rate_penalty)
     
 def _non_saturating_loss(D_real_logits, D_gen_logits, D_real=None, D_gen=None):

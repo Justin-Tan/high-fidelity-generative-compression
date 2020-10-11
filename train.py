@@ -25,7 +25,7 @@ from torch.utils.tensorboard import SummaryWriter
 # Custom modules
 from src.model import Model
 from src.helpers import utils, datasets
-from default_config import hific_args, mse_lpips_args, directories, ModelModes, ModelTypes
+from default_config import hific_args, mse_lpips_args, vae_args, directories, ModelModes, ModelTypes
 
 # go fast boi!!
 torch.backends.cudnn.benchmark = True
@@ -212,7 +212,7 @@ if __name__ == '__main__':
     # General options - see `default_config.py` for full options
     general = parser.add_argument_group('General options')
     general.add_argument("-n", "--name", default=None, help="Identifier for checkpoints and metrics.")
-    general.add_argument("-mt", "--model_type", required=True, choices=(ModelTypes.COMPRESSION, ModelTypes.COMPRESSION_GAN), 
+    general.add_argument("-mt", "--model_type", required=True, choices=(ModelTypes.COMPRESSION, ModelTypes.COMPRESSION_GAN, ModelTypes.COMPRESSION_VAE), 
         help="Type of model - with or without GAN component")
     general.add_argument("-regime", "--regime", choices=('low','med','high'), default='low', help="Set target bit rate - Low (0.14), Med (0.30), High (0.45)")
     general.add_argument("-gpu", "--gpu", type=int, default=0, help="GPU ID.")
@@ -256,6 +256,9 @@ if __name__ == '__main__':
         args = mse_lpips_args
     elif cmd_args.model_type == ModelTypes.COMPRESSION_GAN:
         args = hific_args
+    elif cmd_args.model_type == ModelTypes.COMPRESSION_VAE:
+        args = vae_args
+
 
     start_time = time.time()
     device = utils.get_device()

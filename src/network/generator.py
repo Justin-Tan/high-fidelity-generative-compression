@@ -4,7 +4,12 @@ import torch.nn.functional as F
 import numpy as np
 
 # Custom
-from src.normalisation import channel, instance
+from src.normalisation import channel, instance, gdn
+
+SMALL_FILTERS = 128
+SMALL_BOTTLENECK = 192
+LARGE_FILTERS = 192
+LARGE_BOTTLENECK = 320
 
 class ResidualBlock(nn.Module):
     def __init__(self, input_dims, kernel_size=3, stride=1, 
@@ -44,8 +49,8 @@ class ResidualBlock(nn.Module):
         return torch.add(res, identity_map)
 
 class Generator(nn.Module):
-    def __init__(self, input_dims, batch_size, C=16, activation='relu',
-                 n_residual_blocks=8, channel_norm=True, sample_noise=False,
+    def __init__(self, input_dims, batch_size, C=220, activation='relu',
+                 n_residual_blocks=7, channel_norm=True, sample_noise=False,
                  noise_dim=32):
 
         """ 
@@ -168,6 +173,76 @@ class Generator(nn.Module):
 
         return out
 
+class SynthesisTransform(nn.Module):
+    def __init__(self, input_dims, num_filters=SMALL_FILTERS,
+        C=SMALL_BOTTLENECK):
+
+        """ 
+        Generator with convolutional architecture used in [1].
+        Upscales quantized encoder output into feature map of size C x W x H.
+        Expects input size (C,16,16)
+        ========
+        Arguments:
+        input_dims: Dimensions of quantized representation, (C,H,W)
+        batch_size: Number of instances per minibatch
+        C:          Encoder bottleneck depth, controls bits-per-pixel
+                    C around 200 used in [1].
+
+        [1] Ballé et. al., "Variational image compression with a scale hyperprior", 
+            arXiv:1802.01436 (2018).
+        """
+        
+        super(SynthesisTransform, self).__init__()
+        
+        kernel_dim = 5
+
+        # Layer / normalization options
+        stride = 2
+        cnn_kwargs = dict(stride=stride, padding=kernel_dim//2, output_padding=stride-1)
+        self.n_upsampling_layers = 4
+        filters = [num_filters for _ in range(self.n_upsampling_layers)]
+
+        self.pre_pad = nn.ReflectionPad2d(1)
+        self.asymmetric_pad = nn.ReflectionPad2d((0,1,1,0))  # Slower than tensorflow?
+        self.post_pad = nn.ReflectionPad2d(3)
+
+        # (16,16) -> (16,16), with implicit padding
+        # self.conv_block_init = nn.Sequential(
+        #     self.pre_pad,
+        #     nn.Conv2d(C, filters[0], kernel_size=(3,3), stride=1),
+        #     self.interlayer_norm(filters[0], **norm_kwargs),
+        # )
+
+        
+        # (16,16) -> (32,32)
+        self.upconv_block1 = nn.Sequential(
+            nn.ConvTranspose2d(C, filters[0], kernel_dim, **cnn_kwargs),
+            gdn.GDN(filters[0], inverse=True),
+        )
+
+        self.upconv_block2 = nn.Sequential(
+            nn.ConvTranspose2d(filters[0], filters[1], kernel_dim, **cnn_kwargs),
+            gdn.GDN(filters[1], inverse=True),
+        )
+
+        self.upconv_block3 = nn.Sequential(
+            nn.ConvTranspose2d(filters[1], filters[2], kernel_dim, **cnn_kwargs),
+            gdn.GDN(filters[2], inverse=True),
+        )
+
+        self.upconv_block4 = nn.Sequential(
+            nn.ConvTranspose2d(filters[2], 3, kernel_dim, **cnn_kwargs),
+        )
+
+
+    def forward(self, x):
+                
+        x = self.upconv_block1(x)
+        x = self.upconv_block2(x)
+        x = self.upconv_block3(x)
+        out = self.upconv_block4(x)
+        return out
+
 
 
 if __name__ == "__main__":
@@ -175,7 +250,10 @@ if __name__ == "__main__":
     C = 8
     y = torch.randn([3,C,16,16])
     y_dims = y.size()
-    G = Generator(y_dims[1:], y_dims[0], C=C, n_residual_blocks=3, sample_noise=True)
+    G = Generator(y_dims[1:], y_dims[0], C=C, n_residual_blocks=3, sample_noise=False)
+    S = SynthesisTransform(y_dims[1:], num_filters=SMALL_FILTERS, C=C)
 
-    x_hat = G(y)
-    print(x_hat.size())
+    G_out = G(y)
+    print('G_out size', G_out.size())
+    S_out = S(y)
+    print('S_out size', S_out.size())

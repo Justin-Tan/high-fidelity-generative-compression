@@ -47,14 +47,8 @@ class args(object):
     dataset_path = DatasetPaths.OPENIMAGES
     shuffle = True
 
-    # GAN params
-    discriminator_steps = 0
-    model_mode = ModelModes.TRAINING
-    sample_noise = False
-    noise_dim = 32
-
     # Architecture params - Table 3a) of [1]
-    latent_channels = 128
+    latent_channels = 192
     n_residual_blocks = 1           # Authors use 9 blocks, performance saturates at 5
     lambda_B = 2**(-4)              # Loose rate
     k_M = 0.075 * 2**(-5)           # Distortion
@@ -64,6 +58,12 @@ class args(object):
     likelihood_type = 'gaussian'    # Latent likelihood model
     normalize_input_image = True   # Normalize inputs to range [-1,1]
     
+    # Hyperprior VAE model
+    small_latent_channels = 192
+    small_filters = 128
+    large_latent_channels = 256
+    large_filters = 192
+
     # Shapes
     crop_size = 256
     image_dims = (3,256,256)
@@ -88,6 +88,12 @@ class args(object):
     target_rate = target_rate_map[regime]
     lambda_A = lambda_A_map[regime]
 
+    # GAN params
+    discriminator_steps = 0
+    model_mode = ModelModes.TRAINING
+    sample_noise = False
+    noise_dim = 32
+
     # DLMM
     use_latent_mixture_model = False
     mixture_components = 4
@@ -103,6 +109,14 @@ class mse_lpips_args(args):
     perceptual loss only.
     """
     model_type = ModelTypes.COMPRESSION
+
+class vae_args(args):
+    """
+    Config for model trained with distortion and 
+    perceptual loss only.
+    """
+    model_type = ModelTypes.COMPRESSION_VAE
+
 
 class hific_args(args):
     """
