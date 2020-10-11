@@ -357,7 +357,7 @@ def log(model, storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, st
     report_f('========>')
     report_f("Rate-Distortion:")
     report_f("Weighted R-D: {:.3f} | Weighted Rate: {:.3f} | Weighted Distortion: {:.3f} | Weighted Perceptual: {:.3f} | "
-             "Distortion: {:.3f} | Rate Penalty: {:.3f}".format(storage['weighted_R_D'][-1],
+             "Distortion: {:.3f} | log_2 Rate Penalty: {:.3f}".format(np.log2(storage['weighted_R_D'][-1]),
              storage['weighted_rate'][-1], storage['weighted_distortion'][-1], storage['weighted_perceptual'][-1],
              storage['distortion'][-1], storage['rate_penalty'][-1]))
     report_f('========>')

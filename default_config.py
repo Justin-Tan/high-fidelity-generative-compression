@@ -9,6 +9,7 @@ command line arguments in `train.py`.
 
 class ModelTypes(object):
     COMPRESSION = 'compression'
+    COMPRESSION_VAE = 'compression_vae'
     COMPRESSION_GAN = 'compression_gan'
 
 class ModelModes(object):
@@ -73,8 +74,10 @@ class args(object):
     weight_decay = 1e-6
 
     # Scheduling
-    lambda_schedule = dict(vals=[2., 1.], steps=[50000])
-    lr_schedule = dict(vals=[1., 0.1], steps=[500000])
+    # lambda_schedule = dict(vals=[2., 1.], steps=[50000])
+    # lr_schedule = dict(vals=[1., 0.1], steps=[500000])
+    lambda_schedule = dict(vals=[1., 0.5], steps=[200000])
+    lr_schedule = dict(vals=[1., 0.1], steps=[800000])
     target_schedule = dict(vals=[0.20/0.14, 1.], steps=[50000])  # Rate allowance
     ignore_schedule = False
 
