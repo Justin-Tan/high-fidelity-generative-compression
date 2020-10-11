@@ -10,7 +10,7 @@ lower_bound_toward = maths.LowerBoundToward.apply
 class IWAE(nn.Module):
 
     def __init__(self, bottleneck_capacity, latent_prob_model, hyperlatent_prob_model, hyperlatent_inference_net, 
-        synthesis_net, scale_lower_bound, num_i_samples=4, **kwargs):
+        synthesis_net, scale_lower_bound, num_i_samples=8, **kwargs):
         
         super(IWAE, self).__init__()
 
@@ -76,32 +76,55 @@ class IWAE(nn.Module):
     #         # Reconstruction, return mean
     #         return mu
 
+    def _estimate_entropy_log(self, log_likelihood, spatial_shape):
+
+        quotient = -np.log(2.)
+        batch_size = log_likelihood.size()[0]
+
+        assert len(spatial_shape) == 2, 'Mispecified spatial dims'
+        n_pixels = np.prod(spatial_shape)
+
+        n_bits = torch.sum(log_likelihood) / (batch_size * quotient)
+        bpp = n_bits / n_pixels
+
+        return bpp
+
     def get_importance_samples(self, latents, latent_stats, hyperlatent_sample, hyperlatent_stats):
         """
         Tighten lower bound by reducing variance of marginal likelihood
         estimator through the sample mean.
         """
 
+        EPS = 1e-9  
+
         # [n*B, C_y, H_y, W_y]
         B, C_y, H_y, W_y = latents.size()
         latents = torch.repeat_interleave(latents, self.num_i_samples, dim=0)
 
         # [n*B, C_y, H_y, W_y]
-        log_pz = self.hyperlatent_prob_model(hyperlatent_sample).sum(dim=(1,2,3), keepdim=True)
-        log_qzCy = maths.log_density_gaussian(hyperlatent_sample, *hyperlatent_stats).sum(dim=(1,2,3), keepdim=True)
-        log_pyCz = self.latent_prob_model(latents, *latent_stats)
+        log_pz = torch.log(self.hyperlatent_prob_model(hyperlatent_sample) + EPS)#.sum(dim=(1,2,3), keepdim=True)
+        log_qzCy = maths.log_density_gaussian(hyperlatent_sample, *hyperlatent_stats)#.sum(dim=(1,2,3), keepdim=True)
+        log_pyCz = torch.log(self.latent_prob_model(latents, *latent_stats) + EPS)
 
-        log_iw = log_pyCz + log_pz - log_qzCy
-        print('log_iw', log_iw.shape)
+        log_iw = log_pyCz + (log_pz - log_qzCy).sum(dim=(1,2,3), keepdim=True)/(C_y * H_y * W_y)
+        # log_iw_scalar = log_pyCz.sum(dim=(1,2,3), keepdim=True) + log_pz.sum(dim=(1,2,3), keepdim=True) - log_qzCy.sum(dim=(1,2,3), keepdim=True)
+    
         log_iw = log_iw.reshape(B, self.num_i_samples, C_y, H_y, W_y)  # [B, n, C_y, H_y, W_y]
-        print('after reshape', log_iw.shape)
-        return log_iw
+        # print('after reshape', log_iw.shape)
+        return log_iw #, log_iw_scalar
 
     def marginal_estimate(self, latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs):
     
         log_iw = self.get_importance_samples(latents, latent_stats, hyperlatent_sample, hyperlatent_stats)
         iwelbo = torch.logsumexp(log_iw, dim=1) - np.log(self.num_i_samples)  # [B, C_y, H_y, W_y]
-        print('iwelbo', iwelbo.shape)
+
+        #iwelbo_scalar = torch.logsumexp(log_iw_scalar, dim=1) - np.log(self.num_i_samples)  # [B, C_y, H_y, W_y]
+
+        #iwe = self._estimate_entropy_log(iwelbo, (256,256)).item()
+        #iwe2 = self._estimate_entropy_log(iwelbo_scalar, (256,256)).item()
+        #print('good',iwe)
+        #print('bad', iwe2)
+        # print('iwelbo', iwelbo.shape)
 
         return iwelbo
 

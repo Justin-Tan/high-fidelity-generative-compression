@@ -330,7 +330,7 @@ class Hyperprior(CodingModel):
         # Differential entropy, latents
         noisy_latents = self._quantize(latents, mode='noise', means=latent_means)   
         noisy_latent_marginal = self.iwelbo(noisy_latents, hyperlatent_stats)
-        noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(
+        noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy_log(
             noisy_latent_marginal, spatial_shape)
 
         # Discrete entropy, latents
@@ -338,8 +338,8 @@ class Hyperprior(CodingModel):
         if evaluate_qbpp is True:
             quantized_latents = self._quantize(latents, mode='quantize', means=latent_means)
             quantized_latent_marginal = self.iwelbo(quantized_latents, hyperlatent_stats)
-            quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(
-                quantized_latent_likelihood, spatial_shape)
+            quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy_log(
+                quantized_latent_marginal, spatial_shape)
 
 
         info = HyperInfo(
@@ -349,7 +349,7 @@ class Hyperprior(CodingModel):
             total_nbpp=noisy_latent_bpp + noisy_hyperlatent_bpp,
             latent_qbpp=quantized_latent_bpp,
             hyperlatent_qbpp=quantized_hyperlatent_bpp,
-            total_qbpp=quantized_latent_bpp + quantized_hyperlatent_bpp,
+            total_qbpp=quantized_latent_bpp.to(quantized_hyperlatent_bpp) + quantized_hyperlatent_bpp,
         )
 
         return info

@@ -145,11 +145,8 @@ class Model(nn.Module):
             factor = 2 ** n_hyperencoder_downsamples
             y = utils.pad_factor(y, y.size()[2:], factor)
 
-        import time
-        start_t = time.time()
         hyperinfo = self.Hyperprior(y, spatial_shape=x.size()[2:], iw=self.iw,
             evaluate_qbpp=(self.step_counter % self.log_interval == 1))
-        print('delta t', time.time() - start_t)
 
         latents_quantized = hyperinfo.decoded
         total_nbpp = hyperinfo.total_nbpp
