@@ -66,20 +66,34 @@ class Model(nn.Module):
         if model_mode == ModelModes.EVALUATION:
             self.entropy_code = True
 
-        self.Encoder = encoder.Encoder(self.image_dims, self.batch_size, C=self.args.latent_channels,
-            channel_norm=self.args.use_channel_norm)
+        if self.model_type in [ModelTypes.COMPRESSION, ModelTypes.COMPRESSION_GAN]:
+            
+            self.latent_channels = self.args.latent_channels
+            self.Encoder = encoder.Encoder(self.image_dims, self.batch_size, C=self.latent_channels,
+                channel_norm=self.args.use_channel_norm)
 
-        self.Generator = generator.Generator(self.image_dims, self.batch_size, C=self.args.latent_channels,
-            n_residual_blocks=self.args.n_residual_blocks, channel_norm=self.args.use_channel_norm, sample_noise=
-            self.args.sample_noise, noise_dim=self.args.noise_dim)
+            self.Generator = generator.Generator(self.image_dims, self.batch_size, C=self.latent_channels,
+                n_residual_blocks=self.args.n_residual_blocks, channel_norm=self.args.use_channel_norm, sample_noise=
+                self.args.sample_noise, noise_dim=self.args.noise_dim)
 
-        if self.args.use_latent_mixture_model is True:
-            self.Hyperprior = hyperprior.HyperpriorDLMM(bottleneck_capacity=self.args.latent_channels,
-                likelihood_type=self.args.likelihood_type, mixture_components=self.args.mixture_components, entropy_code=self.entropy_code)
-        else:
-            self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.args.latent_channels,
-                likelihood_type=self.args.likelihood_type, entropy_code=self.entropy_code,
-                gaussian_hyperlatent_posterior=self.iw)
+        elif self.model_type == ModelTypes.COMPRESSION_VAE:
+            # Higher capacity for tighter rate
+            if self.args.lambda_B <= 2**(-4):
+                self.latent_channels = self.args.small_latent_channels
+                self.num_filters = self.args.small_filters
+            else:
+                self.latent_channels = self.args.large_latent_channels
+                self.num_filters = self.args.large_filters
+
+            self.Encoder = encoder.AnalysisTransform(self.image_dims, C=self.latent_channels, 
+                num_filters=self.num_filters)
+
+            self.Generator = generator.SynthesisTransform(self.image_dims, C=self.latent_channels,
+                num_filters=self.num_filters)
+
+        self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.latent_channels,
+            likelihood_type=self.args.likelihood_type, entropy_code=self.entropy_code,
+            gaussian_hyperlatent_posterior=self.iw)
 
         self.amortization_models = [self.Encoder, self.Generator]
         self.amortization_models.extend(self.Hyperprior.amortization_models)
@@ -436,10 +450,10 @@ if __name__ == '__main__':
     for n, p in model.Hyperprior.hyperlatent_likelihood.named_parameters():
         logger.info(f'{n} - {p.shape}')
 
-    if compress_test is False:
-        logger.info('DISCRIMINATOR PARAMETERS')
-        for n, p in model.Discriminator.named_parameters():
-            logger.info(f'{n} - {p.shape}')
+    # if compress_test is False:
+    #     logger.info('DISCRIMINATOR PARAMETERS')
+    #     for n, p in model.Discriminator.named_parameters():
+    #         logger.info(f'{n} - {p.shape}')
 
     logger.info("Number of trainable parameters: {}".format(utils.count_parameters(model)))
     logger.info("Estimated size: {} MB".format(utils.count_parameters(model) * 4. / 10**6))

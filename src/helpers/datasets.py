@@ -205,6 +205,8 @@ class OpenImages(BaseDataset):
             raise ValueError('Unknown mode!')
 
         self.imgs = glob.glob(os.path.join(data_dir, '*.jpg'))
+        self.imgs += glob.glob(os.path.join(data_dir, '*.png'))
+
         self.crop_size = crop_size
         self.image_dims = (3, self.crop_size, self.crop_size)
         self.scale_min = SCALE_MIN
