@@ -34,7 +34,7 @@ Disc_out= namedtuple("disc_out",
 
 class Model(nn.Module):
 
-    def __init__(self, args, logger, storage_train=defaultdict(list), storage_test=defaultdict(list), model_mode=ModelModes.TRAINING, 
+    def __init__(self, args, logger, storage_train=defaultdict(lambda: [0.]), storage_test=defaultdict(lambda: [0.]), model_mode=ModelModes.TRAINING, 
             model_type=ModelTypes.COMPRESSION, iw=False):
         super(Model, self).__init__()
 
@@ -181,6 +181,12 @@ class Model(nn.Module):
 
         return intermediates, hyperinfo
 
+    def get_inference_gradients(self, inference_loss):
+
+        inference_grads = torch.autograd.grad(inference_loss, self.Hyperprior.analysis_net.parameters)
+        print([p.grad for p in self.Hyperprior.analysis_net.parameters()])
+        return inference_grads
+
     def discriminator_forward(self, intermediates, train_generator):
         """ Train on gen/real batches simultaneously. """
         x_gen = intermediates.reconstruction
@@ -264,8 +270,8 @@ class Model(nn.Module):
             self.store_loss('weighted_compression_loss_sans_G', weighted_compression_loss.item())
 
             if self.iw is True:
-                self.store_loss('n_latent_marginal', hyperinfo.latent_marginal_nbpp.item())
-                self.store_loss('q_latent_marginal', hyperinfo.latent_marginal_qbpp.item())
+                self.store_loss('n_rate_latent_marginal', hyperinfo.latent_marginal_nbpp.item())
+                self.store_loss('q_rate_latent_marginal', hyperinfo.latent_marginal_qbpp.item())
 
         return weighted_compression_loss
 
@@ -395,6 +401,9 @@ class Model(nn.Module):
             return reconstruction, intermediates.q_bpp
 
         compression_model_loss = self.compression_loss(intermediates, hyperinfo)
+
+        if self.iw is True:
+            losses['inference_loss'] = hyperinfo.latent_marginal_nbpp
 
         if self.use_discriminator is True:
             # Only send gradients to generator when training generator via

@@ -59,7 +59,7 @@ def optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_li
     hyperlatent_likelihood_opt.zero_grad()
 
 def test(args, model, epoch, idx, data, test_data, test_bpp, device, epoch_test_loss, storage, best_test_loss, 
-         start_time, epoch_start_time, logger, train_writer, test_writer):
+         start_time, epoch_start_time, logger, train_writer, test_writer, grad_ema):
 
     model.eval()  
     with torch.no_grad():
@@ -68,6 +68,12 @@ def test(args, model, epoch, idx, data, test_data, test_bpp, device, epoch_test_
         losses, intermediates = model(data, return_intermediates=True, writeout=False)
         utils.save_images(train_writer, model.step_counter, intermediates.input_image, intermediates.reconstruction,
             fname=os.path.join(args.figures_save, 'recon_epoch{}_idx{}_TRAIN_{:%Y_%m_%d_%H:%M}.jpg'.format(epoch, idx, datetime.datetime.now())))
+
+        if model.iw is True:
+            inference_grads = model.get_inference_gradients(losses['inference_loss'])
+            inference_grad_variance, inference_grad_SNR_sq = utils.SNR_gradients(inference_grads, grad_ema, 'inference_grad')
+            model.store_loss('inference_grad_var', inference_grad_variance.item())
+            model.store_loss('inference_grad_SNR_sq', inference_grad_SNR_sq.item())
 
         test_data = test_data.to(device, dtype=torch.float)
         losses, intermediates = model(test_data, return_intermediates=True, writeout=True)
@@ -95,11 +101,11 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
     train_writer = SummaryWriter(os.path.join(args.tensorboard_runs, 'train'))
     test_writer = SummaryWriter(os.path.join(args.tensorboard_runs, 'test'))
     storage, storage_test = model.storage_train, model.storage_test
+    grad_ema = utils.EMA(momentum=0.01)
 
     amortization_opt, hyperlatent_likelihood_opt = optimizers['amort'], optimizers['hyper']
     if model.use_discriminator is True:
         disc_opt = optimizers['disc']
-
 
     for epoch in trange(args.n_epochs, desc='Epoch'):
 
@@ -163,7 +169,7 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                     test_data, test_bpp = test_loader_iter.next()
 
                 best_test_loss, epoch_test_loss = test(args, model, epoch, idx, data, test_data, test_bpp, device, epoch_test_loss, storage_test,
-                     best_test_loss, start_time, epoch_start_time, logger, train_writer, test_writer)
+                     best_test_loss, start_time, epoch_start_time, logger, train_writer, test_writer, grad_ema)
 
                 with open(os.path.join(args.storage_save, 'storage_{}_tmp.pkl'.format(args.name)), 'wb') as handle:
                     pickle.dump(storage, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -273,8 +279,8 @@ if __name__ == '__main__':
     args.lambda_A = args.lambda_A_map[args.regime]
     args.n_steps = int(args.n_steps)
 
-    storage = defaultdict(list)
-    storage_test = defaultdict(list)
+    storage = defaultdict(lambda: [0.])
+    storage_test = defaultdict(lambda: [0.])
     logger = utils.logger_setup(logpath=os.path.join(args.snapshot, 'logs'), filepath=os.path.abspath(__file__))
 
     if args.warmstart is True:

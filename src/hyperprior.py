@@ -364,7 +364,6 @@ class Hyperprior(CodingModel):
             quantized_latent_marginal_bits, quantized_latent_marginal_bpp = self._estimate_entropy_log(
                 quantized_latent_marginal, spatial_shape)
 
-
         info = HyperInfo(
             decoded=latents_decoded,
             latent_nbpp=noisy_latent_bpp,
@@ -565,6 +564,8 @@ class HyperpriorDLMM(CodingModel):
             latent_qbpp=quantized_latent_bpp,
             hyperlatent_qbpp=quantized_hyperlatent_bpp,
             total_qbpp=quantized_latent_bpp + quantized_hyperlatent_bpp,
+            latent_marginal_nbpp=None,
+            latent_marginal_qbpp=None,
         )
 
         return info
