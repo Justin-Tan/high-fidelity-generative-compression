@@ -61,8 +61,8 @@ class args(object):
     # Hyperprior VAE model
     small_latent_channels = 192
     small_filters = 128
-    large_latent_channels = 256
-    large_filters = 192
+    large_latent_channels = 192 #256
+    large_filters = 128 # 192
 
     # Shapes
     crop_size = 256

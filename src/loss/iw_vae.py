@@ -10,7 +10,7 @@ lower_bound_toward = maths.LowerBoundToward.apply
 class IWAE(nn.Module):
 
     def __init__(self, bottleneck_capacity, latent_prob_model, hyperlatent_prob_model, hyperlatent_inference_net, 
-        synthesis_net, scale_lower_bound, num_i_samples=8, **kwargs):
+        synthesis_net, scale_lower_bound, num_i_samples=4, **kwargs):
         
         super(IWAE, self).__init__()
 

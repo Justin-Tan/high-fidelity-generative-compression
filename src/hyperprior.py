@@ -231,7 +231,7 @@ class Hyperprior(CodingModel):
 
         latent_params = self.synthesis_net(hyperlatents_decoded)
         latent_means, latent_scales = torch.split(latent_params, self.bottleneck_capacity, dim=1)
-        #latent_scales = F.softplus(latent_scales)
+        latent_scales = F.softplus(latent_scales)
         latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
 
         # Use latent statistics to build indexed probability tables, and compress latents
@@ -282,7 +282,7 @@ class Hyperprior(CodingModel):
         #latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
         latent_params = self.synthesis_net(hyperlatents_decoded)
         latent_means, latent_scales = torch.split(latent_params, self.bottleneck_capacity, dim=1)
-        #latent_scales = F.softplus(latent_scales)
+        latent_scales = F.softplus(latent_scales)
         latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
         latent_spatial_shape = latent_scales.size()[2:]
 

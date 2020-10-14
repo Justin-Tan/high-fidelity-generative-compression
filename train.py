@@ -106,7 +106,7 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
         epoch_loss, epoch_test_loss = [], []  
         epoch_start_time = time.time()
         
-        if epoch > 0:
+        if epoch > 5:
             ckpt_path = utils.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
         
         model.train()
@@ -216,11 +216,11 @@ if __name__ == '__main__':
         help="Type of model - with or without GAN component")
     general.add_argument("-regime", "--regime", choices=('low','med','high'), default='low', help="Set target bit rate - Low (0.14), Med (0.30), High (0.45)")
     general.add_argument("-gpu", "--gpu", type=int, default=0, help="GPU ID.")
-    general.add_argument("-log_intv", "--log_interval", type=int, default=1000, help="Number of steps between logs.")
-    general.add_argument("-save_intv", "--save_interval", type=int, default=50000, help="Number of steps between checkpoints.")
+    general.add_argument("-log_intv", "--log_interval", type=int, default=5000, help="Number of steps between logs.")
+    general.add_argument("-save_intv", "--save_interval", type=int, default=100000, help="Number of steps between checkpoints.")
     general.add_argument("-multigpu", "--multigpu", help="Toggle data parallel capability using torch DataParallel", action="store_true")
     general.add_argument("-norm", "--normalize_input_image", help="Normalize input images to [-1,1]", action="store_true")
-    general.add_argument('-bs', '--batch_size', type=int, default=8, help='input batch size for training')
+    general.add_argument('-bs', '--batch_size', type=int, default=16, help='input batch size for training')
     general.add_argument('--save', type=str, default='experiments', help='Parent directory for stored information (checkpoints, logs, etc.)')
     general.add_argument("-lt", "--likelihood_type", choices=('gaussian', 'logistic'), default='gaussian', help="Likelihood model for latents.")
     general.add_argument("-force_gpu", "--force_set_gpu", help="Set GPU to given ID", action="store_true")

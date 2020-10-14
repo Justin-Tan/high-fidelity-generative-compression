@@ -49,7 +49,7 @@ class Model(nn.Module):
         self.storage_train = storage_train
         self.storage_test = storage_test
         self.step_counter = 0
-        self.iw = False
+        self.iw = False #True
 
         if self.args.use_latent_mixture_model is True:
             self.args.latent_channels = self.args.latent_channels_DLMM
@@ -226,17 +226,24 @@ class Model(nn.Module):
             x_gen = (x_gen + 1.) / 2.
 
         distortion_loss = self.distortion_loss(x_gen, x_real)
-        perceptual_loss = self.perceptual_loss_wrapper(x_gen, x_real, normalize=True)
 
         weighted_distortion = self.args.k_M * distortion_loss
-        weighted_perceptual = self.args.k_P * perceptual_loss
 
         weighted_rate, rate_penalty = losses.weighted_rate_loss(self.args, total_nbpp=intermediates.n_bpp,
             total_qbpp=intermediates.q_bpp, step_counter=self.step_counter, ignore_schedule=self.args.ignore_schedule,
             bypass_rate=True)
 
         weighted_R_D_loss = weighted_rate + weighted_distortion
-        weighted_compression_loss = weighted_R_D_loss# + weighted_perceptual
+        weighted_compression_loss = weighted_R_D_loss
+
+        if self.model_type == ModelTypes.COMPRESSION_VAE:
+            with torch.no_grad():
+                perceptual_loss = self.perceptual_loss_wrapper(x_gen, x_real, normalize=True)
+            weighted_perceptual = self.args.k_P * perceptual_loss
+        else:
+            perceptual_loss = self.perceptual_loss_wrapper(x_gen, x_real, normalize=True)
+            weighted_perceptual = self.args.k_P * perceptual_loss
+            weighted_compression_loss += weighted_perceptual
 
         # Bookkeeping 
         if (self.step_counter % self.log_interval == 1):
