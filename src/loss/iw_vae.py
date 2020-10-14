@@ -10,7 +10,7 @@ lower_bound_toward = maths.LowerBoundToward.apply
 class IWAE(nn.Module):
 
     def __init__(self, bottleneck_capacity, latent_prob_model, hyperlatent_prob_model, hyperlatent_inference_net, 
-        synthesis_net, scale_lower_bound, num_i_samples=8, **kwargs):
+        synthesis_net, scale_lower_bound, num_i_samples=4, **kwargs):
         
         super(IWAE, self).__init__()
 
@@ -96,7 +96,6 @@ class IWAE(nn.Module):
         """
 
         EPS = 1e-9  
-
         # [n*B, C_y, H_y, W_y]
         B, C_y, H_y, W_y = latents.size()
         latents = torch.repeat_interleave(latents, self.num_i_samples, dim=0)
@@ -115,18 +114,45 @@ class IWAE(nn.Module):
 
     def marginal_estimate(self, latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs):
     
-        log_iw = self.get_importance_samples(latents, latent_stats, hyperlatent_sample, hyperlatent_stats)
-        iwelbo = torch.logsumexp(log_iw, dim=1) - np.log(self.num_i_samples)  # [B, C_y, H_y, W_y]
+        EPS = 1e-9  
+        # [n*B, C_y, H_y, W_y]
+        B, C_y, H_y, W_y = latents.size()
+        latents = torch.repeat_interleave(latents, self.num_i_samples, dim=0)
 
-        #iwelbo_scalar = torch.logsumexp(log_iw_scalar, dim=1) - np.log(self.num_i_samples)  # [B, C_y, H_y, W_y]
+        # [n*B, C_y, H_y, W_y]
+        log_pz = torch.log(self.hyperlatent_prob_model(hyperlatent_sample) + EPS).sum(dim=(1,2,3), keepdim=True)
+        log_qzCy = maths.log_density_gaussian(hyperlatent_sample, *hyperlatent_stats).sum(dim=(1,2,3), keepdim=True)
+        log_pyCz = torch.log(self.latent_prob_model(latents, *latent_stats) + EPS).sum(dim=(1,2,3), keepdim=True)
 
-        #iwe = self._estimate_entropy_log(iwelbo, (256,256)).item()
-        #iwe2 = self._estimate_entropy_log(iwelbo_scalar, (256,256)).item()
-        #print('good',iwe)
-        #print('bad', iwe2)
-        # print('iwelbo', iwelbo.shape)
+        log_iw = log_pyCz + (log_pz - log_qzCy)
+        log_iw = log_iw.reshape(B, self.num_i_samples) # [B, n]
+
+        # log_iw = self.get_importance_samples(latents, latent_stats, hyperlatent_sample, hyperlatent_stats)
+        iwelbo = torch.logsumexp(log_iw, dim=1) - np.log(self.num_i_samples)  # [B]
 
         return iwelbo
+
+    def marginal_dreg_estimate(self, latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs):
+
+        EPS = 1e-9  
+        # [n*B, C_y, H_y, W_y]
+        B, C_y, H_y, W_y = latents.size()
+        latents = torch.repeat_interleave(latents, self.num_i_samples, dim=0)
+
+        # [n*B, C_y, H_y, W_y]
+        log_pz = torch.log(self.hyperlatent_prob_model(hyperlatent_sample) + EPS).sum(dim=(1,2,3), keepdim=True)
+        log_qzCy = maths.log_density_gaussian(hyperlatent_sample, *hyperlatent_stats).sum(dim=(1,2,3), keepdim=True)
+        log_pyCz = torch.log(self.latent_prob_model(latents, *latent_stats) + EPS).sum(dim=(1,2,3), keepdim=True)
+
+        log_iw = log_pyCz + (log_pz - log_qzCy)
+        log_iw = log_iw.reshape(B, self.num_i_samples) # [B, n]
+
+        # log_iw = self.get_importance_samples(latents, latent_stats, hyperlatent_sample, hyperlatent_stats)
+        iwelbo = torch.logsumexp(log_iw, dim=1) - np.log(self.num_i_samples)  # [B]
+
+        return iwelbo
+
+
 
     def amortized_inference(self, latents, hyperlatent_stats, num_i_samples):
 

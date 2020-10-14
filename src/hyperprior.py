@@ -14,14 +14,15 @@ MIN_SCALE = 0.11
 LOG_SCALES_MIN = -3.
 MIN_LIKELIHOOD = 1e-9
 MAX_LIKELIHOOD = 1e3
-SMALL_HYPERLATENT_FILTERS = 128 #192
-LARGE_HYPERLATENT_FILTERS = 128 #320
+SMALL_HYPERLATENT_FILTERS = 192
+LARGE_HYPERLATENT_FILTERS = 256
 NUM_IMPORTANCE_SAMPLES = 4
 
 HyperInfo = namedtuple(
     "HyperInfo",
     "decoded "
-    "latent_nbpp hyperlatent_nbpp total_nbpp latent_qbpp hyperlatent_qbpp total_qbpp",
+    "latent_nbpp hyperlatent_nbpp total_nbpp latent_qbpp hyperlatent_qbpp total_qbpp "
+    "latent_marginal_nbpp latent_marginal_qbpp",
 )
 
 CompressionOutput = namedtuple("CompressionOutput",
@@ -37,7 +38,8 @@ CompressionOutput = namedtuple("CompressionOutput",
     "total_bits",
     "hyperlatent_bpp",
     "latent_bpp",
-    "total_bpp"]
+    "total_bpp",
+    ]
 )
 
 lower_bound_identity = maths.LowerBoundIdentity.apply
@@ -328,7 +330,7 @@ class Hyperprior(CodingModel):
         # latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
 
         latent_params = self.synthesis_net(hyperlatents_decoded)  # [n*B, C_y, H_y, W_y]
-        latent_means, _ = torch.split(latent_params, self.bottleneck_capacity, dim=1)   
+        latent_means, latent_scales = torch.split(latent_params, self.bottleneck_capacity, dim=1)   
 
         latents_decoded = self.quantize_latents_st(latents, latent_means)
 
@@ -337,17 +339,29 @@ class Hyperprior(CodingModel):
         """
 
         # Differential entropy, latents
-        noisy_latents = self._quantize(latents, mode='noise', means=latent_means)   
+        noisy_latents = self._quantize(latents, mode='noise', means=latent_means)
+        noisy_latent_likelihood = self.latent_likelihood(noisy_latents, mean=latent_means,
+            scale=latent_scales)
+        noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(
+            noisy_latent_likelihood, spatial_shape)     
+
         noisy_latent_marginal = self.iwelbo(noisy_latents, hyperlatent_stats)
-        noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy_log(
+        noisy_latent_marginal_bits, noisy_latent_marginal_bpp = self._estimate_entropy_log(
             noisy_latent_marginal, spatial_shape)
+    
 
         # Discrete entropy, latents
-        quantized_latent_bpp = torch.Tensor([0.])
+        quantized_latent_bpp, quantized_latent_marginal_bpp = torch.Tensor([0.]), torch.Tensor([0.])
         if evaluate_qbpp is True:
             quantized_latents = self._quantize(latents, mode='quantize', means=latent_means)
+            quantized_latent_likelihood = self.latent_likelihood(quantized_latents, mean=latent_means,
+                scale=latent_scales)
+            quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(
+                quantized_latent_likelihood, spatial_shape)
+
+            quantized_latents = self._quantize(latents, mode='quantize', means=latent_means)
             quantized_latent_marginal = self.iwelbo(quantized_latents, hyperlatent_stats)
-            quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy_log(
+            quantized_latent_marginal_bits, quantized_latent_marginal_bpp = self._estimate_entropy_log(
                 quantized_latent_marginal, spatial_shape)
 
 
@@ -359,6 +373,8 @@ class Hyperprior(CodingModel):
             latent_qbpp=quantized_latent_bpp,
             hyperlatent_qbpp=quantized_hyperlatent_bpp,
             total_qbpp=quantized_latent_bpp.to(quantized_hyperlatent_bpp) + quantized_hyperlatent_bpp,
+            latent_marginal_nbpp=noisy_latent_marginal_bpp,
+            latent_marginal_qbpp=quantized_latent_marginal_bpp,
         )
 
         return info
@@ -413,6 +429,8 @@ class Hyperprior(CodingModel):
             latent_qbpp=quantized_latent_bpp,
             hyperlatent_qbpp=quantized_hyperlatent_bpp,
             total_qbpp=quantized_latent_bpp + quantized_hyperlatent_bpp,
+            latent_marginal_nbpp=None,
+            latent_marginal_qbpp=None,
         )
 
         return info
