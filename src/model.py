@@ -49,7 +49,7 @@ class Model(nn.Module):
         self.storage_train = storage_train
         self.storage_test = storage_test
         self.step_counter = 0
-        self.iw = False #True
+        self.iw = True
 
         if self.args.use_latent_mixture_model is True:
             self.args.latent_channels = self.args.latent_channels_DLMM
@@ -229,8 +229,15 @@ class Model(nn.Module):
 
         weighted_distortion = self.args.k_M * distortion_loss
 
-        weighted_rate, rate_penalty = losses.weighted_rate_loss(self.args, total_nbpp=intermediates.n_bpp,
-            total_qbpp=intermediates.q_bpp, step_counter=self.step_counter, ignore_schedule=self.args.ignore_schedule,
+        if self.iw is True:
+            total_nbpp = hyperinfo.latent_marginal_nbpp
+            total_qbpp = hyperinfo.latent_marginal_qbpp
+        else:
+            total_nbpp = intermediates.n_bpp
+            total_qbpp = intermediates.q_bpp
+
+        weighted_rate, rate_penalty = losses.weighted_rate_loss(self.args, total_nbpp=total_nbpp,
+            total_qbpp=total_qbpp, step_counter=self.step_counter, ignore_schedule=self.args.ignore_schedule,
             bypass_rate=True)
 
         weighted_R_D_loss = weighted_rate + weighted_distortion
@@ -262,6 +269,10 @@ class Model(nn.Module):
             self.store_loss('weighted_perceptual', weighted_perceptual.item())
             self.store_loss('weighted_R_D', weighted_R_D_loss.item())
             self.store_loss('weighted_compression_loss_sans_G', weighted_compression_loss.item())
+
+            if self.iw is True:
+                self.store_loss('n_latent_marginal', hyperinfo.latent_marginal_nbpp.item())
+                self.store_loss('q_latent_marginal', hyperinfo.latent_marginal_qbpp.item())
 
         return weighted_compression_loss
 

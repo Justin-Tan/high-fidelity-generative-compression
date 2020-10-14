@@ -365,6 +365,13 @@ def log(model, storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, st
     report_f("avg. original bpp: {:.3f} | n_bpp (total): {:.3f} | q_bpp (total): {:.3f} | n_bpp (latent): {:.3f} | q_bpp (latent): {:.3f} | "
              "n_bpp (hyp-latent): {:.3f} | q_bpp (hyp-latent): {:.3f}".format(avg_bpp, storage['n_rate'][-1], storage['q_rate'][-1], 
              storage['n_rate_latent'][-1], storage['q_rate_latent'][-1], storage['n_rate_hyperlatent'][-1], storage['q_rate_hyperlatent'][-1]))
+
+    if model.iw is True:
+        report_f('========>')
+        report_f("p(y) marginal IS estimate:")
+        report_f("n_marginal_bpp: {:.3f} | q_marginal_bpp: {:.3f} | IW-ELBO gradient: {:.3f} | SNR: {:.3f}".format(storage['n_latent_marginal'][-1],
+                storage['q_latent_marginal'][-1], storage['iw_elbo_grad'][-1], storage['SNR'][-1]))
+
     if model.use_discriminator is True:
         report_f('========>')
         report_f("Generator-Discriminator:")
