@@ -319,6 +319,9 @@ class HyperpriorDensity(nn.Module):
 
             if update_parameters is False:
                 H_k, a_k, b_k = H_k.detach(), a_k.detach(), b_k.detach()
+
+            print('LOGITS', logits.shape)
+            print('HK', H_k.shape)
             logits = torch.bmm(F.softplus(H_k), logits)  # [C,filters[k+1],*]
             logits = logits + b_k
             logits = logits + torch.tanh(a_k) * torch.tanh(logits)
@@ -359,6 +362,8 @@ class HyperpriorDensity(nn.Module):
             latents = latents.permute(1,0,2,3)
             shape = latents.shape
             latents = torch.reshape(latents, (shape[0],1,-1))
+
+        print('FF', latents.shape)
 
         cdf_upper = self.cdf_logits(latents + 0.5)
         cdf_lower = self.cdf_logits(latents - 0.5)

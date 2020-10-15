@@ -129,10 +129,11 @@ class IWAE(nn.Module):
         log_iw_stop_phi = log_iw_stop_phi.reshape(B, self.num_i_samples) # [B, n]
 
         with torch.no_grad():
-            # normalized_weights = torch.exp(log_iw_stop_phi - torch.logsumexp(log_iw_stop_phi, dim=1, keepdim=True)).detach()
-            normalized_weights = F.softmax(log_iw_stop_phi, dim=1).detach()
+            normalized_weights = torch.exp(log_iw_stop_phi - torch.logsumexp(log_iw_stop_phi, dim=1, keepdim=True)).detach()
+            # normalized_weights = F.softmax(log_iw_stop_phi, dim=1).detach()
             if hyperlatent_sample.requires_grad:
-                hyperlatent_sample.register_hook(lambda grad: torch.reshape(normalized_weights, (batch_size * self.num_i_samples, 1)),  * grad)
+                hyperlatent_sample.register_hook(lambda grad: torch.reshape(normalized_weights, (B * self.num_i_samples, 1, 1, 1))  * grad)
+                # hyperlatent_sample.register_hook(lambda grad: print(grad.shape))
 
         iw_dreg = torch.sum(normalized_weights * log_iw_stop_phi, dim=1)  # [B]
 
