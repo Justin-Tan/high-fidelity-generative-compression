@@ -9,7 +9,7 @@ import os, time, datetime
 import logging
 import itertools
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from torchvision.utils import save_image
 
 META_FILENAME = "metadata.json"
@@ -369,8 +369,12 @@ def log(model, storage, epoch, idx, mean_epoch_loss, current_loss, best_loss, st
     if model.iw is True:
         report_f('========>')
         report_f("p(y) marginal IS estimate:")
-        report_f("n_marginal_bpp: {:.3f} | q_marginal_bpp: {:.3f} | IW-ELBO gradient: {:.3f} | SNR: {:.3f}".format(storage['n_latent_marginal'][-1],
-                storage['q_latent_marginal'][-1], storage['iw_elbo_grad'][-1], storage['SNR'][-1]))
+        try:
+            report_f("n_marginal_bpp: {:.3f} | q_marginal_bpp: {:.3f} | Inference grad var: {:.3f} | Inference grad SNR: {:.3f}".format(storage['n_rate_latent_marginal'][-1],
+                    storage['q_rate_latent_marginal'][-1], storage['inference_grad_var'][-1], storage['inference_grad_SNR_sq'][-1]))
+        except IndexError:
+            report_f("n_marginal_bpp: {:.3f} | q_marginal_bpp: {:.3f}".format(storage['n_rate_latent_marginal'][-1], storage['q_rate_latent_marginal'][-1]))
+
 
     if model.use_discriminator is True:
         report_f('========>')
@@ -395,3 +399,36 @@ def add_noise(x):
         x = x * 255 + noise
         x = x / 256
     return x
+
+class EMA():
+    """
+    EMA for tensors
+    """
+    def __init__(self, momentum=0.01, init_v=0.):
+        self.momentum = momentum
+        self.shadow = defaultdict(lambda: init_v)
+
+    def update(self, name, val):
+        self.shadow[name] = val
+
+    def __call__(self, name, x):
+
+        if name not in self.shadow:
+            print(f'Adding {name} to EMA dict keys.')
+
+        new_average = self.momentum * x + (1.0 - self.momentum) * self.shadow[name]
+        self.update(name, new_average)
+        return new_average
+
+def SNR_gradients(grads, grad_ema, grad_name):
+    """
+    Calculate SNR ratio of gradients
+    """
+    grad_vec = torch.cat([torch.reshape(g, (-1,)) for g in grads if g is not None], dim=0)
+    current_first_moment = grad_vec
+    current_second_moment = torch.square(grad_vec)
+    first_moment = grad_ema(f"{grad_name}_first_moment", current_first_moment)
+    second_moment = grad_ema(f"{grad_name}_second_moment", current_second_moment)
+    variance = second_moment - torch.square(first_moment)
+
+    return torch.mean(variance), torch.mean(torch.square(first_moment)) / torch.mean(variance)

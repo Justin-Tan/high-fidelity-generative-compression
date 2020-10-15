@@ -30,6 +30,8 @@ from default_config import hific_args, mse_lpips_args, vae_args, directories, Mo
 # go fast boi!!
 torch.backends.cudnn.benchmark = True
 
+grad_ema = utils.EMA(momentum=0.01)
+
 def create_model(args, device, logger, storage, storage_test):
 
     start_time = time.time()
@@ -51,17 +53,28 @@ def optimize_loss(loss, opt, retain_graph=False):
     opt.step()
     opt.zero_grad()
 
-def optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt):
-    compression_loss.backward()
+def optimize_compression_loss(model, losses, amortization_opt, hyperlatent_likelihood_opt, retain_graph=False):
+
+    compression_loss = losses['compression']
+    compression_loss.backward(retain_graph=retain_graph)
+
+    if (model.iw is True) and (retain_graph is True):
+        print('F')
+        inference_grads = model.get_inference_gradients(losses['inference_loss'])
+        inference_grad_variance, inference_grad_SNR_sq = utils.SNR_gradients(inference_grads, grad_ema, 'inference_grad')
+        model.store_loss('inference_grad_var', inference_grad_variance.item())
+        model.store_loss('inference_grad_SNR_sq', inference_grad_SNR_sq.item())
+
     amortization_opt.step()
     hyperlatent_likelihood_opt.step()
     amortization_opt.zero_grad()
     hyperlatent_likelihood_opt.zero_grad()
 
 def test(args, model, epoch, idx, data, test_data, test_bpp, device, epoch_test_loss, storage, best_test_loss, 
-         start_time, epoch_start_time, logger, train_writer, test_writer):
+         start_time, epoch_start_time, logger, train_writer, test_writer, grad_ema):
 
     model.eval()  
+
     with torch.no_grad():
         data = data.to(device, dtype=torch.float)
 
@@ -100,7 +113,6 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
     if model.use_discriminator is True:
         disc_opt = optimizers['disc']
 
-
     for epoch in trange(args.n_epochs, desc='Epoch'):
 
         epoch_loss, epoch_test_loss = [], []  
@@ -123,7 +135,7 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                     disc_loss = losses['disc']
 
                     if train_generator is True:
-                        optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
+                        optimize_compression_loss(model, losses, amortization_opt, hyperlatent_likelihood_opt)
                         train_generator = False
                     else:
                         optimize_loss(disc_loss, disc_opt)
@@ -138,7 +150,8 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                     # Rate, distortion, perceptual only
                     losses = model(data, train_generator=True)
                     compression_loss = losses['compression']
-                    optimize_compression_loss(compression_loss, amortization_opt, hyperlatent_likelihood_opt)
+                    optimize_compression_loss(model, losses, amortization_opt, hyperlatent_likelihood_opt,
+                            retain_graph=(model.step_counter % args.log_interval == 1))
 
             except KeyboardInterrupt:
                 # Note: saving not guaranteed!
@@ -150,6 +163,8 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                     return model, None
 
             if model.step_counter % args.log_interval == 1:
+
+
                 epoch_loss.append(compression_loss.item())
                 mean_epoch_loss = np.mean(epoch_loss)
 
@@ -163,7 +178,7 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
                     test_data, test_bpp = test_loader_iter.next()
 
                 best_test_loss, epoch_test_loss = test(args, model, epoch, idx, data, test_data, test_bpp, device, epoch_test_loss, storage_test,
-                     best_test_loss, start_time, epoch_start_time, logger, train_writer, test_writer)
+                     best_test_loss, start_time, epoch_start_time, logger, train_writer, test_writer, grad_ema)
 
                 with open(os.path.join(args.storage_save, 'storage_{}_tmp.pkl'.format(args.name)), 'wb') as handle:
                     pickle.dump(storage, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -216,7 +231,7 @@ if __name__ == '__main__':
         help="Type of model - with or without GAN component")
     general.add_argument("-regime", "--regime", choices=('low','med','high'), default='low', help="Set target bit rate - Low (0.14), Med (0.30), High (0.45)")
     general.add_argument("-gpu", "--gpu", type=int, default=0, help="GPU ID.")
-    general.add_argument("-log_intv", "--log_interval", type=int, default=5000, help="Number of steps between logs.")
+    general.add_argument("-log_intv", "--log_interval", type=int, default=1000, help="Number of steps between logs.")
     general.add_argument("-save_intv", "--save_interval", type=int, default=100000, help="Number of steps between checkpoints.")
     general.add_argument("-multigpu", "--multigpu", help="Toggle data parallel capability using torch DataParallel", action="store_true")
     general.add_argument("-norm", "--normalize_input_image", help="Normalize input images to [-1,1]", action="store_true")

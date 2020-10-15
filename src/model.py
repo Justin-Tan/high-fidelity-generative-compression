@@ -78,7 +78,7 @@ class Model(nn.Module):
 
         elif self.model_type == ModelTypes.COMPRESSION_VAE:
             # Higher capacity for tighter rate
-            if self.args.lambda_B <= 2**(-4):
+            if self.args.lambda_B < 2**(-3):
                 self.latent_channels = self.args.small_latent_channels
                 self.num_filters = self.args.small_filters
             else:
@@ -181,6 +181,11 @@ class Model(nn.Module):
 
         return intermediates, hyperinfo
 
+    def get_inference_gradients(self, inference_loss):
+
+        inference_grads = torch.autograd.grad(inference_loss, self.Hyperprior.analysis_net.parameters())
+        return inference_grads
+
     def discriminator_forward(self, intermediates, train_generator):
         """ Train on gen/real batches simultaneously. """
         x_gen = intermediates.reconstruction
@@ -271,8 +276,8 @@ class Model(nn.Module):
             self.store_loss('weighted_compression_loss_sans_G', weighted_compression_loss.item())
 
             if self.iw is True:
-                self.store_loss('n_latent_marginal', hyperinfo.latent_marginal_nbpp.item())
-                self.store_loss('q_latent_marginal', hyperinfo.latent_marginal_qbpp.item())
+                self.store_loss('n_rate_latent_marginal', hyperinfo.latent_marginal_nbpp.item())
+                self.store_loss('q_rate_latent_marginal', hyperinfo.latent_marginal_qbpp.item())
 
         return weighted_compression_loss
 
@@ -402,6 +407,9 @@ class Model(nn.Module):
             return reconstruction, intermediates.q_bpp
 
         compression_model_loss = self.compression_loss(intermediates, hyperinfo)
+
+        if self.iw is True:
+            losses['inference_loss'] = hyperinfo.latent_marginal_nbpp
 
         if self.use_discriminator is True:
             # Only send gradients to generator when training generator via

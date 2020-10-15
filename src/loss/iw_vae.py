@@ -50,31 +50,6 @@ class IWAE(nn.Module):
             # Reconstruction, return mean
             return mu
 
-    # def reparameterize_continuous(self, mu, sigma):
-    #     """
-    #     Sample from N(mu(x), Sigma(x)) as 
-    #     z | x ~ mu + Cholesky(Sigma(x)) * eps
-    #     eps ~ N(0,I_n)
-        
-    #     The variance is restricted to be diagonal,
-    #     so Cholesky(...) -> sqrt(...)
-    #     Parameters
-    #     ----------
-    #     mu     : torch.Tensor
-    #         Location parameter of Gaussian. (B, latent_dim)
-
-    #     logvar : torch.Tensor
-    #         Log of variance parameter of Gaussian. (B, latent_dim)
-
-    #     """
-    #     # sample = self.training
-    #     sample = True
-    #     if sample is True:
-    #         epsilon = torch.randn_like(sigma)
-    #         return mu + sigma * epsilon
-    #     else:
-    #         # Reconstruction, return mean
-    #         return mu
 
     def _estimate_entropy_log(self, log_likelihood, spatial_shape):
 
@@ -123,6 +98,8 @@ class IWAE(nn.Module):
         log_pz = torch.log(self.hyperlatent_prob_model(hyperlatent_sample) + EPS).sum(dim=(1,2,3), keepdim=True)
         log_qzCy = maths.log_density_gaussian(hyperlatent_sample, *hyperlatent_stats).sum(dim=(1,2,3), keepdim=True)
         log_pyCz = torch.log(self.latent_prob_model(latents, *latent_stats) + EPS).sum(dim=(1,2,3), keepdim=True)
+        #print(log_pyCz.shape)
+        #print(torch.mean(log_pyCz)/(-np.log(2) * 256 * 256))
 
         log_iw = log_pyCz + (log_pz - log_qzCy)
         log_iw = log_iw.reshape(B, self.num_i_samples) # [B, n]

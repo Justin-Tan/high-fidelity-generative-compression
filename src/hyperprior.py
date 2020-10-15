@@ -14,8 +14,8 @@ MIN_SCALE = 0.11
 LOG_SCALES_MIN = -3.
 MIN_LIKELIHOOD = 1e-9
 MAX_LIKELIHOOD = 1e3
-SMALL_HYPERLATENT_FILTERS = 192
-LARGE_HYPERLATENT_FILTERS = 256
+SMALL_HYPERLATENT_FILTERS = 128 # 192
+LARGE_HYPERLATENT_FILTERS = 192 # 256
 NUM_IMPORTANCE_SAMPLES = 4
 
 HyperInfo = namedtuple(
@@ -331,6 +331,7 @@ class Hyperprior(CodingModel):
 
         latent_params = self.synthesis_net(hyperlatents_decoded)  # [n*B, C_y, H_y, W_y]
         latent_means, latent_scales = torch.split(latent_params, self.bottleneck_capacity, dim=1)   
+        latent_scales = lower_bound_toward(F.softplus(latent_scales), self.scale_lower_bound)
 
         latents_decoded = self.quantize_latents_st(latents, latent_means)
 
@@ -363,7 +364,6 @@ class Hyperprior(CodingModel):
             quantized_latent_marginal = self.iwelbo(quantized_latents, hyperlatent_stats)
             quantized_latent_marginal_bits, quantized_latent_marginal_bpp = self._estimate_entropy_log(
                 quantized_latent_marginal, spatial_shape)
-
 
         info = HyperInfo(
             decoded=latents_decoded,
@@ -565,6 +565,8 @@ class HyperpriorDLMM(CodingModel):
             latent_qbpp=quantized_latent_bpp,
             hyperlatent_qbpp=quantized_hyperlatent_bpp,
             total_qbpp=quantized_latent_bpp + quantized_hyperlatent_bpp,
+            latent_marginal_nbpp=None,
+            latent_marginal_qbpp=None,
         )
 
         return info
