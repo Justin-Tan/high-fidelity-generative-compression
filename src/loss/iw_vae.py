@@ -10,7 +10,7 @@ lower_bound_toward = maths.LowerBoundToward.apply
 class IWAE(nn.Module):
 
     def __init__(self, bottleneck_capacity, latent_prob_model, hyperlatent_prob_model, hyperlatent_inference_net, 
-        synthesis_net, scale_lower_bound, num_i_samples=4, **kwargs):
+        synthesis_net, scale_lower_bound, num_i_samples=4, use_dreg=False, **kwargs):
         
         super(IWAE, self).__init__()
 
@@ -19,6 +19,7 @@ class IWAE(nn.Module):
         self.hyperlatent_prob_model = hyperlatent_prob_model
         self.hyperlatent_inference_net = hyperlatent_inference_net
         
+        self.use_dreg = True
         self.num_i_samples = num_i_samples
         self.scale_lower_bound = scale_lower_bound
         self.bottleneck_capacity = bottleneck_capacity
@@ -87,14 +88,14 @@ class IWAE(nn.Module):
         # print('after reshape', log_iw.shape)
         return log_iw #, log_iw_scalar
 
-    def marginal_estimate(self, latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs):
+    def _marginal_estimate(self, latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs):
     
         EPS = 1e-9  
         # [n*B, C_y, H_y, W_y]
         B, C_y, H_y, W_y = latents.size()
         latents = torch.repeat_interleave(latents, self.num_i_samples, dim=0)
 
-        # [n*B, C_y, H_y, W_y]
+        # [n*B, C_y, H_y, W_y] -> [n*B]
         log_pz = torch.log(self.hyperlatent_prob_model(hyperlatent_sample) + EPS).sum(dim=(1,2,3), keepdim=True)
         log_qzCy = maths.log_density_gaussian(hyperlatent_sample, *hyperlatent_stats).sum(dim=(1,2,3), keepdim=True)
         log_pyCz = torch.log(self.latent_prob_model(latents, *latent_stats) + EPS).sum(dim=(1,2,3), keepdim=True)
@@ -109,27 +110,40 @@ class IWAE(nn.Module):
 
         return iwelbo
 
-    def marginal_dreg_estimate(self, latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs):
-
+    def _marginal_dreg_estimate(self, latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs):
+        """
+        Doubly reparameterized gradient estimator.
+        """
         EPS = 1e-9  
         # [n*B, C_y, H_y, W_y]
         B, C_y, H_y, W_y = latents.size()
         latents = torch.repeat_interleave(latents, self.num_i_samples, dim=0)
 
-        # [n*B, C_y, H_y, W_y]
+        # [n*B, C_y, H_y, W_y] - > [n*B]
         log_pz = torch.log(self.hyperlatent_prob_model(hyperlatent_sample) + EPS).sum(dim=(1,2,3), keepdim=True)
-        log_qzCy = maths.log_density_gaussian(hyperlatent_sample, *hyperlatent_stats).sum(dim=(1,2,3), keepdim=True)
+        # Override gradients of inference network
+        log_qzCy = maths.log_density_gaussian(hyperlatent_sample, *[stat.detach() for stat in hyperlatent_stats]).sum(dim=(1,2,3), keepdim=True)
         log_pyCz = torch.log(self.latent_prob_model(latents, *latent_stats) + EPS).sum(dim=(1,2,3), keepdim=True)
 
-        log_iw = log_pyCz + (log_pz - log_qzCy)
-        log_iw = log_iw.reshape(B, self.num_i_samples) # [B, n]
+        log_iw_stop_phi = log_pyCz + (log_pz - log_qzCy)
+        log_iw_stop_phi = log_iw_stop_phi.reshape(B, self.num_i_samples) # [B, n]
 
-        # log_iw = self.get_importance_samples(latents, latent_stats, hyperlatent_sample, hyperlatent_stats)
-        iwelbo = torch.logsumexp(log_iw, dim=1) - np.log(self.num_i_samples)  # [B]
+        with torch.no_grad():
+            # normalized_weights = torch.exp(log_iw_stop_phi - torch.logsumexp(log_iw_stop_phi, dim=1, keepdim=True)).detach()
+            normalized_weights = F.softmax(log_iw_stop_phi, dim=1).detach()
+            if hyperlatent_sample.requires_grad:
+                hyperlatent_sample.register_hook(lambda grad: torch.reshape(normalized_weights, (batch_size * self.num_i_samples, 1)),  * grad)
 
-        return iwelbo
+        iw_dreg = torch.sum(normalized_weights * log_iw_stop_phi, dim=1)  # [B]
 
+        return iw_dreg
 
+    def marginal_estimate(self, latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs):
+        
+        if self.use_dreg is True:
+            return self._marginal_dreg_estimate(latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs)
+        else:
+            return self._marginal_estimate(latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs)
 
     def amortized_inference(self, latents, hyperlatent_stats, num_i_samples):
 
