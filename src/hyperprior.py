@@ -162,6 +162,7 @@ class Hyperprior(CodingModel):
         self.bottleneck_capacity = bottleneck_capacity
         self.scale_lower_bound = scale_lower_bound
         self.num_i_samples = NUM_IMPORTANCE_SAMPLES
+        self.gaussian_hyperlatent_posterior = gaussian_hyperlatent_posterior
 
         analysis_net = hyper.HyperpriorAnalysis
         synthesis_net = hyper.HyperpriorSynthesis
@@ -173,7 +174,7 @@ class Hyperprior(CodingModel):
 
         self.hyperlatent_filters = hyperlatent_filters
         self.analysis_net = analysis_net(C=bottleneck_capacity, N=hyperlatent_filters,
-            gaussian_inference_net=gaussian_hyperlatent_posterior)
+            gaussian_inference_net=self.gaussian_hyperlatent_posterior)
         self.synthesis_net = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters,
             gaussian_inference_net=True)
         self.amortization_models = [self.analysis_net, self.synthesis_net]
@@ -210,6 +211,11 @@ class Hyperprior(CodingModel):
 
         # Obtain hyperlatents from hyperencoder
         hyperlatents = self.analysis_net(latents)
+
+        if self.gaussian_hyperlatent_posterior is True:
+            hyperlatents, hyperlatent_logvar = torch.split(hyperlatentd, self.hyperlatent_filters, dim=1)
+            hyperlatent_stats = (hyperlatents, hyperlatent_logvar)
+
         hyperlatent_spatial_shape = hyperlatents.size()[2:]
         batch_shape = latents.size(0)
 
