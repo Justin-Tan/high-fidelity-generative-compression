@@ -22,7 +22,7 @@ HyperInfo = namedtuple(
     "HyperInfo",
     "decoded "
     "latent_nbpp hyperlatent_nbpp total_nbpp latent_qbpp hyperlatent_qbpp total_qbpp "
-    "latent_marginal_nbpp latent_marginal_qbpp",
+    "latent_marginal_nbpp latent_marginal_qbpp hyperlatent_entropy_qbpp",
 )
 
 CompressionOutput = namedtuple("CompressionOutput",
@@ -213,7 +213,7 @@ class Hyperprior(CodingModel):
         hyperlatents = self.analysis_net(latents)
 
         if self.gaussian_hyperlatent_posterior is True:
-            hyperlatents, hyperlatent_logvar = torch.split(hyperlatentd, self.hyperlatent_filters, dim=1)
+            hyperlatents, hyperlatent_logvar = torch.split(hyperlatents, self.hyperlatent_filters, dim=1)
             hyperlatent_stats = (hyperlatents, hyperlatent_logvar)
 
         hyperlatent_spatial_shape = hyperlatents.size()[2:]
@@ -359,6 +359,7 @@ class Hyperprior(CodingModel):
 
         # Discrete entropy, latents
         quantized_latent_bpp, quantized_latent_marginal_bpp = torch.Tensor([0.]), torch.Tensor([0.])
+        hyperlatent_entropy_qbpp = torch.Tensor([0.])
         if evaluate_qbpp is True:
             quantized_latents = self._quantize(latents, mode='quantize', means=latent_means)
             quantized_latent_likelihood = self.latent_likelihood(quantized_latents, mean=latent_means,
@@ -371,6 +372,12 @@ class Hyperprior(CodingModel):
             quantized_latent_marginal_bits, quantized_latent_marginal_bpp = self._estimate_entropy_log(
                 quantized_latent_marginal, spatial_shape)
 
+            hyperlatent_sample = self.iwelbo.reparameterize_continuous(*hyperlatent_stats)
+            log_qzCy = maths.log_density_gaussian(quantized_hyperlatents, *hyperlatent_stats).sum(dim=(1,2,3), keepdim=True)
+            quantized_hyperlatent_entropy_bits, hyperlatent_entropy_qbpp = self._estimate_entropy_log(
+                log_qzCy, spatial_shape)
+
+
         info = HyperInfo(
             decoded=latents_decoded,
             latent_nbpp=noisy_latent_bpp,
@@ -381,6 +388,7 @@ class Hyperprior(CodingModel):
             total_qbpp=quantized_latent_bpp.to(quantized_hyperlatent_bpp) + quantized_hyperlatent_bpp,
             latent_marginal_nbpp=noisy_latent_marginal_bpp,
             latent_marginal_qbpp=quantized_latent_marginal_bpp,
+            hyperlatent_entropy_qbpp=hyperlatent_entropy_qbpp,
         )
 
         return info
