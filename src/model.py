@@ -93,7 +93,7 @@ class Model(nn.Module):
 
         self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.latent_channels,
             likelihood_type=self.args.likelihood_type, entropy_code=self.entropy_code,
-            gaussian_hyperlatent_posterior=self.iw)
+            gaussian_hyperlatent_posterior=self.iw, num_i_samples=self.args.num_i_samples)
 
         self.amortization_models = [self.Encoder, self.Generator]
         self.amortization_models.extend(self.Hyperprior.amortization_models)

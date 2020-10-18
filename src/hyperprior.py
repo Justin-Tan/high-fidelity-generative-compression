@@ -147,7 +147,8 @@ class Hyperprior(CodingModel):
     
     def __init__(self, bottleneck_capacity=220, hyperlatent_filters=LARGE_HYPERLATENT_FILTERS, 
         mode='large', likelihood_type='gaussian', scale_lower_bound=MIN_SCALE, entropy_code=False,
-        vectorize_encoding=True, block_encode=True, gaussian_hyperlatent_posterior=False):
+        vectorize_encoding=True, block_encode=True, gaussian_hyperlatent_posterior=False,
+        num_i_samples=4, **kwargs):
 
         """
         Introduces probabilistic model over latents of 
@@ -161,7 +162,7 @@ class Hyperprior(CodingModel):
         
         self.bottleneck_capacity = bottleneck_capacity
         self.scale_lower_bound = scale_lower_bound
-        self.num_i_samples = NUM_IMPORTANCE_SAMPLES
+        self.num_i_samples = num_i_samples
         self.gaussian_hyperlatent_posterior = gaussian_hyperlatent_posterior
 
         analysis_net = hyper.HyperpriorAnalysis
@@ -186,7 +187,8 @@ class Hyperprior(CodingModel):
 
         if gaussian_hyperlatent_posterior is True:
             self.iwelbo = iw_vae.IWAE(self.bottleneck_capacity, self.latent_likelihood, self.hyperlatent_likelihood,
-                self.analysis_net, self.synthesis_net, scale_lower_bound=self.scale_lower_bound)
+                self.analysis_net, self.synthesis_net, scale_lower_bound=self.scale_lower_bound, 
+                num_i_samples=self.num_i_samples)
 
         if likelihood_type == 'gaussian':
             self.standardized_CDF = maths.standardized_CDF_gaussian
