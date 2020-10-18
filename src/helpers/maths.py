@@ -2,6 +2,8 @@ import torch
 import numpy as np
 import scipy.stats
 
+EPS = 1e-8
+
 def pmf_to_quantized_cdf(pmf, precision, careful=True):
     """
     Based on https://github.com/rygorous/ryg_rans/blob/master/main64.cpp
@@ -222,3 +224,63 @@ def matrix_log_density_gaussian(x, mu, logvar):
 
     return log_density_gaussian(x, mu, logvar)
 
+class FactorialNormalizingFlow(nn.Module):
+
+    def __init__(self, dim, nsteps=32, flow_type='planar'):
+        super(FactorialNormalizingFlow, self).__init__()
+        self.dim = dim
+        self.nsteps = nsteps
+        self.scale = nn.Parameter(torch.Tensor(self.nsteps, self.dim))
+        self.weight = nn.Parameter(torch.Tensor(self.nsteps, self.dim))
+        self.bias = nn.Parameter(torch.Tensor(self.nsteps, self.dim))
+
+        self.reset_parameters()
+
+        self.register_parameter('scale', self.scale)
+        self.register_parameter('weight', self.weight)
+        self.register_parameter('bias', self.bias)
+
+        if (flow_type=='planar'):
+            self.flow = self.planar_flow
+
+    def reset_parameters(self):
+        self.scale.data.normal_(0, 0.02)
+        self.weight.data.normal_(0, 0.02)
+        self.bias.data.normal_(0, 0.02)
+
+    def planar_flow(self, x, logdetgrad=None):
+
+        for i in range(self.nsteps):
+            u = self.scale[i][None]
+            w = self.weight[i][None]
+            b = self.bias[i][None]
+            act = torch.tanh(x * w + b)
+            x = x + u * act
+
+            if logdetgrad is not None:
+                logdetgrad = logdetgrad + torch.log(torch.abs(1 + u * (1 - act.pow(2)) * w) + EPS)
+
+        if logdetgrad is not None:
+            return x, logdetgrad
+        
+        return x
+
+    def sample(self, batch_size):
+        # Sample from standard normal,
+        # pass through planar flow
+        # TODO: try radial flow
+
+        z_0 = torch.randn([batch_size, self.dim])
+        z_K = self.planar_flow(z_0)
+        return z_K
+
+    def forward(self, y, params=None, **kwargs):
+        assert(y.size(1) == self.dim)
+        x = y
+        logdetgrad = torch.zeros(y.size(), requires_grad=True).type_as(y.data)
+        x, logdetgrad = self.planar_flow(x, logdetgrad)
+
+        zeros = torch.zeros_like(x)
+        logpx = log_density_gaussian(x, mu=zeros, logvar=zeros)
+        logpy = logpx - logdetgrad 
+        return logpy

@@ -265,10 +265,10 @@ class HyperpriorDensity(nn.Module):
     """
 
     def __init__(self, n_channels, init_scale=10., filters=(3, 3, 3), min_likelihood=MIN_LIKELIHOOD, 
-        max_likelihood=MAX_LIKELIHOOD, **kwargs):
+        max_likelihood=MAX_LIKELIHOOD, flow_hyperprior=False, **kwargs):
         """
-        init_scale: Scaling factor determining the initial width of the
-      a-              probability densities.
+        init_scale: Scaling factor determining the initial width of the 
+                    probability densities.
         filters:    Number of filters at each layer < K
                     of the density model. Default K=4 layers.
         """
@@ -284,23 +284,29 @@ class HyperpriorDensity(nn.Module):
         filters = (1,) + self.filters + (1,)
         scale = self.init_scale ** (1 / (len(self.filters) + 1))
 
-        # Define univariate density model 
-        for k in range(len(self.filters)+1):
-            
-            # Weights
-            H_init = np.log(np.expm1(1 / scale / filters[k + 1]))
-            H_k = nn.Parameter(torch.ones((n_channels, filters[k+1], filters[k])))  # apply softmax for non-negativity
-            torch.nn.init.constant_(H_k, H_init)
-            self.register_parameter('H_{}'.format(k), H_k)
+        if flow_hyperprior is True:
+            flow_steps = 16
+            self.flow_hyperprior = maths.FactorialNormalizingFlow(dim=self.n_channels, nsteps=flow_steps)
 
-            # Scale factors
-            a_k = nn.Parameter(torch.zeros((n_channels, filters[k+1], 1)))
-            self.register_parameter('a_{}'.format(k), a_k)
+        else:
 
-            # Biases
-            b_k = nn.Parameter(torch.zeros((n_channels, filters[k+1], 1)))
-            torch.nn.init.uniform_(b_k, -0.5, 0.5)
-            self.register_parameter('b_{}'.format(k), b_k)
+            # Define univariate density model 
+            for k in range(len(self.filters)+1):
+                
+                # Weights
+                H_init = np.log(np.expm1(1 / scale / filters[k + 1]))
+                H_k = nn.Parameter(torch.ones((n_channels, filters[k+1], filters[k])))  # apply softmax for non-negativity
+                torch.nn.init.constant_(H_k, H_init)
+                self.register_parameter('H_{}'.format(k), H_k)
+
+                # Scale factors
+                a_k = nn.Parameter(torch.zeros((n_channels, filters[k+1], 1)))
+                self.register_parameter('a_{}'.format(k), a_k)
+
+                # Biases
+                b_k = nn.Parameter(torch.zeros((n_channels, filters[k+1], 1)))
+                torch.nn.init.uniform_(b_k, -0.5, 0.5)
+                self.register_parameter('b_{}'.format(k), b_k)
 
     def cdf_logits(self, x, update_parameters=True):
         """
@@ -319,9 +325,7 @@ class HyperpriorDensity(nn.Module):
 
             if update_parameters is False:
                 H_k, a_k, b_k = H_k.detach(), a_k.detach(), b_k.detach()
-
-            print('LOGITS', logits.shape)
-            print('HK', H_k.shape)
+                
             logits = torch.bmm(F.softplus(H_k), logits)  # [C,filters[k+1],*]
             logits = logits + b_k
             logits = logits + torch.tanh(a_k) * torch.tanh(logits)
@@ -362,8 +366,6 @@ class HyperpriorDensity(nn.Module):
             latents = latents.permute(1,0,2,3)
             shape = latents.shape
             latents = torch.reshape(latents, (shape[0],1,-1))
-
-        print('FF', latents.shape)
 
         cdf_upper = self.cdf_logits(latents + 0.5)
         cdf_lower = self.cdf_logits(latents - 0.5)
