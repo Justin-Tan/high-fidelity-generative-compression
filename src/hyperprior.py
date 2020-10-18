@@ -309,7 +309,7 @@ class Hyperprior(CodingModel):
         hyperlatent_stats = (hyperlatent_mu, hyperlatent_logvar)
 
         # Differential entropy, hyperlatents
-        noisy_hyperlatents = self._quantize(hyperlatent_mu, mode='noise')
+        noisy_hyperlatents = hyperlatent_mu  # self._quantize(hyperlatent_mu, mode='noise')
         noisy_hyperlatent_likelihood = self.hyperlatent_likelihood(noisy_hyperlatents)
         noisy_hyperlatent_bits, noisy_hyperlatent_bpp = self._estimate_entropy(
             noisy_hyperlatent_likelihood, spatial_shape)
@@ -445,6 +445,7 @@ class Hyperprior(CodingModel):
             total_qbpp=quantized_latent_bpp + quantized_hyperlatent_bpp,
             latent_marginal_nbpp=None,
             latent_marginal_qbpp=None,
+            hyperlatent_entropy_qbpp=None,
         )
 
         return info

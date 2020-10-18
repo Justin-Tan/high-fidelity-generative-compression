@@ -240,6 +240,7 @@ if __name__ == '__main__':
     general.add_argument("-lt", "--likelihood_type", choices=('gaussian', 'logistic'), default='gaussian', help="Likelihood model for latents.")
     general.add_argument("-force_gpu", "--force_set_gpu", help="Set GPU to given ID", action="store_true")
     general.add_argument("-LMM", "--use_latent_mixture_model", help="Use latent mixture model as latent entropy model.", action="store_true")
+    general.add_argument("-iw", "--importance_weighting", help="Use importance weighting in R-D objective.", action="store_true")
 
     # Optimization-related options
     optim_args = parser.add_argument_group("Optimization-related options")

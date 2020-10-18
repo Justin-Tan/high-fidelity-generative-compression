@@ -63,6 +63,8 @@ class args(object):
     small_filters = 128
     large_latent_channels = 256
     large_filters = 128 # 192
+    importance_weighting = False
+    num_i_samples = 8
 
     # Shapes
     crop_size = 256

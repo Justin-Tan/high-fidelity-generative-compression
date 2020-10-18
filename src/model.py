@@ -49,7 +49,7 @@ class Model(nn.Module):
         self.storage_train = storage_train
         self.storage_test = storage_test
         self.step_counter = 0
-        self.iw = True
+        self.iw = self.args.importance_weighting
 
         if self.args.use_latent_mixture_model is True:
             self.args.latent_channels = self.args.latent_channels_DLMM
