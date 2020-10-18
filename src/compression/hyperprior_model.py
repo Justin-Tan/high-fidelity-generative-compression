@@ -265,7 +265,7 @@ class HyperpriorDensity(nn.Module):
     """
 
     def __init__(self, n_channels, init_scale=10., filters=(3, 3, 3), min_likelihood=MIN_LIKELIHOOD, 
-        max_likelihood=MAX_LIKELIHOOD, flow_hyperprior=False, **kwargs):
+        max_likelihood=MAX_LIKELIHOOD, use_flow_hyperprior=False, **kwargs):
         """
         init_scale: Scaling factor determining the initial width of the 
                     probability densities.
@@ -280,11 +280,12 @@ class HyperpriorDensity(nn.Module):
         self.max_likelihood = float(max_likelihood)
         self.n_channels = n_channels
         self.dtype = torch.float32
+        self.use_flow_hyperprior = use_flow_hyperprior
 
         filters = (1,) + self.filters + (1,)
         scale = self.init_scale ** (1 / (len(self.filters) + 1))
 
-        if flow_hyperprior is True:
+        if use_flow_hyperprior is True:
             flow_steps = 16
             self.flow_hyperprior = maths.FactorialNormalizingFlow(dim=self.n_channels, nsteps=flow_steps)
 
@@ -325,7 +326,7 @@ class HyperpriorDensity(nn.Module):
 
             if update_parameters is False:
                 H_k, a_k, b_k = H_k.detach(), a_k.detach(), b_k.detach()
-                
+
             logits = torch.bmm(F.softplus(H_k), logits)  # [C,filters[k+1],*]
             logits = logits + b_k
             logits = logits + torch.tanh(a_k) * torch.tanh(logits)
@@ -391,7 +392,11 @@ class HyperpriorDensity(nn.Module):
         return likelihood_
 
     def forward(self, x, **kwargs):
-        return self.likelihood(x)
+
+        if self.use_flow_hyperprior is True:
+            return lower_bound_toward(self.flow_hyperprior(x), np.log(self.min_likelihood))
+        else:
+            return self.likelihood(x)
 
 
 if __name__ == '__main__':

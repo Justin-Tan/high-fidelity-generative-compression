@@ -183,7 +183,8 @@ class Hyperprior(CodingModel):
         # self.synthesis_std = synthesis_net(C=bottleneck_capacity, N=hyperlatent_filters)
         # self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
-        self.hyperlatent_likelihood = hyperprior_model.HyperpriorDensity(n_channels=hyperlatent_filters)
+        self.hyperlatent_likelihood = hyperprior_model.HyperpriorDensity(n_channels=hyperlatent_filters,
+            use_flow_hyperprior=self.gaussian_hyperlatent_posterior)
 
         if gaussian_hyperlatent_posterior is True:
             self.iwelbo = iw_vae.IWAE(self.bottleneck_capacity, self.latent_likelihood, self.hyperlatent_likelihood,
@@ -313,13 +314,13 @@ class Hyperprior(CodingModel):
         # Differential entropy, hyperlatents
         noisy_hyperlatents = hyperlatent_mu  # self._quantize(hyperlatent_mu, mode='noise')
         noisy_hyperlatent_likelihood = self.hyperlatent_likelihood(noisy_hyperlatents)
-        noisy_hyperlatent_bits, noisy_hyperlatent_bpp = self._estimate_entropy(
+        noisy_hyperlatent_bits, noisy_hyperlatent_bpp = self._estimate_entropy_log(
             noisy_hyperlatent_likelihood, spatial_shape)
 
         # Discrete entropy, hyperlatents
         quantized_hyperlatents = self._quantize(hyperlatent_mu, mode='quantize')
         quantized_hyperlatent_likelihood = self.hyperlatent_likelihood(quantized_hyperlatents)
-        quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy(
+        quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy_log(
             quantized_hyperlatent_likelihood, spatial_shape)
 
         if self.training is True:

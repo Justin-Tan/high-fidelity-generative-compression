@@ -231,7 +231,7 @@ if __name__ == '__main__':
         help="Type of model - with or without GAN component")
     general.add_argument("-regime", "--regime", choices=('low','med','high'), default='low', help="Set target bit rate - Low (0.14), Med (0.30), High (0.45)")
     general.add_argument("-gpu", "--gpu", type=int, default=0, help="GPU ID.")
-    general.add_argument("-log_intv", "--log_interval", type=int, default=5000, help="Number of steps between logs.")
+    general.add_argument("-log_intv", "--log_interval", type=int, default=100, help="Number of steps between logs.")
     general.add_argument("-save_intv", "--save_interval", type=int, default=100000, help="Number of steps between checkpoints.")
     general.add_argument("-multigpu", "--multigpu", help="Toggle data parallel capability using torch DataParallel", action="store_true")
     general.add_argument("-norm", "--normalize_input_image", help="Normalize input images to [-1,1]", action="store_true")
@@ -307,7 +307,8 @@ if __name__ == '__main__':
             [am.parameters() for am in model.amortization_models])
 
         hyperlatent_likelihood_parameters = model.Hyperprior.hyperlatent_likelihood.parameters()
-
+        print('INWOEFGRBLV')
+        print([p for p in hyperlatent_likelihood_parameters])
         amortization_opt = torch.optim.Adam(amortization_parameters,
             lr=args.learning_rate)
         hyperlatent_likelihood_opt = torch.optim.Adam(hyperlatent_likelihood_parameters, 

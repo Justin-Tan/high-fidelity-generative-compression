@@ -275,6 +275,7 @@ class FactorialNormalizingFlow(nn.Module):
         return z_K
 
     def forward(self, y, params=None, **kwargs):
+        print('AAAAAAA')
         assert(y.size(1) == self.dim)
         x = y
         logdetgrad = torch.zeros(y.size(), requires_grad=True).type_as(y.data)
