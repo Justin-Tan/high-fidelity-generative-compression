@@ -120,8 +120,8 @@ class IWAE(nn.Module):
         latents = torch.repeat_interleave(latents, self.num_i_samples, dim=0)
 
         # [n*B, C_y, H_y, W_y] - > [n*B]
-        # log_pz = torch.log(self.hyperlatent_prob_model(hyperlatent_sample) + EPS).sum(dim=(1,2,3), keepdim=True)
-        log_pz = self.hyperlatent_prob_model(hyperlatent_sample).sum(dim=(1,2,3), keepdim=True)
+        log_pz = torch.log(self.hyperlatent_prob_model(hyperlatent_sample) + EPS).sum(dim=(1,2,3), keepdim=True)
+        # log_pz = self.hyperlatent_prob_model(hyperlatent_sample).sum(dim=(1,2,3), keepdim=True)
 
         # Override gradients of inference network
         log_qzCy = maths.log_density_gaussian(hyperlatent_sample, *[stat.detach() for stat in hyperlatent_stats]).sum(dim=(1,2,3), keepdim=True)

@@ -313,15 +313,21 @@ class Hyperprior(CodingModel):
 
         # Differential entropy, hyperlatents
         noisy_hyperlatents = hyperlatent_mu  # self._quantize(hyperlatent_mu, mode='noise')
+        # noisy_hyperlatents = self._quantize(hyperlatent_mu, mode='noise')
         noisy_hyperlatent_likelihood = self.hyperlatent_likelihood(noisy_hyperlatents)
-        noisy_hyperlatent_bits, noisy_hyperlatent_bpp = self._estimate_entropy_log(
+        noisy_hyperlatent_bits, noisy_hyperlatent_bpp = self._estimate_entropy(
             noisy_hyperlatent_likelihood, spatial_shape)
 
         # Discrete entropy, hyperlatents
         quantized_hyperlatents = self._quantize(hyperlatent_mu, mode='quantize')
         quantized_hyperlatent_likelihood = self.hyperlatent_likelihood(quantized_hyperlatents)
-        quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy_log(
+        quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy(
             quantized_hyperlatent_likelihood, spatial_shape)
+
+        # print('H NL', noisy_hyperlatent_likelihood.mean().item())
+        # print('H QL', quantized_hyperlatent_likelihood.mean().item())
+        #print('H NPP', noisy_hyperlatent_bpp.item())
+        #print('H QPP', quantized_hyperlatent_bpp.item())
 
         if self.training is True:
             hyperlatents_decoded = noisy_hyperlatents
