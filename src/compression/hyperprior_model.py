@@ -333,6 +333,154 @@ class HyperpriorDensity(nn.Module):
 
         return logits
 
+
+    def manual_pdf(self, x, update_parameters=True, collapsed_format=False):
+        """
+        Evaluate logits of the cumulative densities.
+        Independent univariate density model for each dimension,
+        calculated manually via the gradient of the CDF.
+        """
+        # Converts latents to (C,1,*) format
+
+        if collapsed_format is False:
+            N, C, H, W = x.size()
+            x = x.permute(1,0,2,3)
+            shape = x.shape
+            x = torch.reshape(x, (shape[0],1,-1))
+
+        logits = x
+
+        pdf = None
+
+        for k in range(len(self.filters)+1):
+            H_k = getattr(self, 'H_{}'.format(str(k)))  # Weight
+            a_k = getattr(self, 'a_{}'.format(str(k)))  # Scale
+            b_k = getattr(self, 'b_{}'.format(str(k)))  # Bias
+
+            if update_parameters is False:
+                H_k, a_k, b_k = H_k.detach(), a_k.detach(), b_k.detach()
+
+            logits = torch.bmm(F.softplus(H_k), logits) + b_k  # [C,filters[k+1],*]
+            factor, nonlinearity = torch.tanh(a_k), torch.tanh(logits)
+            # g_k transformation
+            logits = logits + factor * nonlinearity
+
+            if k < len(self.filters):
+                if pdf is None:
+                    # k = 1: H_1 : [C, f2, 1]
+                    g_grad = (1. + factor * (1. - torch.square(nonlinearity)))  # [C, f2, *]
+                    g_grad = g_grad.permute(2,0,1).unsqueeze(-1)  # [*, C, f2, 1]
+                    jacobian = g_grad * H_k  # [*, C, f2, 1]
+                    pdf = jacobian
+                else:
+                    # k > 1: H_k : [C, f[k+1], f[k]]
+                    g_grad = (1. + factor * (1. - torch.square(nonlinearity)))  # [C, f[k+1], *]
+                    # diag(g_grad) @ H_k
+                    g_grad = g_grad.permute(2,0,1).unsqueeze(-1)  # [*, C, f[k+1], 1]
+                    jacobian = g_grad * H_k  # [*, C, f[k+1], f[k]]
+                    pdf = torch.einsum('bcfg,bcgh->bcfh', (jacobian,pdf))
+                    _, C, A, B = jacobian.shape
+                    _, __, D, ___ = pdf.shape
+                    pdf = torch.bmm(jacobian.view(N*H*W*C, A, B), pdf.view(N*H*W*C, D, 1))
+
+            else:
+                # [C, f[K], *]
+                cdf = torch.sigmoid(logits)
+                final_grad = cdf * (1. - cdf)
+                final_grad = final_grad.permute(2,0,1).unsqueeze(-1)  # [*, C, f[K], 1]
+                jacobian = final_grad * H_k  # [*, C, 1, f[K]]
+                pdf = torch.einsum('bcfg,bcgh->bcfh', (jacobian,pdf))  # [*, C, 1, 1]
+
+        pdf = torch.squeeze(pdf, dim=-1)  # [*, C, 1]
+        pdf = pdf.permute(1,2,0)  # [C, *, 1]
+
+        likelihood_ = lower_bound_toward(pdf, self.min_likelihood)
+
+        if collapsed_format is True:
+            return likelihood_
+
+        # Reshape to (N,C,H,W)
+        likelihood_ = torch.reshape(likelihood_, shape)
+        likelihood_ = likelihood_.permute(1,0,2,3)
+
+        return logits, likelihood_
+
+    def manual_pdf(self, x, update_parameters=True, collapsed_format=False):
+        """
+        Evaluate logits of the cumulative densities.
+        Independent univariate density model for each dimension,
+        calculated manually via the gradient of the CDF.
+        """
+        # Converts latents to (C,1,*) format
+
+        if collapsed_format is False:
+            N, C, H, W = x.size()
+            x = x.permute(1,0,2,3)
+            shape = x.shape
+            x = torch.reshape(x, (shape[0],1,-1))
+
+        logits = x
+
+        pdf = None
+
+        for k in range(len(self.filters)+1):
+            H_k = getattr(self, 'H_{}'.format(str(k)))  # Weight
+            a_k = getattr(self, 'a_{}'.format(str(k)))  # Scale
+            b_k = getattr(self, 'b_{}'.format(str(k)))  # Bias
+
+            if update_parameters is False:
+                H_k, a_k, b_k = H_k.detach(), a_k.detach(), b_k.detach()
+
+            logits = torch.bmm(F.softplus(H_k), logits) + b_k  # [C,filters[k+1],*]
+ 
+            if k < len(self.filters):
+                factor, nonlinearity = torch.tanh(a_k), torch.tanh(logits)
+                # g_k transformation
+                logits = logits + factor * nonlinearity
+                g_grad = (1. + factor * (1. - torch.square(nonlinearity)))  # [C, f2, *]
+
+                else:
+                    # k > 1: H_k : [C, f[k+1], f[k]]
+                    g_grad = (1. + factor * (1. - torch.square(nonlinearity)))  # [C, f[k+1], *]
+                    # diag(g_grad) @ H_k
+                    g_grad = g_grad.permute(2,0,1).unsqueeze(-1)  # [*, C, f[k+1], 1]
+                    jacobian = g_grad * H_k  # [*, C, f[k+1], f[k]]
+                    pdf = torch.einsum('bcfg,bcgh->bcfh', (jacobian,pdf))
+                    _, C, A, B = jacobian.shape
+                    _, __, D, ___ = pdf.shape
+                    pdf = torch.bmm(jacobian.view(N*H*W*C, A, B), pdf.view(N*H*W*C, D, 1))
+
+
+            else:
+                # [C, f[K], *]
+                cdf = torch.sigmoid(logits)
+                g_grad = cdf * (1. - cdf)
+
+            g_grad = g_grad.permute(2,0,1).unsqueeze(-1)  # [*, C, f2, 1]
+            jacobian = g_grad * H_k  # [*, C, f2, 1]
+
+            if pdf is None:
+                pdf = jacobian
+            else:
+                # pdf = torch.einsum('bcfg,bcgh->bcfh', (jacobian,pdf))
+                _, C, rk, dk = jacobian.shape
+                pdf = torch.bmm(jacobian.view(N*H*W*C, rk, dk), pdf.view(N*H*W*C, dk, 1))
+                pdf = pdf.view(N*W*H, C, rk, 1)
+
+        pdf = torch.squeeze(pdf, dim=-1)  # [*, C, 1]
+        pdf = pdf.permute(1,2,0)  # [C, *, 1]
+
+        likelihood_ = lower_bound_toward(pdf, self.min_likelihood)
+
+        if collapsed_format is True:
+            return likelihood_
+
+        # Reshape to (N,C,H,W)
+        likelihood_ = torch.reshape(likelihood_, shape)
+        likelihood_ = likelihood_.permute(1,0,2,3)
+
+        return logits, likelihood_
+
     def quantization_offset(self, **kwargs):
         return 0.
 
@@ -353,6 +501,30 @@ class HyperpriorDensity(nn.Module):
         _median = compression_utils.estimate_tails(cdf_logits_func, target=0., 
             shape=torch.Size((self.n_channels,1,1))).detach()
         return _median.reshape(self.n_channels)
+
+    def cdf_logits(self, x, update_parameters=True):
+        """
+        Evaluate logits of the cumulative densities. 
+        Independent density model for each channel.
+
+        x:  The values at which to evaluate the cumulative densities.
+            torch.Tensor - shape `(C, 1, *)`.
+        """
+        logits = x
+
+        for k in range(len(self.filters)+1):
+            H_k = getattr(self, 'H_{}'.format(str(k)))  # Weight
+            a_k = getattr(self, 'a_{}'.format(str(k)))  # Scale
+            b_k = getattr(self, 'b_{}'.format(str(k)))  # Bias
+
+            if update_parameters is False:
+                H_k, a_k, b_k = H_k.detach(), a_k.detach(), b_k.detach()
+
+            logits = torch.bmm(F.softplus(H_k), logits)  # [C,filters[k+1],*]
+            logits = logits + b_k
+            logits = logits + torch.tanh(a_k) * torch.tanh(logits)
+
+        return logits
 
     def likelihood(self, x, collapsed_format=False, **kwargs):
         """
