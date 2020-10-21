@@ -17,6 +17,7 @@ MAX_LIKELIHOOD = 1e3
 SMALL_HYPERLATENT_FILTERS = 128 # 192
 LARGE_HYPERLATENT_FILTERS = 192 # 256
 NUM_IMPORTANCE_SAMPLES = 4
+VARIANCE_UPPERBOUND = 1e1
 
 HyperInfo = namedtuple(
     "HyperInfo",
@@ -184,7 +185,7 @@ class Hyperprior(CodingModel):
         # self.amortization_models = [self.analysis_net, self.synthesis_mu, self.synthesis_std]
 
         self.hyperlatent_likelihood = hyperprior_model.HyperpriorDensity(n_channels=hyperlatent_filters,
-            use_flow_hyperprior=self.gaussian_hyperlatent_posterior)
+            use_iw=self.gaussian_hyperlatent_posterior)
 
         if gaussian_hyperlatent_posterior is True:
             self.iwelbo = iw_vae.IWAE(self.bottleneck_capacity, self.latent_likelihood, self.hyperlatent_likelihood,
@@ -312,18 +313,23 @@ class Hyperprior(CodingModel):
         hyperlatent_stats = (hyperlatent_mu, hyperlatent_logvar)
 
         # Differential entropy, hyperlatents
-        noisy_hyperlatents = hyperlatent_mu  # self._quantize(hyperlatent_mu, mode='noise')
+        # noisy_hyperlatents = hyperlatent_mu  # self._quantize(hyperlatent_mu, mode='noise')
+        noisy_hyperlatents = self.iwelbo.reparameterize_continuous(mu=hyperlatent_mu,
+            logvar=hyperlatent_logvar)
         # noisy_hyperlatents = self._quantize(hyperlatent_mu, mode='noise')
-        noisy_hyperlatent_likelihood = self.hyperlatent_likelihood(noisy_hyperlatents)
+        noisy_hyperlatent_likelihood = self.hyperlatent_likelihood(noisy_hyperlatents)  # p(z)
         noisy_hyperlatent_bits, noisy_hyperlatent_bpp = self._estimate_entropy(
             noisy_hyperlatent_likelihood, spatial_shape)
 
         # Discrete entropy, hyperlatents
-        quantized_hyperlatents = self._quantize(hyperlatent_mu, mode='quantize')
-        quantized_hyperlatent_likelihood = self.hyperlatent_likelihood(quantized_hyperlatents)
-        quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy(
-            quantized_hyperlatent_likelihood, spatial_shape)
+        # quantized_hyperlatents = self._quantize(hyperlatent_mu, mode='quantize')
+        # quantized_hyperlatent_likelihood = self.hyperlatent_likelihood(quantized_hyperlatents)
+        # quantized_hyperlatent_bits, quantized_hyperlatent_bpp = self._estimate_entropy(
+        #     quantized_hyperlatent_likelihood, spatial_shape)
 
+        # BB coding can have arbitrary discretization for hyperlatents
+        quantized_hyperlatents = noisy_hyperlatents
+        quantized_hyperlatent_bits, quantized_hyperlatent_bpp = noisy_hyperlatent_bits, noisy_hyperlatent_bpp
         # print('H NL', noisy_hyperlatent_likelihood.mean().item())
         # print('H QL', quantized_hyperlatent_likelihood.mean().item())
         #print('H NPP', noisy_hyperlatent_bpp.item())
@@ -368,7 +374,13 @@ class Hyperprior(CodingModel):
 
         # Discrete entropy, latents
         quantized_latent_bpp, quantized_latent_marginal_bpp = torch.Tensor([0.]), torch.Tensor([0.])
-        hyperlatent_entropy_qbpp = torch.Tensor([0.])
+
+        # Quantization irrelevant for BB coding
+        log_qzCy = maths.log_density_gaussian(quantized_hyperlatents, *hyperlatent_stats).sum(dim=(1,2,3), keepdim=True)
+        quantized_hyperlatent_entropy_bits, hyperlatent_entropy_qbpp = self._estimate_entropy_log(
+            log_qzCy, spatial_shape)
+        hyperlatent_entropy_nbpp = hyperlatent_entropy_qbpp
+
         if evaluate_qbpp is True:
             quantized_latents = self._quantize(latents, mode='quantize', means=latent_means)
             quantized_latent_likelihood = self.latent_likelihood(quantized_latents, mean=latent_means,
@@ -376,25 +388,18 @@ class Hyperprior(CodingModel):
             quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(
                 quantized_latent_likelihood, spatial_shape)
 
-            quantized_latents = self._quantize(latents, mode='quantize', means=latent_means)
             quantized_latent_marginal = self.iwelbo(quantized_latents, hyperlatent_stats)
             quantized_latent_marginal_bits, quantized_latent_marginal_bpp = self._estimate_entropy_log(
                 quantized_latent_marginal, spatial_shape)
-
-            hyperlatent_sample = self.iwelbo.reparameterize_continuous(*hyperlatent_stats)
-            log_qzCy = maths.log_density_gaussian(quantized_hyperlatents, *hyperlatent_stats).sum(dim=(1,2,3), keepdim=True)
-            quantized_hyperlatent_entropy_bits, hyperlatent_entropy_qbpp = self._estimate_entropy_log(
-                log_qzCy, spatial_shape)
-
 
         info = HyperInfo(
             decoded=latents_decoded,
             latent_nbpp=noisy_latent_bpp,
             hyperlatent_nbpp=noisy_hyperlatent_bpp,
-            total_nbpp=noisy_latent_bpp + noisy_hyperlatent_bpp,
+            total_nbpp=noisy_latent_bpp + noisy_hyperlatent_bpp - hyperlatent_entropy_nbpp,
             latent_qbpp=quantized_latent_bpp,
             hyperlatent_qbpp=quantized_hyperlatent_bpp,
-            total_qbpp=quantized_latent_bpp.to(quantized_hyperlatent_bpp) + quantized_hyperlatent_bpp,
+            total_qbpp=quantized_latent_bpp.to(quantized_hyperlatent_bpp) + quantized_hyperlatent_bpp - hyperlatent_entropy_qbpp,
             latent_marginal_nbpp=noisy_latent_marginal_bpp,
             latent_marginal_qbpp=quantized_latent_marginal_bpp,
             hyperlatent_entropy_qbpp=hyperlatent_entropy_qbpp,

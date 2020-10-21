@@ -148,7 +148,7 @@ class IWAE(nn.Module):
         else:
             return self._marginal_estimate(latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs)
 
-    def amortized_inference(self, latents, hyperlatent_stats, num_i_samples):
+    def amortized_inference(self, hyperlatent_stats, num_i_samples):
 
         hyperlatent_mu, hyperlatent_logvar = hyperlatent_stats  # [B, C_z, H_z, W_z]
 
@@ -170,8 +170,9 @@ class IWAE(nn.Module):
             print('Using {} importance samples'.format(num_i_samples))
             self.num_i_samples = num_i_samples
 
-        latent_stats, hyperlatent_sample, hyperlatent_stats = self.amortized_inference(latents, hyperlatent_stats,
+        latent_stats, hyperlatent_sample, hyperlatent_stats = self.amortized_inference(hyperlatent_stats,
             num_i_samples=self.num_i_samples)
+            
         iwelbo = self.marginal_estimate(latents, latent_stats, hyperlatent_sample, hyperlatent_stats)
 
         return iwelbo
