@@ -424,7 +424,7 @@ def SNR_gradients(grads, grad_ema, grad_name):
     """
     Calculate SNR ratio of gradients
     """
-    grad_vec = torch.cat([torch.reshape(g, (-1,)) for g in grads if g is not None], dim=0)
+    grad_vec = torch.cat([torch.reshape(g, (-1,)) for g in grads if g is not None], dim=0) * 256**2
     current_first_moment = grad_vec
     current_second_moment = torch.square(grad_vec)
     first_moment = grad_ema(f"{grad_name}_first_moment", current_first_moment)

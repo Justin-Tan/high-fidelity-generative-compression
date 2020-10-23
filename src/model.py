@@ -91,8 +91,10 @@ class Model(nn.Module):
             self.Generator = generator.SynthesisTransform(self.image_dims, C=self.latent_channels,
                 num_filters=self.num_filters)
 
+        self.num_filters = 192
         self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.latent_channels,
             likelihood_type=self.args.likelihood_type, entropy_code=self.entropy_code,
+            hyperlatent_filters=self.num_filters,
             gaussian_hyperlatent_posterior=self.iw, num_i_samples=self.args.num_i_samples)
 
         self.amortization_models = [self.Encoder, self.Generator]
@@ -183,6 +185,7 @@ class Model(nn.Module):
 
     def get_inference_gradients(self, inference_loss):
 
+        # Multiply by pixel dimensions of training images - (256,256)
         inference_grads = torch.autograd.grad(inference_loss, self.Hyperprior.analysis_net.parameters())
         return inference_grads
 
@@ -243,7 +246,7 @@ class Model(nn.Module):
 
         weighted_rate, rate_penalty = losses.weighted_rate_loss(self.args, total_nbpp=total_nbpp,
             total_qbpp=total_qbpp, step_counter=self.step_counter, ignore_schedule=self.args.ignore_schedule,
-            bypass_rate=True)
+            bypass_rate=True, objective=hyperinfo.objective)
 
         weighted_R_D_loss = weighted_rate + weighted_distortion
         weighted_compression_loss = weighted_R_D_loss
@@ -278,6 +281,7 @@ class Model(nn.Module):
             if self.iw is True:
                 self.store_loss('n_rate_latent_marginal', hyperinfo.latent_marginal_nbpp.item())
                 self.store_loss('q_rate_latent_marginal', hyperinfo.latent_marginal_qbpp.item())
+                self.store_loss('IW_objective', hyperinfo.objective.item())
 
         return weighted_compression_loss
 
@@ -409,7 +413,7 @@ class Model(nn.Module):
         compression_model_loss = self.compression_loss(intermediates, hyperinfo)
 
         if self.iw is True:
-            losses['inference_loss'] = hyperinfo.latent_marginal_nbpp
+            losses['inference_loss'] = hyperinfo.objective
 
         if self.use_discriminator is True:
             # Only send gradients to generator when training generator via

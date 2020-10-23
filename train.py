@@ -120,7 +120,7 @@ def train(args, model, train_loader, test_loader, device, logger, optimizers):
         epoch_loss, epoch_test_loss = [], []  
         epoch_start_time = time.time()
         
-        if epoch > 4:
+        if epoch > 5:
             ckpt_path = utils.save_model(model, optimizers, mean_epoch_loss, epoch, device, args=args, logger=logger)
         
         model.train()
@@ -248,7 +248,7 @@ if __name__ == '__main__':
     optim_args = parser.add_argument_group("Optimization-related options")
     optim_args.add_argument('-steps', '--n_steps', type=float, default=1e6, 
         help="Number of gradient steps. Optimization stops at the earlier of n_steps/n_epochs.")
-    optim_args.add_argument('-epochs', '--n_epochs', type=int, default=10, 
+    optim_args.add_argument('-epochs', '--n_epochs', type=int, default=24, 
         help="Number of passes over training dataset. Optimization stops at the earlier of n_steps/n_epochs.")
     optim_args.add_argument("-lambda_B", "--lambda_B", type=float, default=-4, help="log_2 of Rate prefactor in R-D objective.")
     optim_args.add_argument("-lr", "--learning_rate", type=float, default=1e-4, help="Optimizer learning rate.")

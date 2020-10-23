@@ -62,7 +62,7 @@ class args(object):
     small_latent_channels = 192
     small_filters = 128
     large_latent_channels = 256
-    large_filters = 128 # 192
+    large_filters = 192 # 128 # 192
     importance_weighting = False
     num_i_samples = 8
 
@@ -79,7 +79,7 @@ class args(object):
     # lambda_schedule = dict(vals=[2., 1.], steps=[50000])
     # lr_schedule = dict(vals=[1., 0.1], steps=[500000])
     lambda_schedule = dict(vals=[1., 0.5], steps=[200000])
-    lr_schedule = dict(vals=[1., 0.1], steps=[800000])
+    lr_schedule = dict(vals=[1., 0.1], steps=[1600000])
     target_schedule = dict(vals=[0.20/0.14, 1.], steps=[50000])  # Rate allowance
     ignore_schedule = False
 

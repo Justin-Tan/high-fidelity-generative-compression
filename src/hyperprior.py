@@ -23,7 +23,7 @@ HyperInfo = namedtuple(
     "HyperInfo",
     "decoded "
     "latent_nbpp hyperlatent_nbpp total_nbpp latent_qbpp hyperlatent_qbpp total_qbpp "
-    "latent_marginal_nbpp latent_marginal_qbpp hyperlatent_entropy_qbpp",
+    "latent_marginal_nbpp latent_marginal_qbpp hyperlatent_entropy_qbpp objective",
 )
 
 CompressionOutput = namedtuple("CompressionOutput",
@@ -168,11 +168,6 @@ class Hyperprior(CodingModel):
 
         analysis_net = hyper.HyperpriorAnalysis
         synthesis_net = hyper.HyperpriorSynthesis
-
-        if mode == 'small':
-            hyperlatent_filters = SMALL_HYPERLATENT_FILTERS
-        else:
-            hyperlatent_filters = LARGE_HYPERLATENT_FILTERS
 
         self.hyperlatent_filters = hyperlatent_filters
         self.analysis_net = analysis_net(C=bottleneck_capacity, N=hyperlatent_filters,
@@ -367,9 +362,13 @@ class Hyperprior(CodingModel):
         noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(
             noisy_latent_likelihood, spatial_shape)     
 
-        noisy_latent_marginal = self.iwelbo(noisy_latents, hyperlatent_stats)
+        noisy_objective, noisy_latent_marginal = self.iwelbo(noisy_latents, hyperlatent_stats)
         noisy_latent_marginal_bits, noisy_latent_marginal_bpp = self._estimate_entropy_log(
             noisy_latent_marginal, spatial_shape)
+
+        # For DREG estimator
+        noisy_objective_bits, noisy_objective_bpp = self._estimate_entropy_log(
+            noisy_objective, spatial_shape)
     
 
         # Discrete entropy, latents
@@ -388,7 +387,7 @@ class Hyperprior(CodingModel):
             quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(
                 quantized_latent_likelihood, spatial_shape)
 
-            quantized_latent_marginal = self.iwelbo(quantized_latents, hyperlatent_stats)
+            quantized_objective, quantized_latent_marginal = self.iwelbo(quantized_latents, hyperlatent_stats)
             quantized_latent_marginal_bits, quantized_latent_marginal_bpp = self._estimate_entropy_log(
                 quantized_latent_marginal, spatial_shape)
 
@@ -403,6 +402,7 @@ class Hyperprior(CodingModel):
             latent_marginal_nbpp=noisy_latent_marginal_bpp,
             latent_marginal_qbpp=quantized_latent_marginal_bpp,
             hyperlatent_entropy_qbpp=hyperlatent_entropy_qbpp,
+            objective=noisy_objective_bpp,
         )
 
         return info
@@ -460,6 +460,7 @@ class Hyperprior(CodingModel):
             latent_marginal_nbpp=None,
             latent_marginal_qbpp=None,
             hyperlatent_entropy_qbpp=None,
+            objective=None,
         )
 
         return info

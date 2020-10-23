@@ -108,7 +108,7 @@ class IWAE(nn.Module):
         # log_iw = self.get_importance_samples(latents, latent_stats, hyperlatent_sample, hyperlatent_stats)
         iwelbo = torch.logsumexp(log_iw, dim=1) - np.log(self.num_i_samples)  # [B]
 
-        return iwelbo
+        return iwelbo, iwelbo
 
     def _marginal_dreg_estimate(self, latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs):
         """
@@ -137,9 +137,10 @@ class IWAE(nn.Module):
                 hyperlatent_sample.register_hook(lambda grad: torch.reshape(normalized_weights, (B * self.num_i_samples, 1, 1, 1))  * grad)
                 # hyperlatent_sample.register_hook(lambda grad: print(grad.shape))
 
+        iwelbo = torch.logsumexp(log_iw_stop_phi, dim=1) - np.log(self.num_i_samples)  # [B]
         iw_dreg = torch.sum(normalized_weights * log_iw_stop_phi, dim=1)  # [B]
 
-        return iw_dreg
+        return iw_dreg, iwelbo
 
     def marginal_estimate(self, latents, latent_stats, hyperlatent_sample, hyperlatent_stats, **kwargs):
         
