@@ -91,7 +91,7 @@ class Model(nn.Module):
             self.Generator = generator.SynthesisTransform(self.image_dims, C=self.latent_channels,
                 num_filters=self.num_filters)
 
-        self.num_filters = 192
+        # self.num_filters = 192
         self.Hyperprior = hyperprior.Hyperprior(bottleneck_capacity=self.latent_channels,
             likelihood_type=self.args.likelihood_type, entropy_code=self.entropy_code,
             hyperlatent_filters=self.num_filters,

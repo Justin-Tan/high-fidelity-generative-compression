@@ -77,7 +77,7 @@ def update_lr(args, optimizer, itr, logger):
         old_lr = param_group['lr']
         if old_lr != lr:
             logger.info('=============================')
-            logger.info(f'Changing learning rate {olf_lr} -> {lr}')
+            logger.info(f'Changing learning rate {old_lr} -> {lr}')
             param_group['lr'] = lr
 
 def setup_generic_signature(args, special_info):

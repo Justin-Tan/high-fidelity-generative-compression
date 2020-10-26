@@ -380,7 +380,7 @@ class Hyperprior(CodingModel):
             log_qzCy, spatial_shape)
         hyperlatent_entropy_nbpp = hyperlatent_entropy_qbpp
 
-        if evaluate_qbpp is True:
+        if evaluate_qbpp is True or (self.training is False):
             quantized_latents = self._quantize(latents, mode='quantize', means=latent_means)
             quantized_latent_likelihood = self.latent_likelihood(quantized_latents, mean=latent_means,
                 scale=latent_scales)
