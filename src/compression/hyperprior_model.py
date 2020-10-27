@@ -17,7 +17,6 @@ PRECISION_P = entropy_models.PRECISION_P
 
 lower_bound_toward = maths.LowerBoundToward.apply
 
-
 class HyperpriorEntropyModel(entropy_models.ContinuousEntropyModel):
 
     """

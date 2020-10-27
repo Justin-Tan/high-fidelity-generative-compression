@@ -10,14 +10,14 @@ from src.loss import iw_vae
 from src.helpers import maths, utils
 from src.compression import hyperprior_model, prior_model
 
-MIN_SCALE = 0.11
+MIN_SCALE = prior_model.SCALES_MIN
+MAX_SCALE = prior_model.SCALES_MAX
 LOG_SCALES_MIN = -3.
 MIN_LIKELIHOOD = 1e-9
 MAX_LIKELIHOOD = 1e3
 SMALL_HYPERLATENT_FILTERS = 128 # 192
 LARGE_HYPERLATENT_FILTERS = 192 # 256
 NUM_IMPORTANCE_SAMPLES = 4
-VARIANCE_UPPERBOUND = 1e1
 
 HyperInfo = namedtuple(
     "HyperInfo",
@@ -45,6 +45,8 @@ CompressionOutput = namedtuple("CompressionOutput",
 
 lower_bound_identity = maths.LowerBoundIdentity.apply
 lower_bound_toward = maths.LowerBoundToward.apply
+upper_bound_toward = maths.UpperBoundToward.apply
+
 
 class CodingModel(nn.Module):
     """
@@ -163,6 +165,7 @@ class Hyperprior(CodingModel):
         
         self.bottleneck_capacity = bottleneck_capacity
         self.scale_lower_bound = scale_lower_bound
+        self.scale_upper_bound = MAX_SCALE
         self.num_i_samples = num_i_samples
         self.gaussian_hyperlatent_posterior = gaussian_hyperlatent_posterior
 
@@ -240,6 +243,7 @@ class Hyperprior(CodingModel):
         latent_means, latent_scales = torch.split(latent_params, self.bottleneck_capacity, dim=1)
         latent_scales = F.softplus(latent_scales)
         latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
+        latent_scales = upper_bound_toward(latent_scales, self.scale_upper_bound)
 
         # Use latent statistics to build indexed probability tables, and compress latents
         latents_encoded, latent_coding_shape, _ = self.prior_entropy_model.compress(latents, means=latent_means,
@@ -291,6 +295,7 @@ class Hyperprior(CodingModel):
         latent_means, latent_scales = torch.split(latent_params, self.bottleneck_capacity, dim=1)
         latent_scales = F.softplus(latent_scales)
         latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
+        latent_scales = upper_bound_toward(latent_scales, self.scale_upper_bound)
         latent_spatial_shape = latent_scales.size()[2:]
 
         # Use latent statistics to build indexed probability tables, and decompress latents
@@ -348,15 +353,15 @@ class Hyperprior(CodingModel):
         latent_params = self.synthesis_net(hyperlatents_decoded)  # [n*B, C_y, H_y, W_y]
         latent_means, latent_scales = torch.split(latent_params, self.bottleneck_capacity, dim=1)   
         latent_scales = lower_bound_toward(F.softplus(latent_scales), self.scale_lower_bound)
-
-        latents_decoded = self.quantize_latents_st(latents, latent_means)
+        latent_scales = upper_bound_toward(latent_scales, self.scale_upper_bound)
 
         """
         Reset hyperlatent parameters, perform reproducible BBVI here
         """
 
         # Differential entropy, latents
-        noisy_latents = self._quantize(latents, mode='noise', means=latent_means)
+        # noisy_latents = self._quantize(latents, mode='noise', means=latent_means)
+        noisy_latents = self.quantize_latents_st(latents, latent_means)
         noisy_latent_likelihood = self.latent_likelihood(noisy_latents, mean=latent_means,
             scale=latent_scales)
         noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(
@@ -369,7 +374,8 @@ class Hyperprior(CodingModel):
         # For DREG estimator
         noisy_objective_bits, noisy_objective_bpp = self._estimate_entropy_log(
             noisy_objective, spatial_shape)
-    
+
+        latents_decoded = noisy_latents
 
         # Discrete entropy, latents
         quantized_latent_bpp, quantized_latent_marginal_bpp = torch.Tensor([0.]), torch.Tensor([0.])
@@ -432,9 +438,11 @@ class Hyperprior(CodingModel):
         latent_means, latent_scales = torch.split(latent_params, self.bottleneck_capacity, dim=1)
         latent_scales = F.softplus(latent_scales)
         latent_scales = lower_bound_toward(latent_scales, self.scale_lower_bound)
+        latent_scales = upper_bound_toward(latent_scales, self.scale_upper_bound)
 
         # Differential entropy, latents
-        noisy_latents = self._quantize(latents, mode='noise', means=latent_means)
+        # noisy_latents = self._quantize(latents, mode='noise', means=latent_means)
+        noisy_latents = self.quantize_latents_st(latents, latent_means)
         noisy_latent_likelihood = self.latent_likelihood(noisy_latents, mean=latent_means,
             scale=latent_scales)
         noisy_latent_bits, noisy_latent_bpp = self._estimate_entropy(
@@ -447,7 +455,7 @@ class Hyperprior(CodingModel):
         quantized_latent_bits, quantized_latent_bpp = self._estimate_entropy(
             quantized_latent_likelihood, spatial_shape)
 
-        latents_decoded = self.quantize_latents_st(latents, latent_means)
+        latents_decoded = noisy_latents
 
         info = HyperInfo(
             decoded=latents_decoded,

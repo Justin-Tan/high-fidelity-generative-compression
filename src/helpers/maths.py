@@ -90,16 +90,35 @@ class LowerBoundIdentity(torch.autograd.Function):
 class LowerBoundToward(torch.autograd.Function):
     """
     Assumes output shape is identical to input shape.
+    Nonzero gradient only if it pushes towards the
+    lower bound (from below).
     """
     @staticmethod
     def forward(ctx, tensor, lower_bound):
         # lower_bound:  Scalar float.
         ctx.mask = tensor.ge(lower_bound)
-        return torch.clamp(tensor, lower_bound)
+        return torch.clamp(tensor, min=lower_bound)
 
     @staticmethod
     def backward(ctx, grad_output):
         gate = torch.logical_or(ctx.mask, grad_output.lt(0.)).type(grad_output.dtype)
+        return grad_output * gate, None
+
+class UpperBoundToward(torch.autograd.Function):
+    """
+    Assumes output shape is identical to input shape.
+    Nonzero gradient only if it pushes towards the
+    upper bound (from above).
+    """
+    @staticmethod
+    def forward(ctx, tensor, upper_bound):
+        # lower_bound:  Scalar float.
+        ctx.mask = tensor.le(upper_bound)
+        return torch.clamp(tensor, max=upper_bound)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        gate = torch.logical_or(ctx.mask, grad_output.gt(0.)).type(grad_output.dtype)
         return grad_output * gate, None
 
 def standardized_CDF_gaussian(value):
