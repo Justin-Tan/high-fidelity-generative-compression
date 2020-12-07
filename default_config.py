@@ -52,7 +52,7 @@ class args(object):
     sample_noise = False
     noise_dim = 32
 
-    # Architecture params - Table 3a) of [1]
+    # Architecture params - defaults correspond to Table 3a) of [1]
     latent_channels = 220
     n_residual_blocks = 9           # Authors use 9 blocks, performance saturates at 5
     lambda_B = 2**(-4)              # Loose rate
