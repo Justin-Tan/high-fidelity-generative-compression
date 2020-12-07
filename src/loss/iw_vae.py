@@ -19,7 +19,7 @@ class IWAE(nn.Module):
         self.hyperlatent_prob_model = hyperlatent_prob_model
         self.hyperlatent_inference_net = hyperlatent_inference_net
         
-        self.use_dreg = True
+        self.use_dreg = False
         self.num_i_samples = num_i_samples
         self.scale_lower_bound = scale_lower_bound
         self.bottleneck_capacity = bottleneck_capacity

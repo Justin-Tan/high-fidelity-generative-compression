@@ -75,6 +75,8 @@ class Model(nn.Module):
             self.Generator = generator.Generator(self.image_dims, self.batch_size, C=self.latent_channels,
                 n_residual_blocks=self.args.n_residual_blocks, channel_norm=self.args.use_channel_norm, sample_noise=
                 self.args.sample_noise, noise_dim=self.args.noise_dim)
+            
+            self.num_filters = 320
 
         elif self.model_type == ModelTypes.COMPRESSION_VAE:
             # Higher capacity for tighter rate

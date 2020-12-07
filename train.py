@@ -251,7 +251,7 @@ if __name__ == '__main__':
     optim_args.add_argument('-epochs', '--n_epochs', type=int, default=24, 
         help="Number of passes over training dataset. Optimization stops at the earlier of n_steps/n_epochs.")
     optim_args.add_argument("-lambda_B", "--lambda_B", type=float, default=-4, help="log_2 of Rate prefactor in R-D objective.")
-    optim_args.add_argument("-lr", "--learning_rate", type=float, default=1e-4, help="Optimizer learning rate.")
+    optim_args.add_argument("-lr", "--learning_rate", type=float, default=5e-5, help="Optimizer learning rate.")
     optim_args.add_argument("-wd", "--weight_decay", type=float, default=1e-6, help="Coefficient of L2 regularization.")
 
     # Architecture-related options

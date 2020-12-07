@@ -396,6 +396,9 @@ class Hyperprior(CodingModel):
             quantized_objective, quantized_latent_marginal = self.iwelbo(quantized_latents, hyperlatent_stats)
             quantized_latent_marginal_bits, quantized_latent_marginal_bpp = self._estimate_entropy_log(
                 quantized_latent_marginal, spatial_shape)
+            print(hyperlatent_entropy_qbpp)
+            print(quantized_hyperlatent_bpp)
+            print(quantized_latent_bpp.to(quantized_hyperlatent_bpp) + quantized_hyperlatent_bpp - hyperlatent_entropy_qbpp)
 
         info = HyperInfo(
             decoded=latents_decoded,

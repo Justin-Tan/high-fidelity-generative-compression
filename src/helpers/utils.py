@@ -207,6 +207,12 @@ def load_model(save_path, logger, device, model_type=None, model_mode=None, curr
     if hasattr(args, 'sample_noise') is False:
         args.sample_noise = False
         args.noise_dim = 0
+    if hasattr(args, 'importance_weighting') is False:
+        args.importance_weighting = False
+        args.num_i_samples = 1
+    if hasattr(args, 'num_filters') is False:
+        LARGE_HYPERLATENT_FILTERS = 320
+        args.num_filters = LARGE_HYPERLATENT_FILTERS
 
     model = Model(args, logger, model_type=model_type, model_mode=model_mode)
 
