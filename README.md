@@ -1,6 +1,7 @@
 # high-fidelity-generative-compression
 
-Pytorch implementation of the paper ["High-Fidelity Generative Image Compression" by Mentzer et. al.](https://hific.github.io/). This repo also provides general utilities for lossless compression that interface with Pytorch.
+Pytorch implementation of the paper ["High-Fidelity Generative Image Compression" by Mentzer et. al.](https://hific.github.io/). This repo also provides general utilities for lossless compression that interface with Pytorch. For the official (TensorFlow) code release, see the [TensorFlow compression
+repo](https://github.com/tensorflow/compression/tree/master/models/hific).
 
 ## About
 
